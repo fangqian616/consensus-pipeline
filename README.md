@@ -1,8 +1,8 @@
 # 🎬 Consensus Pipeline
 
-> **让AI停止自言自语，开始像真正的创意团队一样辩论、碰撞、达成共识。**
+> **Stop AI from talking to itself. Start a real creative team that debates, collides, and reaches consensus.**
 >
-> 一个多Agent辩论驱动的内容创作框架——不是"一个AI帮你写"，而是"一个AI团队帮你争吵出最好的方案"。
+> A multi-agent debate-driven content creation framework — not "one AI writes for you," but "an AI team argues out the best solution."
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
@@ -12,69 +12,75 @@
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs">
 </p>
 
----
-
-## 🤔 为什么需要这个？
-
-**单LLM的问题：** 不管你问GPT还是Claude，它都是一个"人"在回答。自我反思（Self-Reflection）看似有效，但研究者发现它容易陷入"思维退化"（Degeneration of Thoughts）——偏见无法自我纠正，刚性思维无法自我突破，缺少外部反馈的盲点永远看不到。
-
-**现有Multi-Agent Debate框架的问题：** 它们大多聚焦于"推理增强"——让AI辩论数学题、翻译、常识问答。但很少有人把多Agent辩论用于**创意内容生产**——让AI团队像皮克斯的Braintrust一样，从编剧到灯光到VFX，每个专业部门内部辩论、部门之间交叉碰撞，最终产出完整可用的创作方案。
-
-**Consensus Pipeline 就是这个缺失的环节。**
-
-```
-传统方式：你 → 一个AI → 一个答案（可能好，但你没得选）
-辩论方式：你 → 一个AI团队 → 8个部门内部辩论 → 部门间交叉碰撞 → 最佳方案
-```
+> 📖 [中文文档](README_CN.md)
 
 ---
 
-## 🏗️ 架构
+## 🤔 Why This Exists
+
+**The single-LLM problem:** Whether you ask GPT or Claude, it's always one "person" answering. Self-reflection seems helpful, but researchers have found it leads to "Degeneration of Thoughts" — biases can't self-correct, rigid thinking can't self-breakthrough, and blind spots without external feedback are forever invisible.
+
+**The existing multi-agent debate problem:** Most frameworks focus on "reasoning enhancement" — having AIs debate math problems, translations, and common-sense QA. Almost no one applies multi-agent debate to **creative content production** — having an AI team, like Pixar's Braintrust, where every specialized department debates internally and cross-pollinates externally, ultimately producing a complete, usable creative plan.
+
+**Consensus Pipeline is that missing piece.**
+
+```
+Traditional:   You → One AI → One answer (maybe good, but you have no choice)
+Debate-driven: You → An AI team → 8 departments debate internally → cross-department collisions → The best plan
+```
+
+---
+
+## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Consensus Pipeline                       │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  用户输入                                                        │
+│  User Input                                                     │
 │     │                                                           │
 │     ▼                                                           │
-│  ┌──────────┐    AI Router 自动分析需求                          │
-│  │ Tab0     │    匹配内容类型 → 选择部门 → 配置辩手 → 生成预设     │
-│  │ 智能配组  │    用户可编辑所有提示词，可上传Skill注入             │
+│  ┌──────────┐    AI Router auto-analyzes requirements           │
+│  │ Tab0     │    Matches content type → selects departments     │
+│  │ Smart    │    → configures debaters → generates presets       │
+│  │ Config   │    All prompts editable, Skill injection supported │
 │  └────┬─────┘                                                   │
 │       │                                                         │
 │       ▼                                                         │
-│  ┌──────────┐                                                    │
-│  │ Tab1 输入 │   剧本/角色/提示词/视觉指令                         │
+│  ┌──────────┐                                                   │
+│  │ Tab1     │   Script / Characters / Prompts / Visual direction │
+│  │ Input    │                                                   │
 │  └────┬─────┘                                                   │
 │       │                                                         │
 │       ▼                                                         │
 │  ┌──────────────────────────────────────────────────────┐       │
-│  │ Tab2 部门辩论（8部门串行）                             │       │
+│  │ Tab2 Department Debates (8 departments, serial)       │       │
 │  │                                                      │       │
-│  │  编剧部 → 空间板块 → 分镜部 → 摄影部 → 灯光部          │       │
-│  │     ↓         ↓         ↓        ↓        ↓          │       │
-│  │  VFX部 → 音效部 → 剪辑部                              │       │
+│  │  Screenwriting → Spatial Design → Storyboard         │       │
+│  │        ↓            ↓               ↓                │       │
+│  │  Cinematography → Lighting → VFX → Sound → Editing   │       │
 │  │                                                      │       │
-│  │  每部门：3-4位辩手 × N轮对抗 → 导演综合 → 部门共识       │       │
+│  │  Per department: 3-4 debaters × N rounds → Director  │       │
+│  │  synthesis → Department consensus                     │       │
 │  └──────────────────────────────────────────────────────┘       │
 │       │                                                         │
 │       ▼                                                         │
 │  ┌──────────────────────────────────────────────────────┐       │
-│  │ Tab3 交叉辩论                                         │       │
+│  │ Tab3 Cross-Department Debate                          │       │
 │  │                                                      │       │
-│  │  编剧 ↔ 分镜（叙事节拍 vs 镜头切分）                    │       │
-│  │  摄影 ↔ 灯光（画面构图 vs 光影氛围）                    │       │
-│  │  VFX ↔ 音效（视觉冲击 vs 听觉节奏）                    │       │
-│  │  空间 ↔ 剪辑（场景调度 vs 节奏控制）                    │       │
+│  │  Screenwriting ↔ Storyboard (narrative beats vs cuts) │       │
+│  │  Cinematography ↔ Lighting (composition vs mood)      │       │
+│  │  VFX ↔ Sound (visual impact vs audio rhythm)          │       │
+│  │  Spatial ↔ Editing (scene blocking vs pacing)         │       │
 │  └──────────────────────────────────────────────────────┘       │
 │       │                                                         │
 │       ▼                                                         │
 │  ┌──────────────────────────────────────────────────────┐       │
-│  │ Tab4 校对 → Tab5 最终产出                              │       │
+│  │ Tab4 Review → Tab5 Final Output                       │       │
 │  │                                                      │       │
-│  │  四部门审查 → 9宫格分镜表 + 逐镜视频提示词               │       │
+│  │  Four-department review → 9-grid storyboard +        │       │
+│  │  shot-by-shot video prompts                           │       │
 │  └──────────────────────────────────────────────────────┘       │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -82,7 +88,7 @@
 
 ---
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
 ```bash
 git clone https://github.com/fangqian616/consensus-pipeline.git
@@ -91,167 +97,167 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-打开浏览器，在侧边栏配置API Key（支持DeepSeek/OpenAI/任何兼容API），然后：
+Open your browser, configure your API key in the sidebar (supports DeepSeek / OpenAI / any compatible API), then:
 
-1. **Tab0** → 描述需求，AI自动配组（或加载内置预设）
-2. **Tab1** → 填写剧本、角色参考、视觉指令
-3. **Tab2** → 8个部门依次辩论，实时观看每个部门的辩手对抗
-4. **Tab3** → 部门间交叉辩论，消除矛盾
-5. **Tab4-5** → 校对 → 最终产出
+1. **Tab0** → Describe your needs, AI auto-configures (or load a built-in preset)
+2. **Tab1** → Fill in script, character references, visual direction
+3. **Tab2** → 8 departments debate in sequence, watch each department's debaters clash in real-time
+4. **Tab3** → Cross-department debate, resolve contradictions
+5. **Tab4-5** → Review → Final output
 
 ---
 
-## ✨ 核心特性
+## ✨ Core Features
 
-### 🧠 AI Router — 智能配组
+### 🧠 AI Router — Smart Configuration
 
-不是死板的模板匹配。AI分析你的需求，自动决定：
-- 需要哪些部门（8个全上？还是只要3个？）
-- 每个部门派几位辩手（2-4位）
-- 每位辩手什么风格（职责边界在哪？和其他辩手的分歧点在哪？）
+Not rigid template matching. The AI analyzes your needs and automatically decides:
+- Which departments are needed (all 8? or just 3?)
+- How many debaters per department (2-4)
+- What style for each debater (role boundaries, points of dissent with others)
 
 ```python
-# 你说"只要编剧、分镜、灯光3个部门"
-→ Router精确返回3个部门6位辩手，一个不多
+# You say "just Screenwriting, Storyboard, and Lighting — 3 departments"
+→ Router returns exactly 3 departments, 6 debaters, nothing extra
 
-# 你说"全程暖色调，简约线条风格"
-→ Router自动新增视觉风格部，辩手各司其职
+# You say "warm tones throughout, minimalist line art style"
+→ Router auto-creates a Visual Style department, each debater with a distinct role
 ```
 
-### ✏️ 全流程可编辑
+### ✏️ Fully Editable
 
-AI配好的提示词不满意？每个部门的辩手风格、参数都可以手动改。改完即跑——**以你改过的为准**。
+Not happy with the AI-generated prompts? Every department's debater styles and parameters can be manually edited. Edit and run — **your edits take priority.**
 
-### 💾 本地持久化
+### 💾 Local Persistence
 
-你的配置自动保存到 `user_profiles/`，下次启动自动加载上次使用的配置。内置预设 + 用户配置，两套体系互不干扰。
+Your configurations auto-save to `user_profiles/`. Next launch, your last-used config loads automatically. Built-in presets + user profiles, two systems that don't interfere.
 
-### 📦 Skill注入
+### 📦 Skill Injection
 
-上传你的专属知识（Markdown格式），自动注入到指定部门的所有辩手提示词末尾。比如：
-- 角色设定文档 → 注入编剧部
-- 视觉风格指南 → 注入灯光部/VFX部
-- 品牌规范 → 注入所有部门
+Upload your proprietary knowledge (Markdown format), auto-injected at the end of every debater prompt in the target department. For example:
+- Character design docs → inject into Screenwriting
+- Visual style guide → inject into Lighting / VFX
+- Brand guidelines → inject into all departments
 
-### 🎯 内置预设：动画辩论
+### 🎯 Built-in Preset: Animation Debate
 
-开箱即用的8部门×24辩手完整动画制作管线：
-- 日漫视觉基因注入
-- 空间定位系统（物品参照+画面位置+垂直状态）
-- 完整的校对环节
-- 从一段剧本到9宫格分镜表+逐镜视频提示词
+Ready-to-use 8-department × 24-debater complete animation production pipeline:
+- Anime visual gene injection
+- Spatial positioning system (object reference + screen position + vertical state)
+- Complete review workflow
+- From a script to a 9-grid storyboard + shot-by-shot video prompts
 
-### 🏪 市场模拟模型（Market Mode）
+### 🏪 Market Simulation Mode
 
-不是让辩手互相说服，而是让创意像商品一样在市场中竞争：
+Instead of debaters persuading each other, creative ideas compete like products in a market:
 
 ```
-候选竞选 → 质量叩问 → 投票选举 → 补丁修正
+Candidate campaigns → Quality interrogation → Voting → Patch refinement
 ```
 
-3个AI生成的候选方案同台竞技，经过尖锐的质量评估问题投票，胜出方案再打补丁优化。适合"我不确定想要什么风格"的探索场景。
+3 AI-generated candidate proposals compete on the same stage, evaluated through sharp quality-assessment questions, with the winner receiving patches for optimization. Perfect for "I'm not sure what style I want" exploration scenarios.
 
-### 🔄 四种架构模式
+### 🔄 Four Architecture Modes
 
-| 模式 | 机制 | 质量 | 速度 | Token | 适用场景 |
-|------|------|------|------|-------|---------|
-| **共识管线** | 8部门串行辩论 | ★★★★★ | ★★ | ★★★★ | 追求极致 |
-| **市场模拟** | 候选竞选+投票 | ★★★★ | ★★ | ★★★★★ | 探索方向 |
-| **专家池** | 精选2人/部门 | ★★★ | ★★★ | ★★ | 快速迭代 |
-| **单Agent** | 无辩论直接生成 | ★★ | ★★★★★ | ★ | 对照基线 |
+| Mode | Mechanism | Quality | Speed | Token | Best For |
+|------|-----------|:-------:|:-----:|:-----:|---------|
+| **Consensus Pipeline** | 8 dept serial debate | ★★★★★ | ★★ | ★★★★ | Maximum quality |
+| **Market Simulation** | Candidate competition + voting | ★★★★ | ★★ | ★★★★★ | Exploring directions |
+| **Expert Pool** | Curated 2/dept | ★★★ | ★★★ | ★★ | Fast iteration |
+| **Single Agent** | No debate, direct generation | ★★ | ★★★★★ | ★ | Baseline comparison |
 
-一个输入，四种模式，量化"辩论"和"竞争"带来的质量提升。
+One input, four modes — quantify the quality boost from "debate" and "competition."
 
 ---
 
-## 🆚 与同类项目的对比
+## 🆚 Comparison
 
-| 特性 | Consensus Pipeline | MAD (Liang et al.) | MADJURY | ARGUS | AgentScope |
-|------|:---:|:---:|:---:|:---:|:---:|
-| 多Agent辩论 | ✅ | ✅ | ✅ | ✅ | ✅ |
-| 创意内容生产 | ✅ | ❌ | ❌ | ❌ | ❌ |
-| AI智能配组 | ✅ | ❌ | ❌ | ❌ | ❌ |
-| 部门×辩手结构 | ✅ | ❌ | ❌ | ❌ | ❌ |
-| 用户可编辑提示词 | ✅ | ❌ | ❌ | ✅ | ❌ |
-| 本地持久化 | ✅ | ❌ | ❌ | ❌ | ❌ |
-| 市场模拟模型 | ✅ | ❌ | ❌ | ❌ | ❌ |
-| 四种架构模式 | ✅ | ❌ | ❌ | ❌ | ❌ |
-| 跨领域通用 | ✅ | ❌ | ❌ | ❌ | ✅ |
+| Feature | Consensus Pipeline | MAD (Liang et al.) | MADJURY | ARGUS | AgentScope |
+|---------|:---:|:---:|:---:|:---:|:---:|
+| Multi-Agent Debate | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Creative Content Production | ✅ | ❌ | ❌ | ❌ | ❌ |
+| AI Smart Configuration | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Department × Debater Structure | ✅ | ❌ | ❌ | ❌ | ❌ |
+| User-Editable Prompts | ✅ | ❌ | ❌ | ✅ | ❌ |
+| Local Persistence | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Market Simulation Model | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Four Architecture Modes | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Cross-Domain General | ✅ | ❌ | ❌ | ❌ | ✅ |
 | Streamlit UI | ✅ | ❌ | ❌ | ✅ | ✅ |
-| 信息瓶颈防偏见 | ❌ | ❌ | ✅ | ❌ | ❌ |
-| 实时可视化 | ❌ | ❌ | ❌ | ✅ | ❌ |
+| Info Bottleneck (anti-bias) | ❌ | ❌ | ✅ | ❌ | ❌ |
+| Real-Time Visualization | ❌ | ❌ | ❌ | ✅ | ❌ |
 
-**Consensus Pipeline 的独特定位：** 不追求推理增强的学术指标，不追求通用Agent框架的广度，而是专注于**用辩论机制提升创意内容质量**——让AI团队像真正的专业团队一样协作产出。
-
----
-
-## 📖 使用示例
-
-### 动画短片制作
-
-```
-输入：3D动画短片，沙漠追逐战，两个角色，有魔法元素
-AI Router → 自动配组：8部门24辩手
-运行 → 15分钟后产出：9宫格分镜表 + 11组30镜视频提示词
-```
-
-### 产品设计
-
-```
-输入：面向Z世代的AI笔记App，需要用户调研、功能架构、交互设计
-AI Router → 自动配组：受众分析/内容结构/视觉风格/叙事，4部门8辩手
-运行 → 产出：用户需求文档 + 功能架构 + 交互方案 + 视觉指南
-```
-
-### 学术论文
-
-```
-输入：LLM多Agent协作的文献综述
-AI Router → 自动配组：叙事/内容结构/受众/质控，4部门9辩手
-运行 → 产出：文献综述 + 方法论对比 + 引用规范 + 严谨性审查
-```
+**Consensus Pipeline's unique position:** Not chasing reasoning-benchmark scores, not chasing generic agent-framework breadth — focused on **using debate mechanisms to elevate creative content quality** — making an AI team collaborate like a real professional team.
 
 ---
 
-## 🔧 配置
+## 📖 Examples
 
-支持任何 OpenAI 兼容 API：
+### Animated Short Film
 
-| 提供商 | API 地址 | 推荐模型 |
-|--------|---------|---------|
+```
+Input: 3D animated short, desert chase scene, two characters, magic elements
+AI Router → auto-config: 8 departments, 24 debaters
+Run → 15 minutes later: 9-grid storyboard + 11 groups, 30 shots of video prompts
+```
+
+### Product Design
+
+```
+Input: AI note-taking app for Gen Z, need user research, feature architecture, interaction design
+AI Router → auto-config: Audience Analysis / Content Structure / Visual Style / Narrative, 4 depts, 8 debaters
+Run → output: user needs doc + feature architecture + interaction plan + visual guide
+```
+
+### Academic Paper
+
+```
+Input: Literature review on LLM multi-agent collaboration
+AI Router → auto-config: Narrative / Content Structure / Audience / QA, 4 depts, 9 debaters
+Run → output: literature review + methodology comparison + citation standards + rigor review
+```
+
+---
+
+## 🔧 Configuration
+
+Supports any OpenAI-compatible API:
+
+| Provider | API URL | Recommended Model |
+|----------|--------|-------------------|
 | DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o` |
-| 自定义 | 任意兼容端点 | 任意模型 |
+| Custom | Any compatible endpoint | Any model |
 
-在侧边栏填入 API Key、API URL 和模型名称即可。
+Fill in API Key, API URL, and model name in the sidebar.
 
 ---
 
 ## 🗺️ Roadmap
 
-- [x] v3.0：AI Router 智能配组 + 用户可编辑提示词 + 本地持久化 + Skill注入
-- [x] 内置预设：动画辩论（8部门×24辩手）
-- [x] 四种架构模式切换
-- [x] 市场模拟模型
-- [ ] v3.1：Skill文件上传（当前为文本粘贴）
-- [ ] v3.2：更多内置预设（产品设计、小说创作、游戏设计、学术论文）
-- [ ] v3.3：历史辩论回放与对比
-- [ ] v3.4：批量模式（一次输入跑四种架构，对比产出）
-- [ ] v4.0：辩论过程可视化（实时DAG图、辩手观点流转）
+- [x] v3.0: AI Router smart config + user-editable prompts + local persistence + Skill injection
+- [x] Built-in preset: Animation Debate (8 depts × 24 debaters)
+- [x] Four architecture modes
+- [x] Market Simulation model
+- [ ] v3.1: Skill file upload (currently text paste)
+- [ ] v3.2: More built-in presets (product design, novel writing, game design, academic papers)
+- [ ] v3.3: Historical debate replay & comparison
+- [ ] v3.4: Batch mode (one input, all four modes, compare outputs)
+- [ ] v4.0: Debate process visualization (real-time DAG, debater opinion flow)
 
 ---
 
-## 🤝 贡献
+## 🤝 Contributing
 
-欢迎 PR！特别欢迎：
+PRs welcome! Especially:
 
-- 🎨 **新预设模板** — 产品设计、小说创作、游戏关卡、商业方案……
-- 🎭 **新辩手风格** — 为现有部门贡献更多样的辩手视角
-- 🛠️ **新部门** — 你认为还缺什么？音乐部？色彩部？
-- 🐛 **Bug修复**
-- 📝 **文档改进**
+- 🎨 **New preset templates** — product design, novel writing, game levels, business proposals…
+- 🎭 **New debater styles** — contribute diverse debater perspectives for existing departments
+- 🛠️ **New departments** — what's missing? Music department? Color department?
+- 🐛 **Bug fixes**
+- 📝 **Documentation improvements**
 
-详见 [CONTRIBUTING.md](CONTRIBUTING.md)
+See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
 
