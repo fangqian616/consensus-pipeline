@@ -257,13 +257,4 @@ AI Router → 自动配组：叙事/内容结构/受众/质控，4部门9辩手
 
 ## 📄 License
 
-MIT License © 2026
-
----
-
-## 📚 参考
-
-- [MAD: Multi-Agent Debate](https://arxiv.org/abs/2305.19118) — Liang et al., 2023
-- [MADJURY](https://github.com/arepetti/madjury) — 信息瓶颈 + 无记忆评委 + 跨轮画像
-- [ARGUS](https://pypi.org/project/argus-debate-ai/) — Research Debate Chain + 贝叶斯聚合
-- [AgentScope](https://github.com/modelscope/agentscope) — 通用多Agent框架
+MIT License
