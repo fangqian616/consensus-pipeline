@@ -144,12 +144,9 @@ consensus-pipeline/
 ├── presets/               # 内置预设
 │   └── animation_debate.json
 ├── user_profiles/         # 用户自定义配置（本地持久化，不入Git）
-├── docs/
-│   ├── quickstart.md      # 快速开始
-│   └── custom_presets.md  # 如何创建自定义预设
-└── 9宫格/                  # 动画辩论9宫格分镜模板
-    ├── 9宫格_P1_车外_v1.0.md ~ P11_v1.0.md
-    └── 视频Prompt_P1_v3.1.md ~ P11_v2.0.md
+└── docs/
+    ├── quickstart.md      # 快速开始
+    └── custom_presets.md  # 如何创建自定义预设
 ```
 
 ---
