@@ -1,0 +1,2934 @@
+"""
+AI Consensus Pipeline v3.0 - 通用AI多部门辩论内容创作框架
+支持逐步模式：每轮辩论后暂停，导演可审阅并给出纠正指令
+v3.0: Consensus Pipeline重构——智能配组Tab + 预设/用户配置管理 + AI Router自动配组
+v2.4: 市场模式+候选竞选+投票选举+补丁修正
+v2.2: 编剧部新增叙事架构师+摄影部切换动机+分镜表表格化+浏览器通知提醒
+v2.1: 空间定位重构：从坐标系锚点改为物品定位+画面位置双层结构
+"""
+import streamlit as st
+import streamlit.components.v1 as st_components
+import json
+import os
+import time
+from datetime import datetime
+
+from debate_engine import (
+    DEPARTMENTS, P2_CROSS_DEBATES, P5_CROSS_DEBATES, CROSS_DEBATES,
+    STRUCTURED_TEMPLATES, PROOFREAD_DEPARTMENTS, DEPT_ORDER,
+    MODEL_PROFILES, ARCHITECTURE_MODES,
+    MARKET_CONFIG,
+    apply_config, get_current_config, get_current_config_name,
+    run_department_debate, run_cross_debate, run_summary,
+    run_spatial_review, run_proofreading, run_spatial_diagram,
+    run_auto_revision, run_director_revision, run_output_edit,
+    run_department_round, run_department_consensus,
+    generate_carry_forward, generate_asset_checklist,
+    run_single_agent, run_expert_pool_debate,
+    generate_candidates, generate_questions, vote_on_questions, patch_winner,
+    clean_spatial_coordinates,
+)
+from config_manager import (
+    list_presets, load_preset, list_profiles, save_profile, load_profile,
+    delete_profile, export_config, import_config,
+    get_last_used, set_last_used, validate_config, merge_skill_injection,
+)
+from router import analyze_and_configure
+
+# ============ 浏览器通知 ============
+
+# 提示音：base64编码的短促提示音（约0.3秒的叮咚声）
+_NOTIFICATION_AUDIO_B64 = """
+data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2LkI2Hg3x1b2Vpe4eQlZONhX54cGhgYGl1gIuSlZKMhX54c2xkYWdwe4SOk5WRjIV+eHNsZGFncHuEjpOVkYyFfnhzbGRhZ3B7hI6TlZGMhX54c2xkYWdwe4SOk5WRjIV+eHNsZGFncHs=
+"""
+
+def browser_notify(title: str, message: str):
+    """
+    发送浏览器桌面通知 + 播放提示音。
+    即使Streamlit页面在后台标签页也能收到通知。
+    """
+    # 桌面通知
+    notify_js = f"""
+    <script>
+    (function() {{
+        if (!("Notification" in window)) return;
+        if (Notification.permission === "granted") {{
+            new Notification("{title}", {{ body: "{message}", icon: "🎬" }});
+        }} else if (Notification.permission !== "denied") {{
+            Notification.requestPermission().then(function(perm) {{
+                if (perm === "granted") {{
+                    new Notification("{title}", {{ body: "{message}", icon: "🎬" }});
+                }}
+            }});
+        }}
+    }})();
+    </script>
+    """
+    st_components.html(notify_js, height=0)
+    
+    # 提示音
+    audio_html = f"""
+    <audio autoplay style="display:none">
+    <source src="{_NOTIFICATION_AUDIO_B64}" type="audio/wav">
+    </audio>
+    """
+    st_components.html(audio_html, height=0)
+
+
+# ============ 磁盘持久化 ============
+# 每步完成自动存JSON到磁盘，断网/崩溃/关机不丢结果
+
+_AUTOSAVE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "autosave")
+
+def _ensure_autosave_dir():
+    """确保自动保存目录存在"""
+    os.makedirs(_AUTOSAVE_DIR, exist_ok=True)
+
+def autosave_result(key: str, data: dict):
+    """
+    将结果持久化到磁盘。
+    key: 如 "normal_result", "market_step1", "market_result"
+    data: 要保存的字典数据
+    """
+    try:
+        _ensure_autosave_dir()
+        filepath = os.path.join(_AUTOSAVE_DIR, f"{key}.json")
+        # 序列化时处理不可JSON化的类型
+        def _default(obj):
+            if isinstance(obj, (set, frozenset)):
+                return list(obj)
+            if hasattr(obj, '__dict__'):
+                return str(obj)
+            return str(obj)
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2, default=_default)
+    except Exception as e:
+        # 持久化失败不影响主流程，但打个日志
+        import sys
+        print(f"[autosave] 保存 {key} 失败: {e}", file=sys.stderr)
+
+def autosave_load(key: str) -> dict | None:
+    """
+    从磁盘加载持久化结果。
+    返回 dict 或 None（文件不存在时）
+    """
+    filepath = os.path.join(_AUTOSAVE_DIR, f"{key}.json")
+    if not os.path.exists(filepath):
+        return None
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        import sys
+        print(f"[autosave] 加载 {key} 失败: {e}", file=sys.stderr)
+        return None
+
+def autosave_has(key: str) -> bool:
+    """检查是否存在持久化结果"""
+    return os.path.exists(os.path.join(_AUTOSAVE_DIR, f"{key}.json"))
+
+def autosave_list() -> list[str]:
+    """列出所有已持久化的结果key"""
+    if not os.path.isdir(_AUTOSAVE_DIR):
+        return []
+    return [f.replace(".json", "") for f in os.listdir(_AUTOSAVE_DIR) if f.endswith(".json")]
+
+def autosave_clear(key: str = None):
+    """清除持久化结果。key=None时清除全部"""
+    import glob
+    if key:
+        filepath = os.path.join(_AUTOSAVE_DIR, f"{key}.json")
+        if os.path.exists(filepath):
+            os.remove(filepath)
+    else:
+        for f in glob.glob(os.path.join(_AUTOSAVE_DIR, "*.json")):
+            os.remove(f)
+
+
+def notify_stage_complete(stage_name: str, detail: str = ""):
+    """阶段完成通知的快捷方法"""
+    is_zh = st.session_state.get("lang", "zh") == "zh"
+    title = "🎬 辩论系统" if is_zh else "🎬 Debate System"
+    msg = f"✅ {stage_name}完成！" if is_zh else f"✅ {stage_name} complete!"
+    if detail:
+        msg += f" {detail}"
+    browser_notify(title, msg)
+
+
+# ============ i18n ============
+LANG = {
+    "zh": {
+        "title": "🧠 AI Consensus Pipeline",
+        "subtitle": "通用AI多部门辩论内容创作框架 — 智能配组 → 部门辩论 → 交叉审核 → 校对 → 产出",
+        "tab_input": "📝 输入",
+        "tab_debate": "🗣️ 部门辩论",
+        "tab_cross": "⚔️ 交叉辩论",
+        "tab_output": "🎬 最终产出",
+        "tab_proofread": "🔍 校对",
+        "script_label": "基础剧本",
+        "script_hint": "输入你的场景、角色、情节骨架",
+        "positive_prompt_label": "场景正向提示词",
+        "positive_prompt_hint": "视觉风格、渲染质感、布光风格、氛围",
+        "negative_prompt_label": "负面提示词",
+        "negative_prompt_hint": "要排除的视觉元素",
+        "character_refs_label": "角色参考",
+        "character_refs_hint": "角色三视图/表情设计描述或参考图提示词",
+        "start_debate": "🚀 一键全辩（自动跑完全部）",
+        "start_step": "🎬 逐步辩论（每轮暂停审阅）",
+        "debate_progress": "辩论进度",
+        "consensus": "最终共识",
+        "cross_debate_title": "交叉辩论",
+        "p2_cross_title": "P2 空间板块交叉审核",
+        "p5_cross_title": "P5 交叉辩论",
+        "vs": " vs ",
+        "output_storyboard": "📐 静态关键帧分镜表（喂绘图工具）",
+        "output_video": "🎥 逐镜视频提示词（喂视频生成工具）",
+        "copy_prompt": "📋 复制",
+        "export_json": "📥 导出完整结果JSON",
+        "export_storyboard": "📥 导出分镜表",
+        "export_video": "📥 导出视频提示词",
+        "debate_rounds": "辩论轮次",
+        "debate_rounds_hint": "每个部门的辩论轮次（1-10），轮次越多讨论越深入",
+        "api_url": "API地址",
+        "api_key": "API密钥",
+        "model_name": "模型名称",
+        "language": "语言 / Language",
+        "need_api": "请在侧边栏配置API信息",
+        "need_script": "请先在「输入」页填写基础剧本",
+        "debate_not_started": "辩论尚未开始，请先在「输入」页填写剧本并点击开始",
+        "cross_not_started": "交叉辩论需要先完成部门辩论",
+        "output_not_ready": "最终产出需要先完成全部辩论",
+        "proofread_not_ready": "校对需要先完成最终产出",
+        "rerun_dept": "🔄 重新辩论此部门",
+        "dept_result": "辩论结果",
+        "extra_instructions": "额外指令",
+        "extra_instructions_hint": "对当前部门的额外创作指令",
+        "segment_note": "💡 如剧本超过15秒，产物将自动拆为多段",
+        "director_review": "🎬 导演审阅",
+        "approve": "✅ 通过",
+        "reject_redebate": "❌ 打回重辩",
+        "reject_hint": "请输入修改意见后打回",
+        "rejection_reason": "修改意见",
+        "proofread_run": "🔍 执行校对",
+        "proofread_running": "🔍 正在校对...",
+        "proofread_result": "校对结果",
+        "proofread_overall": "总体评价",
+        # 逐步模式
+        "step_mode": "逐步辩论模式",
+        "step_mode_hint": "开启后每轮辩论暂停，导演可审阅并给出纠正指令再继续",
+        "step_round_title": "第{round}轮辩论完成",
+        "step_correction_label": "导演纠正指令（可选）",
+        "step_correction_hint": "如果本轮辩论跑偏，在此输入纠正指令，将在下一轮生效",
+        "step_continue": "▶️ 继续下一轮",
+        "step_finish_dept": "✅ 结束辩论，生成共识",
+        "step_dept_done": "{dept} 辩论完成",
+        "step_next_dept": "▶️ 开始{dept}辩论",
+        "step_all_done": "✅ 全部部门辩论完成",
+        "step_run_cross": "⚔️ 开始交叉辩论",
+        "step_run_summary": "🎬 生成最终产出",
+        "step_run_proofread": "🔍 执行校对",
+        "step_waiting": "等待导演操作",
+        "step_current_status": "当前状态",
+        # 承上文档
+        "carry_forward_label": "📋 承上文档（前段决策摘要）",
+        "carry_forward_hint": "粘贴上一段辩论生成的承上文档，保证多段剧本之间的连续性",
+        "carry_forward_generate": "🔄 生成承上文档",
+        "carry_forward_generated": "✅ 承上文档已生成",
+        "carry_forward_copy": "📋 复制承上文档",
+        "carry_forward_export": "📥 导出承上文档",
+        "carry_forward_note": "💡 辩论完成后点击「生成承上文档」，将产物粘贴到下一段的承上文档输入框中",
+        # 空间示意图
+        "spatial_diagram": "🗺️ 空间示意图",
+        "spatial_diagram_generate": "🗺️ 生成空间示意图提示词",
+        "spatial_diagram_generating": "🗺️ 正在生成空间示意图提示词...",
+        "spatial_diagram_result": "空间示意图提示词",
+        "spatial_diagram_export": "📥 导出空间示意图提示词",
+        "spatial_diagram_hint": "根据空间板块共识生成可视化布局图提示词，可喂给AI绘图工具生成场景俯视图",
+        "spatial_diagram_need_spatial": "空间示意图需要先完成空间板块辩论",
+        "auto_revision": "🔧 自动修正",
+        "auto_revision_run": "🔧 根据校对反馈自动修正",
+        "auto_revision_running": "🔧 正在根据校对反馈修正产出...",
+        "auto_revision_done": "✅ 自动修正完成",
+        "auto_revision_notes": "修正说明",
+        "director_revision": "🎬 导演指令修正",
+        "director_revision_dept": "选择要重辩的部门",
+        "director_revision_note": "修改意见",
+        "director_revision_note_hint": "告诉这个部门哪里不对、要怎么改",
+        "director_revision_run": "🎬 执行导演指令修正",
+        "director_revision_running": "🎬 正在重辩{dept}并重新生成产出...",
+        "director_revision_done": "✅ 导演指令修正完成",
+        "revision_rounds": "重辩轮次",
+        # 产出回炉编辑
+        "output_edit": "✏️ 产出回炉编辑",
+        "output_edit_hint": "选中部门+给修改意见 → 从该部门专业视角定向修改分镜表/视频提示词/空间表（不重跑辩论）",
+        "output_edit_dept": "选择编辑部门",
+        "output_edit_note": "修改意见",
+        "output_edit_note_hint": "告诉这个部门哪里要改、要加什么内容",
+        "output_edit_spatial": "同时修改空间板块定义（物品清单/角色定位/动线）",
+        "output_edit_run": "✏️ 执行回炉编辑",
+        "output_edit_running": "✏️ 正在让{dept}编辑产出...",
+        "output_edit_done": "✅ 回炉编辑完成",
+        "output_edit_notes": "修改说明",
+        "output_edit_apply": "✅ 应用编辑结果",
+        "output_edit_applied": "✅ 编辑结果已应用到产出",
+        "output_edit_spatial_updated": "（空间板块定义已同步更新）",
+        # 模型与架构
+        "model_profile": "🤖 模型配置",
+        "model_profile_hint": "选择预置模型或自定义",
+        "custom_api_url": "自定义API地址",
+        "custom_api_key": "自定义API密钥",
+        "custom_model_name": "自定义模型名称",
+        "architecture_mode": "🏗️ 架构模式",
+        "mode_pipeline": "共识管线 (Pipeline of Consensus)",
+        "mode_single_agent": "单Agent基线 (Baseline)",
+        "mode_expert_pool": "专家池 (Expert Pool)",
+        # 对比面板
+        "tab_compare": "📊 对比",
+        "compare_title": "📊 运行对比面板",
+        "compare_desc": "同一剧本，不同模型/架构的运行结果对比。展示Harness Engineering的核心论点：换架构 > 换模型。",
+        "compare_no_runs": "还没有运行记录。跑一次辩论后，结果会自动保存到这里。",
+        "compare_save_run": "💾 保存当前运行结果",
+        "compare_saved": "✅ 运行结果已保存",
+        "compare_run_label": "运行 #{idx}",
+        "compare_model": "模型",
+        "compare_mode": "架构",
+        "compare_tokens": "总Token",
+        "compare_time": "耗时",
+        "compare_api_calls": "API调用次数",
+        "compare_storyboard_preview": "分镜表预览",
+        "compare_video_preview": "视频提示词预览",
+        "compare_delete": "🗑️ 删除此运行",
+        "compare_clear": "🗑️ 清空所有运行",
+        "compare_table": "对比总览",
+        "mode_pipeline_desc": "8部门 × 3-4辩手 × N轮 → 共识管线",
+        "mode_single_desc": "1次LLM调用 → 无结构基线",
+        "mode_expert_desc": "场景分析 → 2辩手/部门 → 精简管线",
+        # 市场模式
+        "tab_market": "🏪 市场",
+        "market_title": "🏪 市场模式",
+        "market_subtitle": "3个候选竞选 → 100题投票选举 → 补丁修正 → 最优产出",
+        "market_num_candidates": "候选数量",
+        "market_num_candidates_hint": "生成几个候选方案（2-5），每个用不同温度",
+        "market_questions_per": "每辩手出题数",
+        "market_questions_per_hint": "每个AI提出几个评估问题（3-15）",
+        "market_start": "🏪 开市！",
+        "market_running": "🏪 市场营业中...",
+        "market_step1": "📦 Step 1: 生成候选方案",
+        "market_step2": "❓ Step 2: 出题",
+        "market_step3": "🗳️ Step 3: 投票",
+        "market_step4": "🔧 Step 4: 补丁修正",
+        "market_generating": "正在生成候选{idx}/{total}（温度{temp}）...",
+        "market_questioning": "正在出题：{dept}/{debater}...",
+        "market_voting": "正在投票：{voter}...",
+        "market_patching": "正在补丁修正...",
+        "market_candidates": "候选方案",
+        "market_questions_total": "共{total}个问题",
+        "market_vote_result": "投票结果",
+        "market_winner": "🏆 当选方案：候选{label}（{votes}票）",
+        "market_vote_detail": "投票详情",
+        "market_contested": "争议问题",
+        "market_contested_hint": "投票分歧较大的问题，将用于补丁修正",
+        "market_patch_result": "补丁修正结果",
+        "market_patch_notes": "修正说明",
+        "market_apply_winner": "✅ 应用当选方案",
+        "market_apply_patched": "✅ 应用补丁修正版",
+        "market_applied": "✅ 方案已应用到最终产出",
+        "market_no_result": "市场尚未开市，请先填写剧本并点击「开张！」",
+        "market_need_debate": "请先在输入页完成剧本填写和API配置",
+        "market_parallel_workers": "并行数量",
+        "market_parallel_workers_hint": "同时生成几个候选（1=串行，3=3个一起跑）",
+        "market_rounds": "市场辩论轮次",
+        "market_rounds_hint": "每个候选内部辩论轮次，与普通模式对齐以保证公平对比",
+        "asset_checklist": "📋 资产参照表",
+        "asset_checklist_hint": "从各部门共识自动提取制作动画前需要准备的素材清单",
+        "asset_checklist_download": "📥 导出资产参照表",
+        # v3.0 智能配组
+        "tab_config": "🧠 智能配组",
+        "config_title": "🧠 Consensus Pipeline 智能配组",
+        "config_subtitle": "描述你的创作需求，AI自动配置最优辩论工作组",
+        "config_input_label": "描述你想制作的内容...",
+        "config_input_hint": "例如：制作一个2分钟的科幻短片、写一篇悬疑小说、设计一个RPG游戏的战斗系统...",
+        "config_ai_button": "🧠 AI智能配组",
+        "config_ai_running": "🧠 AI正在分析你的需求并配置工作组...",
+        "config_preset_label": "预设配置",
+        "config_profile_label": "我的配置",
+        "config_preview_title": "工作组预览",
+        "config_dept_enabled": "启用",
+        "config_dept_disabled": "禁用",
+        "config_debaters": "辩手",
+        "config_global_params": "全局参数",
+        "config_visual_directive": "视觉指令",
+        "config_negative_prompts": "负面提示词",
+        "config_debate_rounds": "辩论轮次",
+        "config_skill_injection": "Skill注入",
+        "config_skill_injection_hint": "输入markdown内容，将自动注入到相关辩手提示词末尾",
+        "config_skill_target": "注入目标部门",
+        "config_skill_target_all": "所有部门",
+        "config_save": "💾 保存配置",
+        "config_save_name": "配置名称",
+        "config_export": "📋 导出配置",
+        "config_import": "📥 导入配置",
+        "config_apply": "✅ 确认并开始",
+        "config_applied": "✅ 配置已应用！切换到输入页开始创作",
+        "config_delete": "🗑️ 删除",
+        "config_no_depts": "尚未配置任何部门，请使用AI配组或选择预设",
+        "config_clarification": "⚠️ AI需要更多信息",
+        "config_error": "❌ 配置出错",
+        "config_current": "当前配置",
+    },
+    "en": {
+        "title": "🧠 AI Consensus Pipeline",
+        "subtitle": "Universal AI Multi-Dept Debate Framework — Smart Config → Dept Debate → Cross Review → Proofread → Output",
+        "tab_input": "📝 Input",
+        "tab_debate": "🗣️ Dept. Debate",
+        "tab_cross": "⚔️ Cross Debate",
+        "tab_output": "🎬 Output",
+        "tab_proofread": "🔍 Proofread",
+        "script_label": "Base Script",
+        "script_hint": "Enter your scene, characters, and plot skeleton",
+        "positive_prompt_label": "Scene Positive Prompt",
+        "positive_prompt_hint": "Visual style, render quality, lighting style, atmosphere",
+        "negative_prompt_label": "Negative Prompt",
+        "negative_prompt_hint": "Visual elements to exclude",
+        "character_refs_label": "Character References",
+        "character_refs_hint": "Character turnaround/expression design descriptions or reference image prompts",
+        "start_debate": "🚀 Auto Run All",
+        "start_step": "🎬 Step-by-Step (pause each round)",
+        "debate_progress": "Debate Progress",
+        "consensus": "Final Consensus",
+        "cross_debate_title": "Cross-Department Debate",
+        "p2_cross_title": "P2 Spatial Review",
+        "p5_cross_title": "P5 Cross-Debate",
+        "vs": " vs ",
+        "output_storyboard": "📐 Static Keyframe Storyboard (for image generation)",
+        "output_video": "🎥 Per-Shot Video Prompt (for video generation)",
+        "copy_prompt": "📋 Copy",
+        "export_json": "📥 Export Full Results JSON",
+        "export_storyboard": "📥 Export Storyboard",
+        "export_video": "📥 Export Video Prompts",
+        "debate_rounds": "Debate Rounds",
+        "debate_rounds_hint": "Rounds per department (1-10). More rounds = deeper discussion",
+        "api_url": "API URL",
+        "api_key": "API Key",
+        "model_name": "Model Name",
+        "language": "语言 / Language",
+        "need_api": "Please configure API in the sidebar",
+        "need_script": "Please fill in the base script on the Input tab first",
+        "debate_not_started": "Debate not started. Fill in the script and click Start.",
+        "cross_not_started": "Complete department debates first",
+        "output_not_ready": "Complete all debates first",
+        "proofread_not_ready": "Generate final output first",
+        "rerun_dept": "🔄 Re-debate this department",
+        "dept_result": "Debate Results",
+        "extra_instructions": "Extra Instructions",
+        "extra_instructions_hint": "Additional creative instructions for current department",
+        "segment_note": "💡 If script exceeds 15s, output will be split into segments",
+        "director_review": "🎬 Director Review",
+        "approve": "✅ Approve",
+        "reject_redebate": "❌ Reject & Re-debate",
+        "reject_hint": "Enter revision notes before rejecting",
+        "rejection_reason": "Revision Notes",
+        "proofread_run": "🔍 Run Proofreading",
+        "proofread_running": "🔍 Proofreading...",
+        "proofread_result": "Proofreading Result",
+        "proofread_overall": "Overall Assessment",
+        # Step mode
+        "step_mode": "Step-by-Step Mode",
+        "step_mode_hint": "Pause after each round; director can review and give corrections before continuing",
+        "step_round_title": "Round {round} Complete",
+        "step_correction_label": "Director Correction (optional)",
+        "step_correction_hint": "If this round went off track, enter corrections here for the next round",
+        "step_continue": "▶️ Continue to Next Round",
+        "step_finish_dept": "✅ End Debate & Generate Consensus",
+        "step_dept_done": "{dept} Debate Complete",
+        "step_next_dept": "▶️ Start {dept} Debate",
+        "step_all_done": "✅ All Department Debates Complete",
+        "step_run_cross": "⚔️ Start Cross-Debate",
+        "step_run_summary": "🎬 Generate Final Output",
+        "step_run_proofread": "🔍 Run Proofreading",
+        "step_waiting": "Waiting for director action",
+        "step_current_status": "Current Status",
+        # Carry forward
+        "carry_forward_label": "📋 Carry Forward (Previous Segment Summary)",
+        "carry_forward_hint": "Paste the carry-forward document from the previous segment's debate to ensure continuity",
+        "carry_forward_generate": "🔄 Generate Carry Forward",
+        "carry_forward_generated": "✅ Carry Forward Generated",
+        "carry_forward_copy": "📋 Copy Carry Forward",
+        "carry_forward_export": "📥 Export Carry Forward",
+        "carry_forward_note": "💡 After debate completes, click 'Generate Carry Forward' and paste it into the next segment's input",
+        # Spatial diagram
+        "spatial_diagram": "🗺️ Spatial Diagram",
+        "spatial_diagram_generate": "🗺️ Generate Spatial Diagram Prompt",
+        "spatial_diagram_generating": "🗺️ Generating spatial diagram prompt...",
+        "spatial_diagram_result": "Spatial Diagram Prompt",
+        "spatial_diagram_export": "📥 Export Spatial Diagram Prompt",
+        "spatial_diagram_hint": "Generate a visual layout diagram prompt from Spatial Planning consensus, for AI image tools to create scene top-down view",
+        "spatial_diagram_need_spatial": "Spatial diagram requires Spatial Planning debate to be completed first",
+        "auto_revision": "🔧 Auto Revision",
+        "auto_revision_run": "🔧 Auto-fix based on proofreading feedback",
+        "auto_revision_running": "🔧 Revising output based on proofreading feedback...",
+        "auto_revision_done": "✅ Auto revision complete",
+        "auto_revision_notes": "Revision Notes",
+        "director_revision": "🎬 Director Revision",
+        "director_revision_dept": "Select department to re-debate",
+        "director_revision_note": "Revision Notes",
+        "director_revision_note_hint": "Tell this department what's wrong and how to fix it",
+        "director_revision_run": "🎬 Execute Director Revision",
+        "director_revision_running": "🎬 Re-debating {dept} and regenerating output...",
+        "director_revision_done": "✅ Director revision complete",
+        "revision_rounds": "Re-debate Rounds",
+        # Output edit
+        "output_edit": "✏️ Output Revision",
+        "output_edit_hint": "Select department + edit instructions → targeted edit of storyboard/video prompt/spatial layout from that department's perspective (no re-debate)",
+        "output_edit_dept": "Select editing department",
+        "output_edit_note": "Edit Instructions",
+        "output_edit_note_hint": "Tell this department what to change or add",
+        "output_edit_spatial": "Also edit spatial layout (object inventory/character positioning/paths)",
+        "output_edit_run": "✏️ Execute Revision",
+        "output_edit_running": "✏️ {dept} is editing the output...",
+        "output_edit_done": "✅ Output revision complete",
+        "output_edit_notes": "Edit Notes",
+        "output_edit_apply": "✅ Apply Edit Results",
+        "output_edit_applied": "✅ Edit results applied to output",
+        "output_edit_spatial_updated": "(Spatial layout updated)",
+        # Model & Architecture
+        "model_profile": "🤖 Model Config",
+        "model_profile_hint": "Select a preset model or customize",
+        "custom_api_url": "Custom API URL",
+        "custom_api_key": "Custom API Key",
+        "custom_model_name": "Custom Model Name",
+        "architecture_mode": "🏗️ Architecture Mode",
+        "mode_pipeline": "Pipeline of Consensus",
+        "mode_single_agent": "Single Agent Baseline",
+        "mode_expert_pool": "Expert Pool",
+        # Compare panel
+        "tab_compare": "📊 Compare",
+        "compare_title": "📊 Run Comparison Panel",
+        "compare_desc": "Same script, different model/architecture runs. Demonstrates the core Harness Engineering thesis: architecture > model.",
+        "compare_no_runs": "No runs recorded yet. Run a debate and results will be saved here automatically.",
+        "compare_save_run": "💾 Save Current Run",
+        "compare_saved": "✅ Run results saved",
+        "compare_run_label": "Run #{idx}",
+        "compare_model": "Model",
+        "compare_mode": "Architecture",
+        "compare_tokens": "Total Tokens",
+        "compare_time": "Duration",
+        "compare_api_calls": "API Calls",
+        "compare_storyboard_preview": "Storyboard Preview",
+        "compare_video_preview": "Video Prompt Preview",
+        "compare_delete": "🗑️ Delete Run",
+        "compare_clear": "🗑️ Clear All Runs",
+        "compare_table": "Comparison Overview",
+        "mode_pipeline_desc": "8 depts × 3-4 debaters × N rounds → Consensus Pipeline",
+        "mode_single_desc": "1 LLM call → Unstructured baseline",
+        "mode_expert_desc": "Scene analysis → 2 debaters/dept → Streamlined Pipeline",
+        # Market mode
+        "tab_market": "🏪 Market",
+        "market_title": "🏪 Market Mode",
+        "market_subtitle": "3 candidates run → 100-question vote → patch revision → best output",
+        "market_num_candidates": "Number of Candidates",
+        "market_num_candidates_hint": "How many candidates to generate (2-5), each with different temperature",
+        "market_questions_per": "Questions per Debater",
+        "market_questions_per_hint": "How many evaluation questions each AI proposes (3-15)",
+        "market_start": "🏪 Market Open!",
+        "market_running": "🏪 Market is running...",
+        "market_step1": "📦 Step 1: Generate Candidates",
+        "market_step2": "❓ Step 2: Generate Questions",
+        "market_step3": "🗳️ Step 3: Vote",
+        "market_step4": "🔧 Step 4: Patch Revision",
+        "market_generating": "Generating candidate {idx}/{total} (temp {temp})...",
+        "market_questioning": "Questioning: {dept}/{debater}...",
+        "market_voting": "Voting: {voter}...",
+        "market_patching": "Patching winner...",
+        "market_candidates": "Candidates",
+        "market_questions_total": "{total} questions total",
+        "market_vote_result": "Vote Results",
+        "market_winner": "🏆 Winner: Candidate {label} ({votes} votes)",
+        "market_vote_detail": "Vote Details",
+        "market_contested": "Contested Issues",
+        "market_contested_hint": "Questions with split votes, used for patch revision",
+        "market_patch_result": "Patch Revision Result",
+        "market_patch_notes": "Patch Notes",
+        "market_apply_winner": "✅ Apply Winner",
+        "market_apply_patched": "✅ Apply Patched Version",
+        "market_applied": "✅ Applied to final output",
+        "market_no_result": "Market hasn't opened yet. Fill in the script and click 'Open!'",
+        "market_need_debate": "Please fill in the script and API config first",
+        "market_parallel_workers": "Parallel Workers",
+        "market_parallel_workers_hint": "Generate candidates simultaneously (1=serial, 3=3 at once)",
+        "market_rounds": "Market Debate Rounds",
+        "market_rounds_hint": "Debate rounds per candidate, aligned with normal mode for fair comparison",
+        "asset_checklist": "📋 Asset Checklist",
+        "asset_checklist_hint": "Auto-extract asset preparation list from department consensuses before animation production",
+        "asset_checklist_download": "📥 Export Asset Checklist",
+        # v3.0 Smart Config
+        "tab_config": "🧠 Smart Config",
+        "config_title": "🧠 Consensus Pipeline Smart Config",
+        "config_subtitle": "Describe your creative needs, AI auto-configures the optimal debate workgroup",
+        "config_input_label": "Describe what you want to create...",
+        "config_input_hint": "e.g., produce a 2-min sci-fi short, write a mystery novel, design an RPG combat system...",
+        "config_ai_button": "🧠 AI Smart Config",
+        "config_ai_running": "🧠 AI is analyzing your needs and configuring workgroup...",
+        "config_preset_label": "Presets",
+        "config_profile_label": "My Configs",
+        "config_preview_title": "Workgroup Preview",
+        "config_dept_enabled": "Enabled",
+        "config_dept_disabled": "Disabled",
+        "config_debaters": "Debaters",
+        "config_global_params": "Global Parameters",
+        "config_visual_directive": "Visual Directive",
+        "config_negative_prompts": "Negative Prompts",
+        "config_debate_rounds": "Debate Rounds",
+        "config_skill_injection": "Skill Injection",
+        "config_skill_injection_hint": "Enter markdown content, will be auto-injected to relevant debater prompts",
+        "config_skill_target": "Target Departments",
+        "config_skill_target_all": "All Departments",
+        "config_save": "💾 Save Config",
+        "config_save_name": "Config Name",
+        "config_export": "📋 Export Config",
+        "config_import": "📥 Import Config",
+        "config_apply": "✅ Confirm & Start",
+        "config_applied": "✅ Config applied! Switch to Input tab to start creating",
+        "config_delete": "🗑️ Delete",
+        "config_no_depts": "No departments configured yet, use AI config or select a preset",
+        "config_clarification": "⚠️ AI needs more information",
+        "config_error": "❌ Configuration error",
+        "config_current": "Current Config",
+    }
+}
+
+def t(key: str, **kwargs) -> str:
+    lang = st.session_state.get("lang", "zh")
+    text = LANG.get(lang, LANG["zh"]).get(key, key)
+    if kwargs:
+        text = text.format(**kwargs)
+    return text
+
+
+def init_state():
+    defaults = {
+        "lang": "zh",
+        "script": "",
+        "positive_prompt": "",
+        "negative_prompt": "",
+        "character_refs": "",
+        "api_url": "https://api.deepseek.com/v1/chat/completions",
+        "api_key": "",
+        "model_name": "deepseek-v4-flash",
+        "debate_rounds": 3,
+        "extra_instructions": "",
+        "step_mode": True,
+        # 辩论结果
+        "dept_results": {},
+        "spatial_review_result": None,
+        "cross_results": [],
+        "final_output": {},
+        "proofread_result": None,
+        "debate_completed": False,
+        # 逐步模式状态
+        "step_phase": "idle",  # idle / round_done / dept_done / all_dept_done / spatial_review / cross_done / completed
+        "step_dept_index": 0,
+        "step_round": 1,
+        "step_all_arguments": [],
+        "step_debate_log": [],
+        "step_corrections": [],
+        # 承上文档
+        "carry_forward": "",
+        "carry_forward_result": "",
+        "auto_revision_result": None,
+        "output_edit_result": None,
+        # v2.3 Harness Engineering
+        "model_profile": "deepseek-v4-flash",
+        "custom_api_url": "",
+        "custom_api_key": "",
+        "custom_model_name": "",
+        "architecture_mode": "pipeline_of_consensus",
+        "run_history": [],  # 对比面板的运行历史
+        "current_stats": None,  # 当前运行的token统计
+        "current_start_time": None,  # 当前运行的开始时间
+        "current_end_time": None,  # 当前运行的结束时间
+        # v2.4 Market
+        "market_result": None,  # 市场模式结果
+        "market_num_candidates": 3,
+        "market_questions_per": 7,
+        "market_parallel_workers": 3,
+        "market_rounds": 3,
+        # v3.0 智能配组
+        "workgroup_config": None,  # 当前工作组配置（PresetConfig dict）
+        "workgroup_name": "动画辩论",  # 当前配置名称
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+    
+    # v3.0: 启动时自动加载上次使用的配置
+    if not st.session_state.get("_config_auto_loaded", False):
+        st.session_state._config_auto_loaded = True
+        last_used = get_last_used()
+        if last_used:
+            try:
+                # 优先从user_profiles加载，其次从presets
+                profiles = list_profiles()
+                if last_used in profiles:
+                    cfg = load_profile(last_used)
+                else:
+                    cfg = load_preset(last_used)
+                apply_config(cfg)
+                st.session_state.workgroup_config = cfg
+                st.session_state.workgroup_name = last_used
+            except Exception:
+                pass  # 静默失败，使用默认配置
+
+
+
+def render_sidebar():
+    with st.sidebar:
+        # 语言切换
+        lang_col1, lang_col2 = st.columns(2)
+        with lang_col1:
+            if st.button("🇨🇳 中文", use_container_width=True,
+                         type="primary" if st.session_state.lang == "zh" else "secondary"):
+                st.session_state.lang = "zh"
+                st.rerun()
+        with lang_col2:
+            if st.button("🇬🇧 English", use_container_width=True,
+                         type="primary" if st.session_state.lang == "en" else "secondary"):
+                st.session_state.lang = "en"
+                st.rerun()
+        
+        st.divider()
+        
+        # API配置
+        st.subheader("🔑 API")
+        
+        # 模型配置
+        profile_options = {}
+        for pk, pv in MODEL_PROFILES.items():
+            profile_options[pk] = pv["zh_name"] if st.session_state.lang == "zh" else pv["en_name"]
+        
+        selected_profile = st.selectbox(
+            t("model_profile"),
+            options=list(profile_options.keys()),
+            format_func=lambda x: profile_options[x],
+            key="model_profile_select",
+        )
+        st.session_state.model_profile = selected_profile
+        
+        if selected_profile == "custom":
+            st.session_state.custom_api_url = st.text_input(
+                t("custom_api_url"),
+                value=st.session_state.custom_api_url,
+            )
+            st.session_state.custom_api_key = st.text_input(
+                t("custom_api_key"),
+                value=st.session_state.custom_api_key,
+                type="password",
+            )
+            st.session_state.custom_model_name = st.text_input(
+                t("custom_model_name"),
+                value=st.session_state.custom_model_name,
+            )
+            st.session_state.api_url = st.session_state.custom_api_url
+            st.session_state.api_key = st.session_state.custom_api_key
+            st.session_state.model_name = st.session_state.custom_model_name
+        else:
+            profile = MODEL_PROFILES[selected_profile]
+            st.session_state.api_url = profile["api_url"]
+            st.session_state.model_name = profile["model"]
+            # API Key仍手动输入
+            st.session_state.api_key = st.text_input(
+                t("api_key"),
+                value=st.session_state.api_key,
+                type="password",
+            )
+        
+        st.divider()
+        
+        # 辩论参数
+        st.subheader("⚙️ " + ("辩论参数" if st.session_state.lang == "zh" else "Parameters"))
+        st.session_state.debate_rounds = st.slider(
+            t("debate_rounds"),
+            min_value=1, max_value=10, value=st.session_state.debate_rounds,
+            help=t("debate_rounds_hint"),
+        )
+        st.session_state.extra_instructions = st.text_area(
+            t("extra_instructions"),
+            value=st.session_state.extra_instructions,
+            height=80,
+            help=t("extra_instructions_hint"),
+        )
+        
+        st.divider()
+        
+        # 架构模式
+        st.subheader(t("architecture_mode"))
+        mode_options = {}
+        for mk, mv in ARCHITECTURE_MODES.items():
+            mode_options[mk] = mv["zh_name"] if st.session_state.lang == "zh" else mv["en_name"]
+        
+        selected_mode = st.selectbox(
+            t("architecture_mode"),
+            options=list(mode_options.keys()),
+            format_func=lambda x: mode_options[x],
+            key="arch_mode_select",
+        )
+        st.session_state.architecture_mode = selected_mode
+        
+        # 模式说明
+        mode_info = ARCHITECTURE_MODES[selected_mode]
+        mode_desc = mode_info["zh_desc"] if st.session_state.lang == "zh" else mode_info["en_desc"]
+        st.caption(mode_desc)
+
+        st.divider()
+        
+        # 市场参数
+        st.subheader("🏪 " + ("市场参数" if st.session_state.lang == "zh" else "Market Params"))
+        st.session_state.market_num_candidates = st.slider(
+            t("market_num_candidates"),
+            min_value=2, max_value=5, value=st.session_state.market_num_candidates,
+            help=t("market_num_candidates_hint"),
+        )
+        st.session_state.market_questions_per = st.slider(
+            t("market_questions_per"),
+            min_value=3, max_value=15, value=st.session_state.market_questions_per,
+            help=t("market_questions_per_hint"),
+        )
+        st.session_state.market_parallel_workers = st.slider(
+            t("market_parallel_workers"),
+            min_value=1, max_value=5, value=st.session_state.market_parallel_workers,
+            help=t("market_parallel_workers_hint"),
+        )
+        st.session_state.market_rounds = st.slider(
+            t("market_rounds"),
+            min_value=1, max_value=10, value=st.session_state.get("market_rounds", 3),
+            help=t("market_rounds_hint"),
+        )
+
+        st.divider()
+        
+        # 逐步模式开关
+        st.session_state.step_mode = st.toggle(
+            t("step_mode"),
+            value=st.session_state.step_mode,
+            help=t("step_mode_hint"),
+        )
+
+        st.divider()
+        
+        # 存档管理
+        saved_keys = autosave_list()
+        if saved_keys:
+            st.subheader("💾 " + ("存档管理" if st.session_state.lang == "zh" else "Autosave"))
+            for key in saved_keys:
+                st.caption(f"📄 {key}.json")
+            if st.button("🗑️ " + ("清除全部存档" if st.session_state.lang == "zh" else "Clear all saves"), 
+                         use_container_width=True):
+                autosave_clear()
+                st.rerun()
+        
+        st.divider()
+        
+        # v3.0 我的配置
+        st.subheader(t("config_profile_label"))
+        _all_profiles = list_profiles()
+        _all_presets = list_presets()
+        _config_options = []
+        for p in _all_presets:
+            _config_options.append(f"📦 {p}")
+        for p in _all_profiles:
+            _config_options.append(f"💾 {p}")
+        if _config_options:
+            _current_name = get_current_config_name()
+            _sel_idx = 0
+            for i, opt in enumerate(_config_options):
+                clean = opt.replace("📦 ", "").replace("💾 ", "")
+                if clean == _current_name:
+                    _sel_idx = i
+                    break
+            _selected = st.selectbox(
+                t("config_current"),
+                options=_config_options,
+                index=_sel_idx,
+            )
+            if st.button("✅ " + ("应用" if st.session_state.lang == "zh" else "Apply"), use_container_width=True):
+                _clean_name = _selected.replace("📦 ", "").replace("💾 ", "")
+                try:
+                    if _selected.startswith("📦"):
+                        _cfg = load_preset(_clean_name)
+                    else:
+                        _cfg = load_profile(_clean_name)
+                    apply_config(_cfg)
+                    st.session_state.workgroup_config = _cfg
+                    st.session_state.workgroup_name = _clean_name
+                    set_last_used(_clean_name)
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))
+
+
+def build_dept_input(dept_key: str) -> str:
+    """构建部门输入（按P1→P2→P3→P4流程）"""
+    is_zh = st.session_state.lang == "zh"
+    script = st.session_state.script
+    positive = st.session_state.positive_prompt
+    chars = st.session_state.character_refs
+    dept_results = st.session_state.get("dept_results", {})
+    
+    # P1: 编剧部
+    if dept_key == "screenwriter":
+        return f"剧本：\n{script}\n\n场景风格：\n{positive}\n\n角色参考：\n{chars}"
+    
+    # P2: 空间板块（基于编剧部产出）
+    elif dept_key == "spatial":
+        sw = dept_results.get("screenwriter", {}).get("consensus", script)
+        return f"编剧部细节填充版剧本：\n{sw}\n\n原始场景风格：\n{positive}"
+    
+    # P3: 视觉四部门（基于编剧+空间产出）
+    elif dept_key == "storyboard":
+        sw = dept_results.get("screenwriter", {}).get("consensus", script)
+        sp = dept_results.get("spatial", {}).get("consensus", "")
+        return f"编剧部细节填充版剧本：\n{sw}\n\n空间板块布局：\n{sp}\n\n场景风格：\n{positive}"
+    
+    elif dept_key in ("dp", "lighting", "vfx"):
+        parts = [f"编剧部：\n{dept_results.get('screenwriter', {}).get('consensus', script)}"]
+        if "spatial" in dept_results:
+            parts.append(f"空间板块：\n{dept_results['spatial']['consensus']}")
+        if "storyboard" in dept_results:
+            parts.append(f"分镜部：\n{dept_results['storyboard']['consensus']}")
+        return "\n\n---\n\n".join(parts)
+    
+    # P4: 音效+剪辑
+    elif dept_key == "sound":
+        parts = [f"编剧部：\n{dept_results.get('screenwriter', {}).get('consensus', script)}"]
+        if "storyboard" in dept_results:
+            parts.append(f"分镜部：\n{dept_results['storyboard']['consensus']}")
+        return "\n\n---\n\n".join(parts)
+    
+    elif dept_key == "editing":
+        parts = []
+        for pk in ["screenwriter", "spatial", "storyboard", "dp", "lighting", "vfx", "sound"]:
+            if pk in dept_results:
+                p = DEPARTMENTS[pk]
+                pn = p["zh_name"] if is_zh else p["en_name"]
+                parts.append(f"{pn}共识：\n{dept_results[pk]['consensus']}")
+        return "\n\n---\n\n".join(parts)
+    
+    else:
+        prev = []
+        for pk in DEPT_ORDER[:DEPT_ORDER.index(dept_key)]:
+            if pk in dept_results:
+                p = DEPARTMENTS[pk]
+                pn = p["zh_name"] if is_zh else p["en_name"]
+                prev.append(f"{pn}：\n{dept_results[pk]['consensus']}")
+        return "\n\n---\n\n".join(prev)
+
+
+# ============ 一键全辩 ============
+
+def run_all_debates():
+    """执行全部辩论流程（非逐步模式）"""
+    is_zh = st.session_state.lang == "zh"
+    api_url = st.session_state.api_url
+    api_key = st.session_state.api_key
+    model = st.session_state.model_name
+    rounds = st.session_state.debate_rounds
+    lang = st.session_state.lang
+    extra = st.session_state.extra_instructions
+    
+    script = st.session_state.script
+    positive = st.session_state.positive_prompt
+    negative = st.session_state.negative_prompt
+    chars = st.session_state.character_refs
+    
+    # v2.3: Token统计初始化
+    stats = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "api_calls": 0}
+    st.session_state.current_stats = stats
+    st.session_state.current_start_time = time.time()
+    
+    arch_mode = st.session_state.architecture_mode
+    
+    # === 单Agent基线模式 ===
+    if arch_mode == "single_agent":
+        progress = st.progress(0, text=t("debate_progress"))
+        result = run_single_agent(
+            user_script=script,
+            positive_prompt=positive,
+            negative_prompt=negative,
+            character_refs=chars,
+            api_url=api_url, api_key=api_key, model=model,
+            lang=lang, stats=stats,
+        )
+        st.session_state.final_output = result
+        st.session_state.debate_completed = True
+        st.session_state.current_end_time = time.time()
+        autosave_result("normal_result", result)
+        progress.progress(1.0, text="✅ " + ("单Agent基线生成完成" if is_zh else "Single agent baseline complete"))
+        return
+    
+    # === Pipeline / Expert Pool 模式 ===
+    dept_results = {}
+    total_steps = len(DEPT_ORDER) * rounds * 3
+    progress = st.progress(0, text=t("debate_progress"))
+    step = 0
+    
+    if arch_mode == "expert_pool":
+        # 专家池模式：先做场景分析，再精简辩论
+        expert_result = run_expert_pool_debate(
+            user_script=script,
+            positive_prompt=positive,
+            character_refs=chars,
+            api_url=api_url, api_key=api_key, model=model,
+            rounds=rounds, lang=lang, extra_instructions=extra,
+            carry_forward=st.session_state.carry_forward,
+            progress_callback=None,  # 简化进度展示
+            stats=stats,
+        )
+        dept_results = expert_result["dept_results"]
+        st.session_state.expert_pool_result = expert_result
+    else:
+        # P1-P4: 部门辩论（Pipeline of Consensus）
+        for dept_key in DEPT_ORDER:
+            dept = DEPARTMENTS[dept_key]
+            dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+            dept_input = build_dept_input(dept_key)
+        
+            def on_progress(dk, rn, total_r, debater):
+                nonlocal step
+                d = DEPARTMENTS[dk]
+                dn = d["zh_name"] if is_zh else d["en_name"]
+                if debater == "consensus":
+                    # 共识生成阶段
+                    progress.progress(min(step / total_steps, 0.99), text=f"🔄 {dn} - 正在生成部门总结（可能需要2-5分钟）...")
+                else:
+                    step += 1
+                    dn2 = d["debaters"][debater]["zh_name"] if is_zh else d["debaters"][debater]["en_name"]
+                    pct = min(step / total_steps, 0.99)
+                    progress.progress(pct, text=f"{dn} 第{rn}/{total_r}轮 - {dn2}")
+        
+            result = run_department_debate(
+                department_key=dept_key,
+                input_content=dept_input,
+                api_url=api_url, api_key=api_key, model=model,
+                rounds=rounds, lang=lang, extra_instructions=extra,
+                progress_callback=on_progress,
+                carry_forward=st.session_state.carry_forward,
+                stats=stats,
+            )
+            dept_results[dept_key] = result
+            notify_stage_complete(dept_name)
+    
+    # P2: 空间板块交叉审核
+    spatial_consensus = dept_results.get("spatial", {}).get("consensus", "")
+    if spatial_consensus:
+        with st.spinner("🔍 " + ("空间板块交叉审核..." if is_zh else "Spatial review...")):
+            spatial_review = run_spatial_review(
+                spatial_consensus=spatial_consensus,
+                reviewer_departments=["storyboard", "dp", "editing"],
+                api_url=api_url, api_key=api_key, model=model, lang=lang,
+                stats=stats,
+            )
+            # 用修订后的空间共识替换原来的
+            dept_results["spatial"]["consensus"] = spatial_review["revised_consensus"]
+            st.session_state.spatial_review_result = spatial_review
+            notify_stage_complete("空间交叉审核" if is_zh else "Spatial Review")
+    
+    st.session_state.dept_results = dept_results
+    
+    # P5: 交叉辩论
+    cross_results = []
+    for cd in P5_CROSS_DEBATES:
+        a_key, b_key = cd["side_a"], cd["side_b"]
+        if a_key in dept_results and b_key in dept_results:
+            cr = run_cross_debate(
+                cross_config=cd,
+                dept_a_consensus=dept_results[a_key]["consensus"],
+                dept_b_consensus=dept_results[b_key]["consensus"],
+                api_url=api_url, api_key=api_key, model=model, lang=lang,
+                stats=stats,
+            )
+            cross_results.append(cr)
+    st.session_state.cross_results = cross_results
+    
+    # P6: 总结AI
+    final = run_summary(
+        all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+        cross_results=cross_results,
+        user_script=script, positive_prompt=positive,
+        negative_prompt=negative, character_refs=chars,
+        api_url=api_url, api_key=api_key, model=model, lang=lang,
+        stats=stats,
+    )
+    st.session_state.final_output = final
+    st.session_state.debate_completed = True
+    st.session_state.current_end_time = time.time()
+    autosave_result("normal_result", final)
+    notify_stage_complete("分镜表+视频提示词生成" if is_zh else "Storyboard+Video Prompt")
+    progress.progress(1.0, text="✅ " + ("全部辩论完成！" if is_zh else "All debates complete!"))
+
+
+# ============ 逐步模式 ============
+
+def step_run_round(correction: str = ""):
+    """逐步模式：执行当前部门当前轮辩论"""
+    dept_key = DEPT_ORDER[st.session_state.step_dept_index]
+    dept_input = build_dept_input(dept_key)
+    
+    if correction:
+        st.session_state.step_corrections.append(correction)
+    
+    extra = st.session_state.extra_instructions
+    if st.session_state.step_corrections:
+        all_corrections = "\n".join(f"导演纠正{i+1}：{c}" for i, c in enumerate(st.session_state.step_corrections))
+        extra = f"{extra}\n{all_corrections}" if extra else all_corrections
+    
+    cf = st.session_state.carry_forward if st.session_state.step_round == 1 else ""
+    
+    # 确保stats已初始化
+    if st.session_state.current_stats is None:
+        st.session_state.current_stats = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "api_calls": 0}
+        st.session_state.current_start_time = time.time()
+    
+    round_log, all_arguments = run_department_round(
+        department_key=dept_key,
+        round_num=st.session_state.step_round,
+        input_content=dept_input,
+        previous_arguments=st.session_state.step_all_arguments,
+        api_url=st.session_state.api_url,
+        api_key=st.session_state.api_key,
+        model=st.session_state.model_name,
+        lang=st.session_state.lang,
+        extra_instructions=extra,
+        carry_forward=cf,
+        stats=st.session_state.current_stats,
+    )
+    
+    st.session_state.step_debate_log.extend(round_log)
+    st.session_state.step_all_arguments = all_arguments
+    st.session_state.step_phase = "round_done"
+
+
+def step_generate_consensus():
+    """逐步模式：为当前部门生成共识"""
+    dept_key = DEPT_ORDER[st.session_state.step_dept_index]
+    dept_input = build_dept_input(dept_key)
+    
+    # 确保stats已初始化
+    if st.session_state.current_stats is None:
+        st.session_state.current_stats = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "api_calls": 0}
+        st.session_state.current_start_time = time.time()
+    
+    consensus = run_department_consensus(
+        department_key=dept_key,
+        all_arguments=st.session_state.step_all_arguments,
+        input_content=dept_input,
+        api_url=st.session_state.api_url,
+        api_key=st.session_state.api_key,
+        model=st.session_state.model_name,
+        lang=st.session_state.lang,
+        extra_instructions=st.session_state.extra_instructions,
+        rounds=st.session_state.step_round,
+        stats=st.session_state.current_stats,
+    )
+    
+    st.session_state.dept_results[dept_key] = {
+        "department": dept_key,
+        "debate_log": st.session_state.step_debate_log,
+        "consensus": consensus,
+    }
+    st.session_state.step_phase = "dept_done"
+    dept_name = DEPARTMENTS[dept_key]["zh_name"] if st.session_state.lang == "zh" else DEPARTMENTS[dept_key]["en_name"]
+    notify_stage_complete(dept_name)
+
+
+def step_next_dept():
+    """逐步模式：进入下一个部门"""
+    st.session_state.step_dept_index += 1
+    st.session_state.step_round = 1
+    st.session_state.step_all_arguments = []
+    st.session_state.step_debate_log = []
+    st.session_state.step_corrections = []
+    
+    if st.session_state.step_dept_index >= len(DEPT_ORDER):
+        st.session_state.step_phase = "all_dept_done"
+    else:
+        st.session_state.step_phase = "idle"
+
+
+def step_run_spatial_review():
+    """逐步模式：执行P2空间板块交叉审核"""
+    dept_results = st.session_state.dept_results
+    spatial_consensus = dept_results.get("spatial", {}).get("consensus", "")
+    if spatial_consensus:
+        spatial_review = run_spatial_review(
+            spatial_consensus=spatial_consensus,
+            reviewer_departments=["storyboard", "dp", "editing"],
+            api_url=st.session_state.api_url,
+            api_key=st.session_state.api_key,
+            model=st.session_state.model_name,
+            lang=st.session_state.lang,
+            stats=st.session_state.get("current_stats"),
+        )
+        dept_results["spatial"]["consensus"] = spatial_review["revised_consensus"]
+        st.session_state.spatial_review_result = spatial_review
+
+
+def step_run_cross_debates():
+    """逐步模式：执行P5交叉辩论"""
+    dept_results = st.session_state.dept_results
+    cross_results = []
+    
+    # P2: 空间审核（如果还没做）
+    if not st.session_state.get("spatial_review_result"):
+        step_run_spatial_review()
+    
+    # P5: 交叉辩论
+    for cd in P5_CROSS_DEBATES:
+        a_key, b_key = cd["side_a"], cd["side_b"]
+        if a_key in dept_results and b_key in dept_results:
+            cr = run_cross_debate(
+                cross_config=cd,
+                dept_a_consensus=dept_results[a_key]["consensus"],
+                dept_b_consensus=dept_results[b_key]["consensus"],
+                api_url=st.session_state.api_url,
+                api_key=st.session_state.api_key,
+                model=st.session_state.model_name,
+                lang=st.session_state.lang,
+                stats=st.session_state.get("current_stats"),
+            )
+            cross_results.append(cr)
+    st.session_state.cross_results = cross_results
+    st.session_state.step_phase = "cross_done"
+
+
+def step_run_summary():
+    """逐步模式：生成最终产出"""
+    # 确保stats已初始化
+    if st.session_state.current_stats is None:
+        st.session_state.current_stats = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "api_calls": 0}
+        st.session_state.current_start_time = time.time()
+    
+    dept_results = st.session_state.dept_results
+    final = run_summary(
+        all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+        cross_results=st.session_state.cross_results,
+        user_script=st.session_state.script,
+        positive_prompt=st.session_state.positive_prompt,
+        negative_prompt=st.session_state.negative_prompt,
+        character_refs=st.session_state.character_refs,
+        api_url=st.session_state.api_url,
+        api_key=st.session_state.api_key,
+        model=st.session_state.model_name,
+        lang=st.session_state.lang,
+        stats=st.session_state.current_stats,
+    )
+    st.session_state.final_output = final
+    st.session_state.debate_completed = True
+    st.session_state.current_end_time = time.time()
+    autosave_result("normal_result", final)
+    st.session_state.step_phase = "completed"
+
+
+# ============ 输入Tab ============
+
+def render_input_tab():
+    st.subheader(t("script_label"))
+    st.session_state.script = st.text_area(
+        t("script_label"),
+        value=st.session_state.script,
+        height=150,
+        placeholder=t("script_hint"),
+        label_visibility="collapsed",
+    )
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader(t("positive_prompt_label"))
+        st.session_state.positive_prompt = st.text_area(
+            t("positive_prompt_label"),
+            value=st.session_state.positive_prompt,
+            height=120,
+            placeholder=t("positive_prompt_hint"),
+            label_visibility="collapsed",
+        )
+    with col2:
+        st.subheader(t("negative_prompt_label"))
+        st.session_state.negative_prompt = st.text_area(
+            t("negative_prompt_label"),
+            value=st.session_state.negative_prompt,
+            height=120,
+            placeholder=t("negative_prompt_hint"),
+            label_visibility="collapsed",
+        )
+    
+    st.subheader(t("character_refs_label"))
+    st.session_state.character_refs = st.text_area(
+        t("character_refs_label"),
+        value=st.session_state.character_refs,
+        height=100,
+        placeholder=t("character_refs_hint"),
+        label_visibility="collapsed",
+    )
+    
+    st.info(t("segment_note"))
+    
+    # 承上文档输入
+    st.divider()
+    st.subheader(t("carry_forward_label"))
+    st.session_state.carry_forward = st.text_area(
+        t("carry_forward_label"),
+        value=st.session_state.carry_forward,
+        height=120,
+        placeholder=t("carry_forward_hint"),
+        label_visibility="collapsed",
+    )
+    
+    if not st.session_state.api_key:
+        st.warning(t("need_api"))
+        return
+    
+    if not st.session_state.script.strip():
+        st.warning(t("need_script"))
+        return
+    
+    # 两个启动按钮
+    btn_col1, btn_col2 = st.columns(2)
+    
+    with btn_col1:
+        if st.button(t("start_debate"), type="secondary", use_container_width=True):
+            st.session_state.step_phase = "idle"
+            st.session_state.dept_results = {}
+            st.session_state.cross_results = []
+            st.session_state.final_output = {}
+            st.session_state.debate_completed = False
+            st.session_state.proofread_result = None
+            st.session_state.spatial_review_result = None
+            run_all_debates()
+    
+    with btn_col2:
+        if st.button(t("start_step"), type="primary", use_container_width=True):
+            st.session_state.dept_results = {}
+            st.session_state.cross_results = []
+            st.session_state.final_output = {}
+            st.session_state.debate_completed = False
+            st.session_state.proofread_result = None
+            st.session_state.spatial_review_result = None
+            st.session_state.step_dept_index = 0
+            st.session_state.step_round = 1
+            st.session_state.step_all_arguments = []
+            st.session_state.step_debate_log = []
+            st.session_state.step_corrections = []
+            step_run_round()
+            st.rerun()
+
+
+# ============ 辩论Tab ============
+
+def render_debate_tab():
+    is_zh = st.session_state.lang == "zh"
+    
+    if st.session_state.step_mode and st.session_state.step_phase != "idle":
+        render_step_mode()
+        return
+    
+    dept_results = st.session_state.get("dept_results", {})
+    
+    if not dept_results:
+        st.info(t("debate_not_started"))
+        return
+    
+    for dept_key in DEPT_ORDER:
+        if dept_key not in dept_results:
+            continue
+        
+        dept = DEPARTMENTS[dept_key]
+        result = dept_results[dept_key]
+        dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+        
+        with st.expander(f"🎬 **{dept_name}**", expanded=False):
+            for log_entry in result.get("debate_log", []):
+                st.markdown(f"**{log_entry['debater_name']}**（第{log_entry['round']}轮）")
+                st.markdown(log_entry["content"])
+                st.divider()
+            
+            st.subheader(t("consensus"))
+            st.markdown(result.get("consensus", ""))
+            
+            st.markdown("---")
+            st.markdown("**" + t("director_review") + "**")
+            rejection = st.text_input(
+                t("rejection_reason"),
+                key=f"reject_{dept_key}",
+                placeholder=t("reject_hint"),
+                label_visibility="collapsed",
+            )
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.button(t("approve"), key=f"approve_{dept_key}", disabled=True, use_container_width=True)
+            with col_b:
+                if st.button(t("reject_redebate"), key=f"reject_btn_{dept_key}", use_container_width=True):
+                    if rejection.strip():
+                        rerun_single_dept(dept_key, rejection)
+                    else:
+                        st.warning(t("reject_hint"))
+
+
+def render_step_mode():
+    """渲染逐步模式界面"""
+    is_zh = st.session_state.lang == "zh"
+    phase = st.session_state.step_phase
+    dept_index = st.session_state.step_dept_index
+    
+    if dept_index < len(DEPT_ORDER):
+        current_dept = DEPARTMENTS[DEPT_ORDER[dept_index]]
+        dept_name = current_dept["zh_name"] if is_zh else current_dept["en_name"]
+    else:
+        dept_name = "---"
+    
+    st.markdown(f"**{t('step_current_status')}：** {dept_name} · {t('step_round_title', round=st.session_state.step_round)} · `{phase}`")
+    
+    if phase == "round_done":
+        dept_key = DEPT_ORDER[dept_index]
+        dept = DEPARTMENTS[dept_key]
+        dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+        
+        st.subheader(t("step_round_title", round=st.session_state.step_round) + f" — {dept_name}")
+        
+        round_num = st.session_state.step_round
+        for log_entry in st.session_state.step_debate_log:
+            if log_entry["round"] == round_num:
+                with st.chat_message("assistant"):
+                    st.markdown(f"**{log_entry['debater_name']}**")
+                    st.markdown(log_entry["content"])
+        
+        st.divider()
+        
+        correction = st.text_input(
+            t("step_correction_label"),
+            key=f"step_correction_{dept_index}_{round_num}",
+            placeholder=t("step_correction_hint"),
+        )
+        
+        col1, col2 = st.columns(2)
+        max_rounds = st.session_state.debate_rounds
+        is_last_round = st.session_state.step_round >= max_rounds
+        
+        with col1:
+            if is_last_round:
+                if st.button(t("step_finish_dept"), type="primary", use_container_width=True, key=f"step_finish_{dept_index}"):
+                    with st.spinner("🔄 " + ("正在生成部门总结（可能需要2-5分钟）..." if is_zh else "Generating consensus (may take 2-5 min)...")):
+                        step_generate_consensus()
+                    st.rerun()
+            else:
+                if st.button(t("step_continue"), type="primary", use_container_width=True, key=f"step_continue_{dept_index}_{round_num}"):
+                    st.session_state.step_round += 1
+                    step_run_round(correction=correction)
+                    st.rerun()
+        
+        with col2:
+            if not is_last_round:
+                if st.button(t("step_finish_dept"), use_container_width=True, key=f"step_early_finish_{dept_index}_{round_num}"):
+                    with st.spinner("🔄 " + ("正在生成部门总结（可能需要2-5分钟）..." if is_zh else "Generating consensus (may take 2-5 min)...")):
+                        step_generate_consensus()
+                    st.rerun()
+    
+    elif phase == "dept_done":
+        dept_key = DEPT_ORDER[dept_index]
+        dept = DEPARTMENTS[dept_key]
+        dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+        result = st.session_state.dept_results.get(dept_key, {})
+        
+        st.subheader(t("step_dept_done", dept=dept_name))
+        
+        with st.expander("📝 " + ("辩论过程" if is_zh else "Debate Log"), expanded=False):
+            for log_entry in result.get("debate_log", []):
+                st.markdown(f"**{log_entry['debater_name']}**（第{log_entry['round']}轮）")
+                st.markdown(log_entry["content"])
+                st.divider()
+        
+        st.subheader(t("consensus"))
+        st.markdown(result.get("consensus", ""))
+        
+        st.markdown("---")
+        st.markdown("**" + t("director_review") + "**")
+        rejection = st.text_input(
+            t("rejection_reason"),
+            key=f"step_reject_{dept_key}",
+            placeholder=t("reject_hint"),
+            label_visibility="collapsed",
+        )
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button(t("approve"), type="primary", use_container_width=True, key=f"step_approve_{dept_key}"):
+                step_next_dept()
+                if st.session_state.step_phase == "all_dept_done":
+                    st.rerun()
+                else:
+                    step_run_round()
+                    st.rerun()
+        with col_b:
+            if st.button(t("reject_redebate"), use_container_width=True, key=f"step_reject_btn_{dept_key}"):
+                if rejection.strip():
+                    st.session_state.step_round = 1
+                    st.session_state.step_all_arguments = []
+                    st.session_state.step_debate_log = []
+                    st.session_state.step_corrections = [rejection]
+                    step_run_round()
+                    st.rerun()
+                else:
+                    st.warning(t("reject_hint"))
+    
+    elif phase == "all_dept_done":
+        st.success(t("step_all_done"))
+        
+        for dept_key in DEPT_ORDER:
+            if dept_key in st.session_state.dept_results:
+                dept = DEPARTMENTS[dept_key]
+                dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+                result = st.session_state.dept_results[dept_key]
+                with st.expander(f"📋 **{dept_name}**"):
+                    st.markdown(result.get("consensus", ""))
+        
+        if st.button(t("step_run_cross"), type="primary", use_container_width=True, key="step_run_cross"):
+            with st.spinner("⚔️ " + ("交叉辩论中..." if is_zh else "Cross-debating...")):
+                step_run_cross_debates()
+            st.rerun()
+    
+    elif phase == "cross_done":
+        st.success("✅ " + ("交叉辩论完成" if is_zh else "Cross-debates complete"))
+        
+        # P2空间审核结果
+        if st.session_state.get("spatial_review_result"):
+            with st.expander(f"🔍 **{t('p2_cross_title')}**"):
+                sr = st.session_state.spatial_review_result
+                for dk, rv in sr.get("reviews", {}).items():
+                    dept = DEPARTMENTS[dk]
+                    dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+                    st.markdown(f"**{dept_name}** 审核反馈：")
+                    st.markdown(rv)
+                    st.divider()
+        
+        # P5交叉辩论结果
+        for cr in st.session_state.cross_results:
+            a_dept = DEPARTMENTS[cr["side_a"]]
+            b_dept = DEPARTMENTS[cr["side_b"]]
+            a_name = a_dept["zh_name"] if is_zh else a_dept["en_name"]
+            b_name = b_dept["zh_name"] if is_zh else b_dept["en_name"]
+            with st.expander(f"⚔️ **{a_name} vs {b_name}** — {cr['topic']}"):
+                st.markdown(cr.get("debate_result", ""))
+        
+        if st.button(t("step_run_summary"), type="primary", use_container_width=True, key="step_run_summary"):
+            with st.spinner("🎬 " + ("生成最终产出中..." if is_zh else "Generating final output...")):
+                step_run_summary()
+            st.rerun()
+    
+    elif phase == "completed":
+        st.success("🎬 " + ("全部流程完成！请到「最终产出」Tab查看结果，到「校对」Tab执行校对" if is_zh else "All complete! Check Output tab for results, Proofread tab for QA"))
+    
+    # 已有部门结果
+    if st.session_state.dept_results and phase not in ("all_dept_done", "cross_done", "completed"):
+        st.divider()
+        for dk in DEPT_ORDER:
+            if dk in st.session_state.dept_results and DEPT_ORDER.index(dk) < dept_index:
+                dept = DEPARTMENTS[dk]
+                dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+                result = st.session_state.dept_results[dk]
+                with st.expander(f"✅ **{dept_name}**"):
+                    st.markdown(result.get("consensus", ""))
+
+
+def rerun_single_dept(dept_key: str, revision_note: str):
+    """打回重辩单个部门"""
+    dept_input = build_dept_input(dept_key)
+    extra = st.session_state.extra_instructions
+    if revision_note:
+        extra = f"{extra}\n导演修改意见：{revision_note}" if extra else f"导演修改意见：{revision_note}"
+    
+    result = run_department_debate(
+        department_key=dept_key,
+        input_content=dept_input,
+        api_url=st.session_state.api_url,
+        api_key=st.session_state.api_key,
+        model=st.session_state.model_name,
+        rounds=st.session_state.debate_rounds,
+        lang=st.session_state.lang,
+        extra_instructions=extra,
+        carry_forward=st.session_state.carry_forward,
+        stats=st.session_state.get("current_stats"),
+    )
+    st.session_state.dept_results[dept_key] = result
+    st.rerun()
+
+
+# ============ 交叉辩论Tab ============
+
+def render_cross_tab():
+    cross_results = st.session_state.get("cross_results", [])
+    is_zh = st.session_state.lang == "zh"
+    
+    # P2空间审核
+    if st.session_state.get("spatial_review_result"):
+        sr = st.session_state.spatial_review_result
+        st.subheader(t("p2_cross_title"))
+        for dk, rv in sr.get("reviews", {}).items():
+            dept = DEPARTMENTS[dk]
+            dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+            with st.expander(f"🔍 **{dept_name}** " + ("审核反馈" if is_zh else "Review")):
+                st.markdown(rv)
+        with st.expander("📝 " + ("空间板块修订方案" if is_zh else "Revised Spatial Plan")):
+            st.markdown(sr.get("revised_consensus", ""))
+    
+    st.divider()
+    
+    # P5交叉辩论
+    st.subheader(t("p5_cross_title"))
+    if not cross_results:
+        st.info(t("cross_not_started"))
+        return
+    
+    for cr in cross_results:
+        a_dept = DEPARTMENTS[cr["side_a"]]
+        b_dept = DEPARTMENTS[cr["side_b"]]
+        a_name = a_dept["zh_name"] if is_zh else a_dept["en_name"]
+        b_name = b_dept["zh_name"] if is_zh else b_dept["en_name"]
+        
+        with st.expander(f"⚔️ **{a_name} vs {b_name}** — {cr['topic']}", expanded=False):
+            st.markdown(cr.get("debate_result", ""))
+
+
+# ============ 产出Tab ============
+
+def render_output_tab():
+    is_zh = st.session_state.lang == "zh"
+    final = st.session_state.get("final_output", {})
+    
+    # 🔧 自动恢复普通模式结果
+    if not final:
+        saved = autosave_load("normal_result")
+        if saved:
+            st.info("💾 " + ("检测到上次辩论结果，已自动恢复！" if is_zh else "Previous debate result recovered from disk!"))
+            st.session_state.final_output = saved
+            st.session_state.debate_completed = True
+            final = saved
+    
+    if not final:
+        st.info(t("output_not_ready"))
+        return
+    
+    # 分镜表
+    st.subheader(t("output_storyboard"))
+    storyboard_text = final.get("storyboard_prompt", "")
+    st.code(storyboard_text, language=None)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            t("export_storyboard"),
+            data=storyboard_text,
+            file_name="storyboard_prompt.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
+    with col2:
+        st.download_button(
+            t("copy_prompt"),
+            data=storyboard_text,
+            file_name="storyboard_prompt.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
+    
+    st.divider()
+    
+    # 视频提示词
+    st.subheader(t("output_video"))
+    video_text = final.get("video_prompt", "")
+    st.code(video_text, language=None)
+    
+    col3, col4 = st.columns(2)
+    with col3:
+        st.download_button(
+            t("export_video"),
+            data=video_text,
+            file_name="video_prompt.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
+    with col4:
+        st.download_button(
+            t("copy_prompt"),
+            data=video_text,
+            file_name="video_prompt.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
+    
+    st.divider()
+    
+    # 空间示意图
+    st.subheader(t("spatial_diagram"))
+    st.caption(t("spatial_diagram_hint"))
+    
+    dept_results = st.session_state.get("dept_results", {})
+    spatial_consensus = dept_results.get("spatial", {}).get("consensus", "") if dept_results else ""
+    
+    if not spatial_consensus:
+        st.warning(t("spatial_diagram_need_spatial"))
+    else:
+        if st.button(t("spatial_diagram_generate"), type="primary", use_container_width=True, key="gen_spatial_diagram"):
+            with st.spinner(t("spatial_diagram_generating")):
+                diagram_result = run_spatial_diagram(
+                    spatial_consensus=spatial_consensus,
+                    user_script=st.session_state.script,
+                    positive_prompt=st.session_state.positive_prompt,
+                    api_url=st.session_state.api_url,
+                    api_key=st.session_state.api_key,
+                    model=st.session_state.model_name,
+                    lang=st.session_state.lang,
+                    stats=st.session_state.get("current_stats"),
+                )
+                st.session_state.spatial_diagram_result = diagram_result
+        
+        diagram = st.session_state.get("spatial_diagram_result")
+        if diagram:
+            scene_count = diagram.get("scene_count", 1)
+            scene_diagrams = diagram.get("scene_diagrams", [])
+            
+            if scene_count > 1 and scene_diagrams:
+                # 多场景：每个场景单独展示
+                for sd in scene_diagrams:
+                    st.markdown(f"**🗺️ {sd['scene_name']}**")
+                    st.code(sd["diagram_prompt"], language=None)
+                    st.download_button(
+                        f"📥 {t('spatial_diagram_export')} - {sd['scene_name']}",
+                        data=sd["diagram_prompt"],
+                        file_name=f"spatial_diagram_{sd['scene_name']}.txt",
+                        mime="text/plain",
+                        use_container_width=True,
+                        key=f"dl_spatial_{sd['scene_name']}",
+                    )
+                    st.divider()
+            else:
+                # 单场景：原有逻辑
+                diagram_text = diagram.get("spatial_diagram_prompt", "")
+                st.code(diagram_text, language=None)
+                
+                sd_col1, sd_col2 = st.columns(2)
+                with sd_col1:
+                    st.download_button(
+                        t("spatial_diagram_export"),
+                        data=diagram_text,
+                        file_name="spatial_diagram_prompt.txt",
+                        mime="text/plain",
+                        use_container_width=True,
+                    )
+                with sd_col2:
+                    st.download_button(
+                        t("copy_prompt"),
+                        data=diagram_text,
+                        file_name="spatial_diagram_prompt.txt",
+                        mime="text/plain",
+                        use_container_width=True,
+                    )
+    
+    st.divider()
+    
+    # 资产参照表
+    st.subheader(t("asset_checklist"))
+    st.caption(t("asset_checklist_hint"))
+    
+    dept_results = st.session_state.get("dept_results", {})
+    if dept_results:
+        asset_checklist_text = generate_asset_checklist(
+            all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+            user_script=st.session_state.script,
+            character_refs=st.session_state.character_refs,
+            lang=st.session_state.lang,
+        )
+        st.markdown(asset_checklist_text)
+        st.download_button(
+            t("asset_checklist_download"),
+            data=asset_checklist_text,
+            file_name="asset_checklist.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+    else:
+        st.info(t("output_not_ready"))
+    
+    st.divider()
+    
+    # 承上文档
+    st.subheader(t("carry_forward_label"))
+    st.caption(t("carry_forward_note"))
+    
+    if st.button(t("carry_forward_generate"), type="primary", use_container_width=True, key="gen_carry_forward"):
+        dept_results = st.session_state.get("dept_results", {})
+        if dept_results:
+            with st.spinner("🔄 " + ("正在生成承上文档..." if st.session_state.lang == "zh" else "Generating carry forward...")):
+                st.session_state.carry_forward_result = generate_carry_forward(
+                    all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+                    cross_results=st.session_state.get("cross_results", []),
+                    api_url=st.session_state.api_url,
+                    api_key=st.session_state.api_key,
+                    model=st.session_state.model_name,
+                    lang=st.session_state.lang,
+                    storyboard_prompt=storyboard_text,
+                    video_prompt=video_text,
+                    stats=st.session_state.get("current_stats"),
+                )
+    
+    if st.session_state.get("carry_forward_result"):
+        st.success(t("carry_forward_generated"))
+        st.code(st.session_state.carry_forward_result, language=None)
+        
+        cf_col1, cf_col2 = st.columns(2)
+        with cf_col1:
+            st.download_button(
+                t("carry_forward_export"),
+                data=st.session_state.carry_forward_result,
+                file_name="carry_forward.txt",
+                mime="text/plain",
+                use_container_width=True,
+            )
+        with cf_col2:
+            st.download_button(
+                t("carry_forward_copy"),
+                data=st.session_state.carry_forward_result,
+                file_name="carry_forward.txt",
+                mime="text/plain",
+                use_container_width=True,
+            )
+    
+    st.divider()
+    
+    # ===== 产出回炉编辑 =====
+    with st.expander(t("output_edit"), expanded=False):
+        st.caption(t("output_edit_hint"))
+        
+        dept_options = {}
+        for dk in DEPT_ORDER:
+            dept = DEPARTMENTS[dk]
+            dept_options[dk] = dept["zh_name"] if is_zh else dept["en_name"]
+        
+        col_dept_edit, col_spatial = st.columns([3, 2])
+        with col_dept_edit:
+            selected_edit_dept = st.selectbox(
+                t("output_edit_dept"),
+                options=list(dept_options.keys()),
+                format_func=lambda x: dept_options[x],
+                key="output_edit_dept_select",
+            )
+        with col_spatial:
+            edit_spatial = st.checkbox(
+                t("output_edit_spatial"),
+                value=(selected_edit_dept == "spatial"),
+                key="output_edit_spatial_check",
+            )
+        
+        edit_note = st.text_area(
+            t("output_edit_note"),
+            height=100,
+            placeholder=t("output_edit_note_hint"),
+            key="output_edit_note_input",
+        )
+        
+        if st.button(t("output_edit_run"), type="primary", use_container_width=True, key="run_output_edit"):
+            if not edit_note.strip():
+                st.warning(t("reject_hint"))
+            else:
+                dept_results = st.session_state.get("dept_results", {})
+                spatial_consensus = dept_results.get("spatial", {}).get("consensus", "") if dept_results else ""
+                with st.spinner(t("output_edit_running", dept=dept_options[selected_edit_dept])):
+                    edit_result = run_output_edit(
+                        department_key=selected_edit_dept,
+                        edit_instructions=edit_note,
+                        current_storyboard=final.get("storyboard_prompt", ""),
+                        current_video_prompt=final.get("video_prompt", ""),
+                        spatial_consensus=spatial_consensus,
+                        all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+                        edit_spatial=edit_spatial,
+                        api_url=st.session_state.api_url,
+                        api_key=st.session_state.api_key,
+                        model=st.session_state.model_name,
+                        lang=st.session_state.lang,
+                        stats=st.session_state.get("current_stats"),
+                    )
+                    st.session_state.output_edit_result = edit_result
+                    st.rerun()
+        
+        edit_res = st.session_state.get("output_edit_result")
+        if edit_res:
+            st.success(t("output_edit_done"))
+            
+            if edit_res.get("edit_notes"):
+                with st.expander("📝 " + t("output_edit_notes")):
+                    st.markdown(edit_res["edit_notes"])
+            
+            # 展示修改后的产出
+            rev_sb = edit_res.get("storyboard_prompt", "")
+            rev_vp = edit_res.get("video_prompt", "")
+            rev_sp = edit_res.get("spatial_consensus")
+            
+            if rev_sb:
+                with st.expander("📐 " + t("output_storyboard")):
+                    st.code(rev_sb, language=None)
+            if rev_vp:
+                with st.expander("🎥 " + t("output_video")):
+                    st.code(rev_vp, language=None)
+            if rev_sp:
+                with st.expander("🗺️ " + ("修改后空间板块" if is_zh else "Revised Spatial Layout")):
+                    st.code(rev_sp, language=None)
+            
+            # 一键应用
+            if st.button(t("output_edit_apply"), type="primary", use_container_width=True, key="apply_output_edit"):
+                st.session_state.final_output["storyboard_prompt"] = rev_sb
+                st.session_state.final_output["video_prompt"] = rev_vp
+                # 如果修改了空间板块，同步更新dept_results
+                if rev_sp:
+                    dept_results = st.session_state.get("dept_results", {})
+                    if "spatial" in dept_results:
+                        dept_results["spatial"]["consensus"] = rev_sp
+                st.session_state.output_edit_result = None
+                st.session_state.proofread_result = None
+                st.session_state.auto_revision_result = None
+                st.rerun()
+    
+    st.divider()
+    
+    # 完整结果JSON
+    full_result = {
+        "script": st.session_state.script,
+        "positive_prompt": st.session_state.positive_prompt,
+        "negative_prompt": st.session_state.negative_prompt,
+        "character_refs": st.session_state.character_refs,
+        "dept_results": {
+            k: {
+                "department": v.get("department"),
+                "consensus": v.get("consensus"),
+            }
+            for k, v in st.session_state.get("dept_results", {}).items()
+        },
+        "spatial_review": st.session_state.get("spatial_review_result"),
+        "cross_results": st.session_state.get("cross_results", []),
+        "storyboard_prompt": storyboard_text,
+        "video_prompt": video_text,
+        "proofread_result": st.session_state.get("proofread_result"),
+        "generated_at": datetime.now().isoformat(),
+    }
+    st.download_button(
+        t("export_json"),
+        data=json.dumps(full_result, ensure_ascii=False, indent=2),
+        file_name="debate_result.json",
+        mime="application/json",
+        use_container_width=True,
+    )
+
+
+# ============ 校对Tab ============
+
+def render_proofread_tab():
+    is_zh = st.session_state.lang == "zh"
+    final = st.session_state.get("final_output", {})
+    
+    if not final:
+        st.info(t("proofread_not_ready"))
+        return
+    
+    st.subheader(t("proofread_result"))
+    st.caption("P7: " + ("空间/分镜/摄影/剪辑四部门审查" if is_zh else "Spatial/Storyboard/DP/Editing review"))
+    
+    if st.button(t("proofread_run"), type="primary", use_container_width=True, key="run_proofread"):
+        dept_results = st.session_state.get("dept_results", {})
+        with st.spinner(t("proofread_running")):
+            result = run_proofreading(
+                storyboard=final.get("storyboard_prompt", ""),
+                video_prompt=final.get("video_prompt", ""),
+                all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+                api_url=st.session_state.api_url,
+                api_key=st.session_state.api_key,
+                model=st.session_state.model_name,
+                lang=st.session_state.lang,
+                stats=st.session_state.get("current_stats"),
+            )
+            st.session_state.proofread_result = result
+            st.rerun()
+    
+    pr = st.session_state.get("proofread_result")
+    if pr:
+        st.subheader(t("proofread_overall"))
+        if pr.get("passed"):
+            st.success(pr.get("overall", ""))
+        else:
+            st.warning(pr.get("overall", ""))
+        
+        for dept_key in PROOFREAD_DEPARTMENTS:
+            dept = DEPARTMENTS[dept_key]
+            dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+            review = pr.get("reviews", {}).get(dept_key, "")
+            with st.expander(f"🔍 **{dept_name}**"):
+                st.markdown(review)
+        
+        # ===== 校对发现问题 → 自动修正 =====
+        if not pr.get("passed"):
+            st.divider()
+            st.subheader(t("auto_revision"))
+            
+            revision = st.session_state.get("auto_revision_result")
+            if revision:
+                st.success(t("auto_revision_done"))
+                if revision.get("revision_notes"):
+                    with st.expander("📝 " + t("auto_revision_notes")):
+                        st.markdown(revision["revision_notes"])
+                
+                # 展示修正后的产出
+                rev_sb = revision.get("storyboard_prompt", "")
+                rev_vp = revision.get("video_prompt", "")
+                if rev_sb:
+                    with st.expander("📐 " + t("output_storyboard")):
+                        st.code(rev_sb, language=None)
+                if rev_vp:
+                    with st.expander("🎥 " + t("output_video")):
+                        st.code(rev_vp, language=None)
+                
+                # 一键应用修正
+                if st.button("✅ " + ("应用修正结果" if is_zh else "Apply Revision"), type="primary", use_container_width=True, key="apply_auto_revision"):
+                    st.session_state.final_output["storyboard_prompt"] = rev_sb
+                    st.session_state.final_output["video_prompt"] = rev_vp
+                    st.session_state.auto_revision_result = None
+                    st.session_state.proofread_result = None
+                    st.rerun()
+            else:
+                if st.button(t("auto_revision_run"), type="secondary", use_container_width=True, key="run_auto_revision"):
+                    dept_results = st.session_state.get("dept_results", {})
+                    with st.spinner(t("auto_revision_running")):
+                        revision = run_auto_revision(
+                            storyboard=pr.get("original_storyboard", final.get("storyboard_prompt", "")),
+                            video_prompt=pr.get("original_video_prompt", final.get("video_prompt", "")),
+                            proofread_result=pr,
+                            all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+                            api_url=st.session_state.api_url,
+                            api_key=st.session_state.api_key,
+                            model=st.session_state.model_name,
+                            lang=st.session_state.lang,
+                            stats=st.session_state.get("current_stats"),
+                        )
+                        st.session_state.auto_revision_result = revision
+                        st.rerun()
+        
+        # ===== 导演指令修正 =====
+        st.divider()
+        st.subheader(t("director_revision"))
+        st.caption("导演指定部门+修改意见 → 重跑该部门辩论 → 重新生成分镜表+视频提示词" if is_zh else "Director picks department + notes → re-debate that dept → regenerate storyboard + video prompt")
+        
+        dept_options = {}
+        for dk in DEPT_ORDER:
+            dept = DEPARTMENTS[dk]
+            dept_options[dk] = dept["zh_name"] if is_zh else dept["en_name"]
+        
+        col_dept, col_rounds = st.columns([3, 1])
+        with col_dept:
+            selected_dept = st.selectbox(
+                t("director_revision_dept"),
+                options=list(dept_options.keys()),
+                format_func=lambda x: dept_options[x],
+                key="director_revision_dept_select",
+            )
+        with col_rounds:
+            revision_rounds = st.number_input(
+                t("revision_rounds"),
+                min_value=1, max_value=5, value=2,
+                key="director_revision_rounds",
+            )
+        
+        director_note = st.text_area(
+            t("director_revision_note"),
+            height=100,
+            placeholder=t("director_revision_note_hint"),
+            key="director_revision_note_input",
+        )
+        
+        if st.button(t("director_revision_run"), type="primary", use_container_width=True, key="run_director_revision"):
+            if not director_note.strip():
+                st.warning(t("reject_hint"))
+            else:
+                dept_results = st.session_state.get("dept_results", {})
+                with st.spinner(t("director_revision_running", dept=dept_options[selected_dept])):
+                    result = run_director_revision(
+                        department_key=selected_dept,
+                        director_note=director_note,
+                        all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+                        user_script=st.session_state.script,
+                        positive_prompt=st.session_state.positive_prompt,
+                        negative_prompt=st.session_state.negative_prompt,
+                        character_refs=st.session_state.character_refs,
+                        cross_results=st.session_state.get("cross_results", []),
+                        current_storyboard=final.get("storyboard_prompt", ""),
+                        current_video_prompt=final.get("video_prompt", ""),
+                        api_url=st.session_state.api_url,
+                        api_key=st.session_state.api_key,
+                        model=st.session_state.model_name,
+                        lang=st.session_state.lang,
+                        rounds=revision_rounds,
+                        stats=st.session_state.get("current_stats"),
+                    )
+                    # 更新部门共识和最终产出
+                    st.session_state.dept_results[selected_dept] = result["dept_result"]
+                    st.session_state.final_output = {
+                        "storyboard_prompt": result["storyboard_prompt"],
+                        "video_prompt": result["video_prompt"],
+                    }
+                    # 清除旧校对结果
+                    st.session_state.proofread_result = None
+                    st.session_state.auto_revision_result = None
+                    st.rerun()
+
+
+
+# ============ 对比面板 ============
+
+def render_compare_tab():
+    """渲染运行对比面板"""
+    is_zh = st.session_state.lang == "zh"
+    run_history = st.session_state.get("run_history", [])
+    
+    st.subheader(t("compare_title"))
+    st.caption(t("compare_desc"))
+    
+    # 保存当前运行结果
+    if st.session_state.get("debate_completed") and st.session_state.get("final_output"):
+        if st.button(t("compare_save_run"), type="primary", use_container_width=True, key="save_current_run"):
+            stats = st.session_state.get("current_stats", {})
+            start_time = st.session_state.get("current_start_time")
+            end_time = st.session_state.get("current_end_time", time.time())
+            duration = round(end_time - start_time, 1) if start_time else 0
+            
+            run_record = {
+                "timestamp": datetime.now().isoformat(),
+                "model_profile": st.session_state.get("model_profile", "custom"),
+                "model_name": st.session_state.model_name,
+                "architecture_mode": st.session_state.architecture_mode,
+                "mode_name": ARCHITECTURE_MODES.get(st.session_state.architecture_mode, {}).get("zh_name" if is_zh else "en_name", ""),
+                "prompt_tokens": stats.get("prompt_tokens", 0),
+                "completion_tokens": stats.get("completion_tokens", 0),
+                "total_tokens": stats.get("total_tokens", 0),
+                "api_calls": stats.get("api_calls", 0),
+                "duration_seconds": duration,
+                "storyboard_prompt": st.session_state.final_output.get("storyboard_prompt", ""),
+                "video_prompt": st.session_state.final_output.get("video_prompt", ""),
+                "script_hash": hash(st.session_state.script) if st.session_state.script else 0,
+            }
+            run_history.append(run_record)
+            st.session_state.run_history = run_history
+            st.success(t("compare_saved"))
+    
+    if not run_history:
+        st.info(t("compare_no_runs"))
+        return
+    
+    # 对比总览表
+    st.subheader(t("compare_table"))
+    
+    # 构建对比数据
+    cols = ["#", t("compare_model"), t("compare_mode"), t("compare_tokens"), t("compare_time"), t("compare_api_calls")]
+    table_data = []
+    for i, run in enumerate(run_history):
+        mode_name = ARCHITECTURE_MODES.get(run["architecture_mode"], {}).get("zh_name" if is_zh else "en_name", run["architecture_mode"])
+        table_data.append({
+            "#": i + 1,
+            t("compare_model"): run["model_name"],
+            t("compare_mode"): mode_name,
+            t("compare_tokens"): f"{run['total_tokens']:,}",
+            t("compare_time"): f"{run['duration_seconds']}s",
+            t("compare_api_calls"): run["api_calls"],
+        })
+    
+    st.dataframe(table_data, use_container_width=True, hide_index=True)
+    
+    # 每次运行的详情
+    for i, run in enumerate(run_history):
+        mode_name = ARCHITECTURE_MODES.get(run["architecture_mode"], {}).get("zh_name" if is_zh else "en_name", run["architecture_mode"])
+        with st.expander(f"\u2615 {t('compare_run_label', idx=i+1)} \u2014 {run['model_name']} / {mode_name}"):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric(t("compare_tokens"), f"{run['total_tokens']:,}")
+            with col2:
+                st.metric(t("compare_time"), f"{run['duration_seconds']}s")
+            with col3:
+                st.metric(t("compare_api_calls"), run["api_calls"])
+            
+            st.divider()
+            
+            sb = run.get("storyboard_prompt", "")
+            vp = run.get("video_prompt", "")
+            if sb:
+                with st.expander("\U0001F4D0 " + t("compare_storyboard_preview")):
+                    st.code(sb[:2000] + ("..." if len(sb) > 2000 else ""), language=None)
+            if vp:
+                with st.expander("\U0001F3A5 " + t("compare_video_preview")):
+                    st.code(vp[:2000] + ("..." if len(vp) > 2000 else ""), language=None)
+    
+    # 清空按钮
+    col_clear1, col_clear2 = st.columns([3, 1])
+    with col_clear2:
+        if st.button(t("compare_clear"), key="clear_all_runs"):
+            st.session_state.run_history = []
+            st.rerun()
+
+
+# ============ 主入口 ============
+
+
+# ============ 市场Tab ============
+
+def render_market_tab():
+    """渲染市场Tab"""
+    is_zh = st.session_state.lang == "zh"
+    
+    st.subheader(t("market_title"))
+    st.caption(t("market_subtitle"))
+    
+    if not st.session_state.api_key or not st.session_state.script.strip():
+        st.warning(t("market_need_debate"))
+        return
+    
+    # 查看已有结果
+    market_result = st.session_state.get("market_result")
+    
+    # 🔧 自动恢复：断网/崩溃后从磁盘恢复
+    if not market_result:
+        # 检查是否有磁盘存档
+        saved = autosave_load("market_result")
+        if saved:
+            st.info("💾 " + ("检测到上次未完成的市场模式结果，已自动恢复！" if is_zh else "Previous market result recovered from disk!"))
+            st.session_state.market_result = saved
+            market_result = saved
+        else:
+            # 检查是否有阶段性存档
+            step3 = autosave_load("market_step3")
+            step2 = autosave_load("market_step2")
+            step1 = autosave_load("market_step1")
+            if step3:
+                st.warning("⚠️ " + ("检测到投票完成但补丁未完成的结果，已恢复到投票阶段" if is_zh else "Vote completed but patch not done, recovered to vote stage"))
+                st.session_state.market_result = step3
+                market_result = step3
+            elif step2:
+                st.warning("⚠️ " + ("检测到候选+出题完成但投票未完成的结果，已恢复" if is_zh else "Candidates+questions done but vote not completed, recovered"))
+                st.session_state.market_result = step2
+                market_result = step2
+            elif step1:
+                st.warning("⚠️ " + ("检测到候选生成完成但出题未完成的结果，已恢复" if is_zh else "Candidates generated but questions not done, recovered"))
+                st.session_state.market_result = step1
+                market_result = step1
+    
+    if not market_result:
+        # 导入已有结果选项
+        existing_result = st.session_state.get("final_output")
+        if existing_result and existing_result.get("storyboard_prompt"):
+            include_existing = st.checkbox(
+                "📥 " + ("将普通模式已有结果作为候选之一参加竞选" if is_zh else "Include normal mode result as a candidate"),
+                value=True,
+                key="market_include_existing",
+            )
+            if include_existing:
+                st.caption("✅ " + ("普通模式结果将作为候选A参与市场竞选，其余候选从API生成" if is_zh else "Normal mode result will join as Candidate A, other candidates generated via API"))
+        
+        # 开张按钮
+        if st.button(t("market_start"), type="primary", use_container_width=True):
+            run_market()
+            st.rerun()
+        return
+    
+    # ---- 展示结果 ----
+    
+    # Step 1: 候选方案
+    candidates = market_result.get("candidates", [])
+    st.subheader(t("market_candidates"))
+    for c in candidates:
+        existing_tag = " ⭐" + ("已有" if is_zh else "Existing") if c.get("is_existing") else f" (T={c.get('temperature', '?')})"
+        with st.expander(f"📦 {t('market_candidates')} {c.get('label', '?')}{existing_tag}"):
+            st.markdown(f"**分镜表**" if is_zh else "**Storyboard**")
+            st.code(c.get("storyboard_prompt", "")[:500] + "...", language=None)
+            st.markdown(f"**视频提示词**" if is_zh else "**Video Prompt**")
+            st.code(c.get("video_prompt", "")[:500] + "...", language=None)
+    
+    st.divider()
+    
+    # Step 2: 问题统计（可能没有）
+    questions = market_result.get("questions", [])
+    if questions:
+        st.subheader(t("market_questions_total", total=len(questions)))
+        
+        # 按部门统计问题数
+        dept_q_counts = {}
+        for q in questions:
+            dk = q.get("source_dept", "unknown")
+            dn = DEPARTMENTS.get(dk, {}).get("zh_name" if is_zh else "en_name", dk)
+            dept_q_counts[dn] = dept_q_counts.get(dn, 0) + 1
+        
+        if dept_q_counts:
+            st.bar_chart(dept_q_counts)
+        
+        st.divider()
+    else:
+        st.info("❓ " + ("出题尚未完成，重新开市将从此步骤继续" if is_zh else "Questions not yet generated, restart market to continue from this step"))
+        # 提供重新开市按钮
+        if st.button("🔄 " + ("重新开市（从出题开始）" if is_zh else "Restart market (from questions)"), type="primary"):
+            # 保留候选，重新跑出题+
+            st.session_state.market_result = None
+            # 候选数据保留在step1存档中
+            st.rerun()
+        return
+    
+    # Step 3: 投票结果（可能没有）
+    vote_result = market_result.get("vote_result")
+    if vote_result:
+        vote_counts = vote_result.get("vote_counts", {})
+        winner_label = vote_result.get("winner_label", "?")
+        winner_votes = vote_counts.get(winner_label, 0)
+        
+        st.subheader(t("market_vote_result"))
+        st.success(t("market_winner", label=winner_label, votes=winner_votes))
+        
+        # 票数柱状图
+        if vote_counts:
+            st.bar_chart(vote_counts)
+        
+        # 投票详情
+        with st.expander("📊 " + t("market_vote_detail")):
+            votes = vote_result.get("votes", [])
+            # 按部门分组展示
+            dept_votes = {}
+            for v in votes:
+                voter_dept = v.get("voter", "").split("/")[0] if "/" in v.get("voter", "") else "Other"
+                if voter_dept not in dept_votes:
+                    dept_votes[voter_dept] = []
+                dept_votes[voter_dept].append(v)
+            
+            for dept_name, dept_v in dept_votes.items():
+                with st.expander(f"🏛️ {dept_name}"):
+                    for v in dept_v[:10]:  # 每部门最多显示10个
+                        st.markdown(f"- **Q:** {v['question'][:80]}... → **选:** 候选{v.get('choice', '?')} {v.get('reason', '')[:100]}")
+        
+        st.divider()
+        
+        # 争议问题
+        contested = vote_result.get("contested_questions", [])
+        if contested:
+            with st.expander("⚠️ " + t("market_contested"), expanded=True):
+                st.caption(t("market_contested_hint"))
+                for cq in contested[:10]:
+                    st.markdown(f"- {cq['question']}（{cq['vote_distribution']}）")
+        
+        st.divider()
+    else:
+        st.info("🗳️ " + ("投票尚未完成，重新开市将从此步骤继续" if is_zh else "Voting not yet completed, restart market to continue from this step"))
+        if st.button("🔄 " + ("重新开市（从投票开始）" if is_zh else "Restart market (from voting)"), type="primary"):
+            st.session_state.market_result = None
+            st.rerun()
+        return
+    
+    # Step 4: 补丁修正
+    patch_result = market_result.get("patch_result")
+    if patch_result:
+        st.subheader(t("market_patch_result"))
+        st.info(patch_result.get("patch_notes", ""))
+        
+        with st.expander("📐 " + ("补丁版分镜表" if is_zh else "Patched Storyboard")):
+            st.code(patch_result.get("storyboard_prompt", ""), language=None)
+        with st.expander("🎥 " + ("补丁版视频提示词" if is_zh else "Patched Video Prompt")):
+            st.code(patch_result.get("video_prompt", ""), language=None)
+    
+    st.divider()
+    
+    # 应用按钮
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button(t("market_apply_winner"), type="primary", use_container_width=True):
+            winner = vote_result.get("winner_candidate", {})
+            st.session_state.final_output = {
+                "storyboard_prompt": winner.get("storyboard_prompt", ""),
+                "video_prompt": winner.get("video_prompt", ""),
+            }
+            st.session_state.debate_completed = True
+            st.success(t("market_applied"))
+    
+    with col2:
+        if patch_result and st.button(t("market_apply_patched"), use_container_width=True):
+            st.session_state.final_output = {
+                "storyboard_prompt": patch_result.get("storyboard_prompt", ""),
+                "video_prompt": patch_result.get("video_prompt", ""),
+            }
+            st.session_state.debate_completed = True
+            st.success(t("market_applied"))
+
+
+def run_market():
+    """执行市场完整流程——全面防护版，任何步骤失败都不会白跑"""
+    is_zh = st.session_state.lang == "zh"
+    api_url = st.session_state.api_url
+    api_key = st.session_state.api_key
+    model = st.session_state.model_name
+    lang = st.session_state.lang
+    market_rounds = st.session_state.get("market_rounds", 3)
+    extra = st.session_state.extra_instructions
+    num_candidates = st.session_state.market_num_candidates
+    questions_per = st.session_state.market_questions_per
+    
+    stats = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "api_calls": 0}
+    st.session_state.current_stats = stats
+    st.session_state.current_start_time = time.time()
+    
+    progress = st.progress(0, text=t("market_running"))
+    
+    # ====== Step 1: 生成候选 ======
+    progress.progress(0.05, text=t("market_step1"))
+    
+    completed_count = 0
+    def on_gen_progress(phase, idx, dept_key, di=0, total_depts=8):
+        nonlocal completed_count
+        try:
+            label = chr(65 + idx)
+            if phase == "candidate_done":
+                completed_count += 1
+                progress.progress(min(0.1 + 0.4 * (completed_count / num_candidates), 0.49), 
+                    text=f"✅ {('候选' if is_zh else 'Cand.')} {label} {('已完成' if is_zh else 'done')}（{completed_count}/{num_candidates}）")
+            elif phase == "candidate_error":
+                progress.progress(min(0.1 + 0.4 * (completed_count / num_candidates), 0.49),
+                    text=f"❌ {('候选' if is_zh else 'Cand.')} {label}: {dept_key[:60]}")
+            elif phase == "dept_done":
+                dept = DEPARTMENTS.get(dept_key, {})
+                dn = dept.get("zh_name" if is_zh else "en_name", dept_key)
+                pct_val = min(0.1 + 0.4 * (completed_count / num_candidates) + (di / total_depts) / num_candidates, 0.49)
+                progress.progress(pct_val, text=f"📦 {('候选' if is_zh else 'Cand.')} {label}: {dn} ✅（{di}/{total_depts}）")
+            elif phase == "dept_start":
+                dept = DEPARTMENTS.get(dept_key, {})
+                dn = dept.get("zh_name" if is_zh else "en_name", dept_key)
+                pct_val = min(0.1 + 0.4 * (completed_count / num_candidates) + (di / total_depts) / num_candidates, 0.49)
+                progress.progress(pct_val, text=f"📦 {('候选' if is_zh else 'Cand.')} {label}: {dn} {('辩论中' if is_zh else 'debating')}（{di+1}/{total_depts}）")
+            elif phase == "phase":
+                phase_names = {
+                    "spatial_review": ("空间审核" if is_zh else "Spatial Review"),
+                    "cross_debate": ("交叉辩论" if is_zh else "Cross Debate"),
+                    "summary": ("总结" if is_zh else "Summary"),
+                }
+                pn = phase_names.get(dept_key, dept_key)
+                pct_val = min(0.1 + 0.4 * (completed_count / num_candidates) + 0.35 / num_candidates, 0.49)
+                progress.progress(pct_val, text=f"📦 {('候选' if is_zh else 'Cand.')} {label}: {pn}...")
+        except Exception:
+            pass  # 进度更新失败不影响主流程
+    
+    # 如果导入已有结果，API少生成一个候选
+    include_existing = st.session_state.get("market_include_existing", False)
+    existing_result = st.session_state.get("final_output")
+    has_existing = include_existing and existing_result and existing_result.get("storyboard_prompt")
+    api_candidates = max(num_candidates - 1, 1) if has_existing else num_candidates
+
+    try:
+        candidates_result = generate_candidates(
+            num_candidates=api_candidates,
+            user_script=st.session_state.script,
+            positive_prompt=st.session_state.positive_prompt,
+            negative_prompt=st.session_state.negative_prompt,
+            character_refs=st.session_state.character_refs,
+            api_url=api_url, api_key=api_key, model=model,
+            rounds=market_rounds, lang=lang, extra_instructions=extra,
+            carry_forward=st.session_state.carry_forward,
+            stats=stats,
+            progress_callback=on_gen_progress,
+            max_workers=st.session_state.market_parallel_workers,
+        )
+    except Exception as e:
+        st.error(f"❌ Step 1 {('生成候选失败' if is_zh else 'Candidate generation failed')}: {e}")
+        progress.progress(1.0, text="❌ " + ("失败" if is_zh else "Failed"))
+        return
+    
+    candidates = candidates_result.get("candidates", [])
+    if not candidates:
+        st.error("❌ " + ("未生成任何候选方案，请检查API配置" if is_zh else "No candidates generated, check API config"))
+        progress.progress(1.0, text="❌ " + ("失败" if is_zh else "Failed"))
+        return
+    
+    # 导入普通模式已有结果作为候选
+    include_existing = st.session_state.get("market_include_existing", False)
+    existing_result = st.session_state.get("final_output")
+    if include_existing and existing_result and existing_result.get("storyboard_prompt"):
+        existing_candidate = {
+            "label": "A",
+            "temperature": 0.0,
+            "storyboard_prompt": existing_result.get("storyboard_prompt", ""),
+            "video_prompt": existing_result.get("video_prompt", ""),
+            "dept_results": existing_result.get("dept_results", {}),
+            "stats": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "api_calls": 0},
+            "is_existing": True,
+        }
+        # 已有结果作为候选A，其余候选标签从B开始
+        candidates.insert(0, existing_candidate)
+        for i, c in enumerate(candidates[1:], 1):
+            c["label"] = chr(65 + i)  # B, C, D...
+        progress.progress(0.49, text="📥 " + ("已导入普通模式结果作为候选A" if is_zh else "Imported normal mode result as Candidate A"))
+    
+    step1_errors = candidates_result.get("errors", [])
+    if step1_errors:
+        st.warning(f"⚠️ {len(step1_errors)} {('个候选生成失败' if is_zh else 'candidates failed')}")
+    
+    # 📦 Step1完成 → 存盘
+    autosave_result("market_step1", {"candidates": candidates, "errors": step1_errors})
+    # ====== Step 2: 出题 ======
+    progress.progress(0.55, text=t("market_step2"))
+    
+    def on_q_progress(phase, dept_key, debater_key):
+        try:
+            dept = DEPARTMENTS.get(dept_key, {})
+            dn = dept.get("zh_name" if is_zh else "en_name", dept_key)
+            # debater_key现在传的是dept_key（部门出题模式），直接用部门名
+            progress.progress(0.55, text=f"❓ {dn} {('出题中' if is_zh else 'questioning')}...")
+        except Exception:
+            pass
+    
+    try:
+        questions_result = generate_questions(
+            candidates=candidates,
+            questions_per_debater=questions_per,
+            api_url=api_url, api_key=api_key, model=model,
+            lang=lang, stats=stats,
+            progress_callback=on_q_progress,
+        )
+    except Exception as e:
+        st.error(f"❌ Step 2 {('出题失败' if is_zh else 'Question generation failed')}: {e}")
+        # 出题失败也保留候选结果
+        st.session_state.market_result = {
+            "candidates": candidates, "questions": [],
+            "vote_result": None, "patch_result": None,
+        }
+        st.session_state.current_end_time = time.time()
+        autosave_result("market_result", st.session_state.market_result)
+        progress.progress(1.0, text="⚠️ " + ("候选已保存，但出题失败" if is_zh else "Candidates saved, questioning failed"))
+        return
+    
+    questions = questions_result.get("questions", [])
+    if not questions:
+        st.warning("⚠️ " + ("未生成评估问题，跳过投票" if is_zh else "No questions generated, skipping vote"))
+        st.session_state.market_result = {
+            "candidates": candidates, "questions": [],
+            "vote_result": None, "patch_result": None,
+        }
+        st.session_state.current_end_time = time.time()
+        autosave_result("market_result", st.session_state.market_result)
+        progress.progress(1.0, text="⚠️ " + ("候选已保存" if is_zh else "Candidates saved"))
+        return
+    
+    # 📦 Step2完成 → 存盘
+    autosave_result("market_step2", {"candidates": candidates, "questions": questions})
+    
+    # ====== Step 3: 投票 ======
+    progress.progress(0.7, text=t("market_step3"))
+    
+    def on_vote_progress(phase, vi, debater_name, total_voters=None):
+        try:
+            tv = total_voters if total_voters else 24
+            pct = min(0.7 + 0.2 * (vi / max(tv, 1)), 0.89)
+            progress.progress(pct, text=t("market_voting", voter=debater_name))
+        except Exception:
+            pass
+    
+    try:
+        vote_result = vote_on_questions(
+            questions=questions,
+            candidates=candidates,
+            api_url=api_url, api_key=api_key, model=model,
+            lang=lang, stats=stats,
+            progress_callback=on_vote_progress,
+        )
+    except Exception as e:
+        st.error(f"❌ Step 3 {('投票失败' if is_zh else 'Voting failed')}: {e}")
+        st.session_state.market_result = {
+            "candidates": candidates, "questions": questions,
+            "vote_result": None, "patch_result": None,
+        }
+        st.session_state.current_end_time = time.time()
+        autosave_result("market_result", st.session_state.market_result)
+        progress.progress(1.0, text="⚠️ " + ("候选已保存，投票失败" if is_zh else "Candidates saved, voting failed"))
+        return
+    
+    # 检查投票结果
+    winner = vote_result.get("winner_candidate") if vote_result else None
+    if not winner and candidates:
+        # 投票失败但候选还在，直接取第一个
+        winner = candidates[0]
+        st.warning("⚠️ " + ("投票未产生明确胜者，默认使用候选A" if is_zh else "No clear winner, using Candidate A"))
+    
+    # 📦 Step3完成 → 存盘
+    autosave_result("market_step3", {"candidates": candidates, "questions": questions, "vote_result": vote_result})
+    
+    # ====== Step 4: 补丁修正 ======
+    progress.progress(0.92, text=t("market_step4"))
+    
+    patch_result = None
+    if winner and vote_result and vote_result.get("contested_questions"):
+        try:
+            patch_result = patch_winner(
+                winner_candidate=winner,
+                contested_questions=vote_result["contested_questions"],
+                all_candidates=candidates,
+                api_url=api_url, api_key=api_key, model=model,
+                lang=lang, stats=stats,
+            )
+        except Exception as e:
+            st.warning(f"⚠️ {('补丁修正失败' if is_zh else 'Patch failed')}: {e}")
+            patch_result = None
+    elif winner:
+        patch_result = {
+            "storyboard_prompt": winner.get("storyboard_prompt", ""),
+            "video_prompt": winner.get("video_prompt", ""),
+            "patch_notes": ("无争议问题，无需修正" if is_zh else "No contested issues"),
+        }
+    
+    # ====== 完成 ======
+    progress.progress(1.0, text="✅ " + ("市场收市！" if is_zh else "Market closed!"))
+    
+    st.session_state.market_result = {
+        "candidates": candidates,
+        "questions": questions,
+        "vote_result": vote_result,
+        "patch_result": patch_result,
+    }
+    
+    st.session_state.current_end_time = time.time()
+    # 📦 最终结果存盘
+    autosave_result("market_result", st.session_state.market_result)
+
+
+# ============ v3.0 智能配组 Tab ============
+
+def render_config_tab():
+    """🧠 智能配组 — Consensus Pipeline v3.0 入口"""
+    is_zh = st.session_state.lang == "zh"
+    
+    st.subheader(t("config_title"))
+    st.caption(t("config_subtitle"))
+    
+    # 显示当前配置
+    _cur_name = get_current_config_name()
+    st.info(f"{'当前配置' if is_zh else 'Current config'}: **{_cur_name}**  |  {'部门数' if is_zh else 'Depts'}: {len(DEPARTMENTS)}  |  {'辩手总数' if is_zh else 'Total debaters'}: {sum(len(d.get('debaters', {})) for d in DEPARTMENTS.values())}")
+    
+    left_col, right_col = st.columns([2, 3])
+    
+    with left_col:
+        st.markdown("### " + ("需求输入" if is_zh else "Requirement Input"))
+        
+        # 用户需求描述
+        user_input = st.text_area(
+            t("config_input_label"),
+            height=150,
+            placeholder=t("config_input_hint"),
+            key="config_user_input",
+        )
+        
+        # AI智能配组按钮
+        if st.button(t("config_ai_button"), type="primary", use_container_width=True, disabled=not user_input):
+            if not st.session_state.api_key:
+                st.error(t("need_api"))
+            else:
+                with st.spinner(t("config_ai_running")):
+                    result = analyze_and_configure(
+                        user_input=user_input,
+                        api_url=st.session_state.api_url,
+                        api_key=st.session_state.api_key,
+                        model=st.session_state.model_name,
+                        lang=st.session_state.lang,
+                    )
+                if result.get("error"):
+                    st.error(f"{t('config_error')}: {result.get('message', '')}")
+                    if result.get("raw_content"):
+                        with st.expander("原始返回" if is_zh else "Raw Response"):
+                            st.code(result["raw_content"])
+                elif result.get("needs_clarification"):
+                    st.warning(t("config_clarification"))
+                    for q in result.get("clarification_questions", []):
+                        st.markdown(f"- {q}")
+                    # 仍然保存部分配置供编辑
+                    st.session_state.workgroup_config = result
+                else:
+                    st.session_state.workgroup_config = result
+                    st.success("✅ " + ("AI配组完成！" if is_zh else "AI config complete!"))
+        
+        st.divider()
+        
+        # 预设选择
+        st.markdown("### " + t("config_preset_label"))
+        presets = list_presets()
+        if presets:
+            selected_preset = st.selectbox(
+                t("config_preset_label"),
+                options=presets,
+                key="config_preset_select",
+            )
+            if st.button("📦 " + ("加载预设" if is_zh else "Load Preset"), use_container_width=True):
+                try:
+                    cfg = load_preset(selected_preset)
+                    st.session_state.workgroup_config = cfg
+                    st.session_state.workgroup_name = selected_preset
+                    st.success(f"✅ {'已加载预设' if is_zh else 'Loaded preset'}: {selected_preset}")
+                except Exception as e:
+                    st.error(str(e))
+        
+        # 用户配置选择
+        st.markdown("### " + t("config_profile_label"))
+        profiles = list_profiles()
+        if profiles:
+            selected_profile = st.selectbox(
+                t("config_profile_label"),
+                options=profiles,
+                key="config_profile_select",
+            )
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("💾 " + ("加载" if is_zh else "Load"), use_container_width=True):
+                    try:
+                        cfg = load_profile(selected_profile)
+                        st.session_state.workgroup_config = cfg
+                        st.session_state.workgroup_name = selected_profile
+                        st.success(f"✅ {'已加载配置' if is_zh else 'Loaded config'}: {selected_profile}")
+                    except Exception as e:
+                        st.error(str(e))
+            with col_b:
+                if st.button(t("config_delete"), use_container_width=True):
+                    delete_profile(selected_profile)
+                    st.rerun()
+    
+    with right_col:
+        st.markdown("### " + t("config_preview_title"))
+        
+        config = st.session_state.get("workgroup_config")
+        if config is None:
+            # 尝试加载当前生效的配置
+            config = get_current_config()
+        
+        if not config or not config.get("departments"):
+            st.info(t("config_no_depts"))
+        else:
+            # 每个部门一个折叠区
+            depts = config.get("departments", {})
+            dept_order = config.get("dept_order", list(depts.keys()))
+            
+            for dept_key in dept_order:
+                if dept_key not in depts:
+                    continue
+                dept = depts[dept_key]
+                dept_name = dept.get("zh_name", dept_key) if is_zh else dept.get("en_name", dept_key)
+                debaters = dept.get("debaters", {})
+                num_debaters = len(debaters)
+                
+                with st.expander(f"**{dept_name}** ({num_debaters}{'位辩手' if is_zh else ' debaters'})", expanded=False):
+                    # 启用/禁用开关
+                    dept_enabled = st.checkbox(
+                        f"{t('config_dept_enabled')}/{t('config_dept_disabled')}",
+                        value=True,
+                        key=f"config_dept_enabled_{dept_key}",
+                    )
+                    
+                    if dept_enabled:
+                        # 辩手列表
+                        for d_key, debater in debaters.items():
+                            d_name = debater.get("zh_name", d_key) if is_zh else debater.get("en_name", d_key)
+                            style_key = "zh_style" if is_zh else "en_style"
+                            current_style = debater.get(style_key, "")
+                            
+                            st.markdown(f"**{d_name}**")
+                            new_style = st.text_area(
+                                f"{'提示词' if is_zh else 'Prompt'}",
+                                value=current_style,
+                                height=80,
+                                key=f"config_debater_style_{dept_key}_{d_key}",
+                                label_visibility="collapsed",
+                            )
+                            # 实时更新到配置
+                            if new_style != current_style:
+                                config["departments"][dept_key]["debaters"][d_key][style_key] = new_style
+                                st.session_state.workgroup_config = config
+            
+            st.divider()
+            
+            # 全局参数编辑
+            st.markdown("### " + t("config_global_params"))
+            
+            vd = config.get("visual_directive", {})
+            vd_zh = vd.get("zh", "") if isinstance(vd, dict) else ""
+            new_vd_zh = st.text_area(
+                t("config_visual_directive") + " (中文)",
+                value=vd_zh,
+                height=100,
+                key="config_visual_directive_zh",
+            )
+            if new_vd_zh != vd_zh:
+                if not isinstance(config.get("visual_directive"), dict):
+                    config["visual_directive"] = {"zh": "", "en": ""}
+                config["visual_directive"]["zh"] = new_vd_zh
+                st.session_state.workgroup_config = config
+            
+            neg = config.get("negative_prompts", "")
+            new_neg = st.text_input(
+                t("config_negative_prompts"),
+                value=neg,
+                key="config_negative_prompts",
+            )
+            if new_neg != neg:
+                config["negative_prompts"] = new_neg
+                st.session_state.workgroup_config = config
+            
+            dr = config.get("debate_rounds", 3)
+            new_dr = st.slider(
+                t("config_debate_rounds"),
+                min_value=1, max_value=10, value=dr,
+                key="config_debate_rounds",
+            )
+            if new_dr != dr:
+                config["debate_rounds"] = new_dr
+                st.session_state.workgroup_config = config
+            
+            st.divider()
+            
+            # Skill注入区
+            st.markdown("### " + t("config_skill_injection"))
+            skill_md = st.text_area(
+                t("config_skill_injection"),
+                height=80,
+                placeholder=t("config_skill_injection_hint"),
+                key="config_skill_md",
+            )
+            if skill_md:
+                # 选择目标部门
+                dept_keys = list(depts.keys())
+                target_options = [t("config_skill_target_all")] + [
+                    depts[k].get("zh_name", k) if is_zh else depts[k].get("en_name", k)
+                    for k in dept_keys
+                ]
+                selected_target = st.selectbox(
+                    t("config_skill_target"),
+                    options=target_options,
+                    key="config_skill_target",
+                )
+                if st.button("💉 " + ("注入" if is_zh else "Inject"), use_container_width=True):
+                    if selected_target == target_options[0]:
+                        target_depts = None  # 全部
+                    else:
+                        # 找到对应的dept_key
+                        idx = target_options.index(selected_target) - 1
+                        target_depts = [dept_keys[idx]]
+                    
+                    config = merge_skill_injection(config, skill_md, target_depts)
+                    st.session_state.workgroup_config = config
+                    st.success("✅ " + ("Skill已注入！" if is_zh else "Skill injected!"))
+    
+    # 底部操作栏
+    st.divider()
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        # 保存配置
+        save_name = st.text_input(
+            t("config_save_name"),
+            value=st.session_state.get("workgroup_name", ""),
+            key="config_save_name",
+        )
+        if st.button(t("config_save"), use_container_width=True):
+            config = st.session_state.get("workgroup_config", get_current_config())
+            if save_name:
+                save_profile(save_name, config)
+                set_last_used(save_name)
+                st.success(f"✅ {'已保存为' if is_zh else 'Saved as'}: {save_name}")
+            else:
+                st.error("请输入配置名称" if is_zh else "Please enter a config name")
+    
+    with col2:
+        # 导出配置
+        if st.button(t("config_export"), use_container_width=True):
+            config = st.session_state.get("workgroup_config", get_current_config())
+            json_str = export_config(config)
+            st.code(json_str, language="json")
+            st.download_button(
+                "⬇️ " + ("下载JSON" if is_zh else "Download JSON"),
+                data=json_str,
+                file_name=f"{st.session_state.get('workgroup_name', 'config')}.json",
+                mime="application/json",
+            )
+    
+    with col3:
+        # 导入配置
+        imported_json = st.text_area(
+            "JSON" if is_zh else "JSON",
+            height=60,
+            placeholder="粘贴JSON配置..." if is_zh else "Paste JSON config...",
+            key="config_import_json",
+            label_visibility="collapsed",
+        )
+        if st.button(t("config_import"), use_container_width=True):
+            if imported_json:
+                try:
+                    cfg = import_config(imported_json)
+                    errors = validate_config(cfg)
+                    if errors:
+                        for e in errors:
+                            st.warning(e)
+                    st.session_state.workgroup_config = cfg
+                    st.success("✅ " + ("配置已导入" if is_zh else "Config imported"))
+                except Exception as e:
+                    st.error(str(e))
+            else:
+                st.warning("请先粘贴JSON" if is_zh else "Please paste JSON first")
+    
+    with col4:
+        # 确认并开始
+        if st.button(t("config_apply"), type="primary", use_container_width=True):
+            config = st.session_state.get("workgroup_config", get_current_config())
+            apply_config(config)
+            cfg_name = config.get("name", "自定义配置")
+            st.session_state.workgroup_name = cfg_name
+            set_last_used(cfg_name)
+            st.success(t("config_applied"))
+
+
+def main():
+    st.set_page_config(
+        page_title="AI Consensus Pipeline" if st.session_state.get("lang", "zh") == "zh" else "AI Consensus Pipeline",
+        page_icon="🧠",
+        layout="wide",
+    )
+    
+    render_sidebar()
+    
+    st.title(t("title"))
+    st.caption(t("subtitle"))
+    
+    tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        t("tab_config"),
+        t("tab_input"),
+        t("tab_debate"),
+        t("tab_cross"),
+        t("tab_output"),
+        t("tab_proofread"),
+        t("tab_compare"),
+        t("tab_market"),
+    ])
+    
+    with tab0:
+        render_config_tab()
+    with tab1:
+        render_input_tab()
+    with tab2:
+        render_debate_tab()
+    with tab3:
+        render_cross_tab()
+    with tab4:
+        render_output_tab()
+    with tab5:
+        render_proofread_tab()
+    with tab6:
+        render_compare_tab()
+    with tab7:
+        render_market_tab()
+
+
+if __name__ == "__main__":
+    init_state()
+    main()
