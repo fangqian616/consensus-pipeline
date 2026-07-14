@@ -376,6 +376,8 @@ def test_phase2_pipeline(router_config):
                 "duration": duration,
                 "storyboard_length": storyboard_len,
                 "video_prompt_length": video_len,
+                "storyboard_prompt": summary.get("storyboard_prompt", ""),
+                "video_prompt": summary.get("video_prompt", ""),
             }
             print(f"    ✅ 完成 ({format_duration(duration)}) | 分镜表:{storyboard_len}字 | 视频提示词:{video_len}字")
         except Exception as e:

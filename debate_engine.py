@@ -763,7 +763,7 @@ Output consensus strictly in this structure:
 - 硬切Shot分布: [哪些Shot可以灵活分组]
 - 长镜头锚点: [哪些Shot不可拆，作为分组的锚点]
 - 段间衔接策略: [每段之间用什么方式衔接]
-- 每段3x3网格分配: [每段对应一张3x3，≤9个Shot；超过9个则在该段内再分页]""",
+- 每段3x3网格分配: [每段固定9个Shot对应一张3×3；不足9个时标注需补充的关键帧数量及原因]""",
         "en": """Output consensus strictly in this structure:
 
 ## Total Duration & Shot Stats
@@ -794,7 +794,7 @@ Output consensus strictly in this structure:
 - Hard-cut shot distribution: [which shots can be flexibly grouped]
 - Long-take anchors: [which shots are indivisible, serve as grouping anchors]
 - Inter-segment transition strategy: [what transition type between each segment]
-- Per-segment 3x3 grid allocation: [each segment maps to one 3x3 grid, ≤9 shots; if >9, further paginate within that segment]""",
+- Per-segment 3x3 grid allocation: [each segment fixed at 9 shots mapping to one 3×3; if fewer than 9, annotate count and reason for gap fill]""",
     },
 }
 
@@ -2358,9 +2358,9 @@ def run_summary(
 2. 每个镜头必须标注剪辑属性：硬切/长镜头/叠化/淡入淡出（来自分镜部辩论）
 3. 每个镜头的站位必须包含物品参照位置+镜头相对朝向+画面位置+垂直状态（如"长桌靠墙侧左端，侧面向镜头30度 / 画面左1/3，中景 / 站立"），朝向严禁用东南/西南等罗盘方向
 4. 分镜表只写静态定格状态，不写任何动态描述
-5. Shot数量由分镜部辩论决定，不限制为9个
-6. 如果总Shot数超过9个，按剪辑部的拆分方案分成多段，每段一张3x3网格（≤9个Shot）
-7. 如果总Shot数≤9个，产出一张3x3网格即可
+5. Shot总数由分镜部辩论决定，不限制为9个
+6. 剪辑部按4-15秒拆分为段落，每段恰好9个Shot（对应3×3九宫格，每格一个关键帧）
+7. 【关键帧不足补充流程】如果某段不足9个Shot：分镜部对接剪辑部，在不改变整体编排时间的前提下协商补充关键帧 → 补充后的Shot重新走灯光部/空间部等流程确认 → 最终每段补齐到9个Shot。补充的关键帧必须与原有叙事逻辑一致，不能凭空插入
 8. 【最重要】每个Shot必须有【完整画面】段——用自然语言描述整帧画面的完整视觉内容，包括前景/中景/背景构成、角色在画面中的位置和整体造型轮廓、环境空间构成、光线的实际画面效果、关键视觉元素的画面表现。这是AI绘图工具唯一能理解的部分，没有它AI无法画出分镜图
 9. 【最重要】分镜表是结构化表格，不是自由文章——每个字段必须从对应部门的共识中提取，AI不做自由改写：
    - 叙事节拍 → 从编剧部架构师共识提取
@@ -2454,8 +2454,8 @@ Shot 02（时间：2-4s）：
 （如有段落2，按同样格式继续，Shot编号从01重新开始，因为每张3x3网格是独立图像）
 
 【九宫格渲染说明】
-段内Shot数≤9时：一张3×3网格，格子从左到右、从上到下排列，格子左上角标Shot编号
-段内Shot数>9时：按3×3拆为多张网格（如10 Shot = 9+1两张，12 Shot = 6+6两张）
+每段固定9个Shot，产出一张3×3网格，格子从左到右、从上到下排列，格子左上角标Shot编号
+如果某段经补充流程后仍不足9个Shot，剩余的格子留空（黑色背景），但必须在分镜表中标注"待补充"并说明原因
 格子间细白线分割，画面内无其他文字标注，无AI水印，无错别字
 
 负面提示词：
@@ -2490,9 +2490,9 @@ Cross-debate results:
 2. Every shot MUST be labeled with edit type: hard cut/long take/dissolve/fade
 3. Every shot's position MUST include object-referenced position + camera-relative facing + frame position + vertical state (e.g. "left end of long table on wall side, 3/4 profile facing camera at 30 degrees / left 1/3 of frame, medium shot / standing"). Compass directions (NE/SW etc.) are FORBIDDEN
 4. Storyboard contains ONLY static frozen states—NO dynamic descriptions
-5. Shot count is determined by the Storyboard department, NOT limited to 9
-6. If total shots > 9, follow the Editing department's split plan into multiple segments, each a 3x3 grid (≤9 shots)
-7. If total shots ≤ 9, output one 3x3 grid
+5. Total shot count is determined by the Storyboard department debate, NOT limited to 9
+6. The Editing department splits into segments based on 4-15s limits, each segment exactly 9 shots (corresponding to a 3×3 grid, one keyframe per cell)
+7. [Keyframe Gap Fill Protocol] If a segment has fewer than 9 shots: Storyboard department consults Editing department to negotiate additional keyframes WITHOUT changing the overall timeline → supplemented shots re-run through Lighting/Spatial/etc. departments for confirmation → finalize each segment at exactly 9 shots. Supplemented keyframes MUST be logically consistent with existing narrative, no arbitrary insertions
 8. [CRITICAL] Every Shot MUST have a [Complete Frame] section—describe the full visual content of the frame in natural language, including foreground/midground/background composition, character positions and overall silhouette, environment spatial composition, actual visual effect of lighting, how key visual elements appear in frame. This is the ONLY part an AI image tool can understand—without it, AI cannot draw the storyboard
 9. [CRITICAL] The storyboard is a structured table, not free prose—every field MUST be extracted from the corresponding department's consensus, no free rewriting by AI:
    - Narrative Beat → extracted from Screenwriter Narrative Architect consensus
@@ -2586,8 +2586,8 @@ Background: [frozen environment details]
 (If the Editing department plan has a Segment 2, continue in the same format, Shot numbering restarts from 01)
 
 [9-Grid Render Notes]
-Shots ≤9 per segment: one 3×3 grid, cells left-to-right top-to-bottom, Shot number in top-left corner
-Shots >9 per segment: split into multiple 3×3 grids (e.g. 10 shots = 9+1, 12 shots = 6+6)
+Each segment is fixed at 9 shots, producing one 3×3 grid, cells left-to-right top-to-bottom, Shot number in top-left corner
+If a segment still has fewer than 9 shots after the gap fill protocol, remaining cells are left blank (black background), but the storyboard MUST annotate "待补充" (pending) with reason
 Thin white lines between cells, no other text annotations, no AI watermarks, no typos
 
 Negative prompt:
