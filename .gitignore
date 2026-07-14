@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Streamlit autosave
+autosave/
+
+# Runtime output
+run_once.*
+run_output_*
+*.log
+
+# User profiles (local only)
+user_profiles/*.json
+
+# Keep .last_used for persistence tracking
+!user_profiles/.last_used
+
+# Internal working files (not for distribution)
+apply_changes.py
+分镜图_*.txt
+分镜表_*_车内_*.txt
+分镜表_*_车外_*.txt
+分镜表_*_磨合测试_*.txt
+分镜表_A线_P*_3格_*.txt
+分镜表_A线_P*_2格_*.txt
+分镜表_B线_P*.txt
+视频Prompt_SHOT*.txt
+视频Prompt_v*.txt
+视频Prompt_磨合测试_*.txt
+storyboard_prompt_v2.txt
+video_prompt_v2.txt
+沙虫追逐9宫格_v*.md
+P1_空间关系_v*.md
+SHOT_A_*.md
+场景提示词升级方案.md
+动作追逐戏镜头设计参考手册.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
