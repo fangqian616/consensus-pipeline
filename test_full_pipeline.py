@@ -585,13 +585,15 @@ def test_phase3_reroll(router_config, phase2_result):
             )
             reroll_duration = time.time() - t0
             
+            final_output = reroll_result.get("final_output", {})
             phase3_result["reroll_result"] = {
                 "status": "ok",
                 "duration": reroll_duration,
                 "reroll_log": reroll_result.get("reroll_log", []),
                 "updated_dept_count": len(reroll_result.get("updated_dept_results", {})),
                 "updated_cross_count": len(reroll_result.get("updated_cross_results", [])),
-                "final_output_error": reroll_result.get("final_output", {}).get("error", False),
+                "final_output_error": final_output.get("error", False),
+                "final_output": final_output,
             }
             phase3_result["total_duration"] = reroll_duration
             phase3_result["reroll_stats"] = reroll_stats
