@@ -303,3 +303,189 @@ def _ensure_config_fields(config: dict) -> dict:
         config["dept_order"] = list(config["departments"].keys())
     
     return config
+# ============ 智能回炉：修订影响分析 ============
+
+REVISION_IMPACT_SYSTEM_PROMPT_ZH = """你是Consensus Pipeline的智能回炉分析器。用户对最终产出（分镜表/视频提示词）给出了修改意见，你需要分析哪些部门需要重新辩论。
+
+## 你的任务
+1. 分析用户的修改意见，判断每条意见影响哪些部门
+2. 输出受影响部门列表，每个部门附带理由
+3. 如果修改意见涉及部门间协作，标注需要重新交叉辩论的部门对
+
+## 可用部门
+screenwriter(编剧部): 叙事节拍、角色对话、出场角色清单、微表情/肢体/情绪
+spatial(空间板块): 物品定位、角色站位、场景布局、动线
+storyboard(分镜部): 镜头切分、构图、画幅、九宫格
+dp(摄影指导部): 镜头语言、切换动机、运镜方式
+lighting(灯光部): 光影氛围、色调、光源方向
+vfx(视效部): 视觉特效、粒子效果、魔法表现
+sound(音效部): 音效设计、环境音、节奏
+editing(剪辑部): 剪辑节奏、转场、时长控制
+
+## 判断规则
+- 如果修改涉及"角色说什么/怎么表现情绪"→ 编剧部
+- 如果修改涉及"角色站在哪里/场景布局"→ 空间板块
+- 如果修改涉及"镜头怎么切/构图"→ 分镜部
+- 如果修改涉及"镜头为什么这样切/运镜"→ 摄影指导部
+- 如果修改涉及"光影/色调/冷暖"→ 灯光部
+- 如果修改涉及"特效/粒子/魔法"→ 视效部
+- 如果修改涉及"音效/环境音"→ 音效部
+- 如果修改涉及"节奏/转场/时长"→ 剪辑部
+- 如果修改泛泛说"整体效果不够好"→ 分镜部+摄影指导部+灯光部（核心视觉三部）
+- 如果修改涉及空间+分镜联动→ 标注交叉辩论对
+
+## 输出格式（严格JSON）
+{
+  "affected_departments": [
+    {"dept_key": "部门key", "reason": "一句话理由，说明为什么这个部门需要回炉"},
+    ...
+  ],
+  "cross_debate_pairs": [
+    {"side_a": "部门A", "side_b": "部门B", "reason": "一句话理由"},
+    ...
+  ]
+}
+
+## 关键规则
+- 宁可多选也不要漏选，漏掉一个部门可能导致产出不一致
+- 理由要具体，不能只说"需要修改"，要说明修改意见的哪部分触发了这个部门
+- cross_debate_pairs只在确实需要部门间协调时才输出，不是每个回炉都需要
+"""
+
+REVISION_IMPACT_SYSTEM_PROMPT_EN = """You are the Smart Re-roll Analyzer for Consensus Pipeline. The user has given revision feedback on the final output (storyboard/video prompts). You need to analyze which departments should be re-debated.
+
+## Your Task
+1. Analyze the revision feedback, determine which departments each point affects
+2. Output affected departments with reasons
+3. If revisions involve cross-department coordination, note which pairs need cross-debate
+
+## Available Departments
+screenwriter: narrative beats, character dialogue, character list, expressions/body language/emotions
+spatial: object positioning, character placement, scene layout, movement paths
+storyboard: shot segmentation, composition, aspect ratio, 9-grid
+dp (Cinematography): shot language, switch motivation, camera movement
+lighting: light/shadow atmosphere, color tone, light source direction
+vfx: visual effects, particles, magic effects
+sound: sound design, ambient audio, rhythm
+editing: editing rhythm, transitions, timing
+
+## Judgment Rules
+- Revisions about "character dialogue/emotional expression" → screenwriter
+- Revisions about "character positioning/scene layout" → spatial
+- Revisions about "shot composition/framing" → storyboard
+- Revisions about "camera motivation/movement" → dp
+- Revisions about "lighting/tone/color temperature" → lighting
+- Revisions about "effects/particles/magic" → vfx
+- Revisions about "sound/ambient audio" → sound
+- Revisions about "rhythm/transitions/timing" → editing
+- Vague "overall effect not good enough" → storyboard + dp + lighting (core visual trio)
+- Spatial + storyboard linkage → mark cross-debate pair
+
+## Output Format (strict JSON)
+{
+  "affected_departments": [
+    {"dept_key": "department_key", "reason": "one-line reason"},
+    ...
+  ],
+  "cross_debate_pairs": [
+    {"side_a": "deptA", "side_b": "deptB", "reason": "one-line reason"},
+    ...
+  ]
+}
+
+## Key Rules
+- Better to over-select than under-select; missing a department causes output inconsistency
+- Reasons must be specific, not generic like "needs modification"
+- cross_debate_pairs only when cross-department coordination is genuinely needed
+"""
+
+
+def analyze_revision_impact(
+    revision_feedback: str,
+    current_config: dict,
+    api_url: str,
+    api_key: str,
+    model: str,
+    lang: str = "zh",
+) -> dict:
+    """
+    分析用户修改意见，判断哪些部门需要回炉。
+    
+    Args:
+        revision_feedback: 用户对最终产出的修改意见
+        current_config: 当前使用的PresetConfig（含departments和dept_order）
+        api_url/api_key/model: LLM配置
+        lang: 语言
+    
+    Returns:
+        {
+            "affected_departments": [{"dept_key": "...", "reason": "..."}],
+            "cross_debate_pairs": [{"side_a": "...", "side_b": "...", "reason": "..."}],
+            "error": False
+        }
+    """
+    system_prompt = REVISION_IMPACT_SYSTEM_PROMPT_ZH if lang == "zh" else REVISION_IMPACT_SYSTEM_PROMPT_EN
+    
+    # 构建当前部门信息
+    dept_info_lines = []
+    for dk in current_config.get("dept_order", []):
+        dept = current_config.get("departments", {}).get(dk, {})
+        zh_name = dept.get("zh_name", dk)
+        en_name = dept.get("en_name", dk)
+        dept_info_lines.append(f"- {dk}: {zh_name} / {en_name}")
+    dept_info = "\n".join(dept_info_lines)
+    
+    user_prompt = (
+        f"当前已配置的部门：\n{dept_info}\n\n"
+        f"用户的修改意见：\n{revision_feedback}"
+    ) if lang == "zh" else (
+        f"Currently configured departments:\n{dept_info}\n\n"
+        f"User's revision feedback:\n{revision_feedback}"
+    )
+    
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}",
+    }
+    
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.2,
+        "max_tokens": 2048,
+    }
+    
+    try:
+        resp = requests.post(api_url, headers=headers, json=payload, timeout=60)
+        resp.raise_for_status()
+        result = resp.json()
+        content = result["choices"][0]["message"]["content"]
+    except Exception as e:
+        return {
+            "error": True,
+            "message": f"智能回炉分析失败: {str(e)}",
+            "affected_departments": [],
+            "cross_debate_pairs": [],
+        }
+    
+    parsed = _parse_json_response(content)
+    if parsed is None:
+        return {
+            "error": True,
+            "message": "智能回炉分析返回格式异常",
+            "raw_content": content,
+            "affected_departments": [],
+            "cross_debate_pairs": [],
+        }
+    
+    parsed["error"] = False
+    # 确保字段存在
+    if "affected_departments" not in parsed:
+        parsed["affected_departments"] = []
+    if "cross_debate_pairs" not in parsed:
+        parsed["cross_debate_pairs"] = []
+    
+    return parsed

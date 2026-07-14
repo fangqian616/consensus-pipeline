@@ -4219,3 +4219,201 @@ Output format:
         "original_storyboard": current_storyboard,
         "original_video_prompt": current_video_prompt,
     }
+# ============ 智能回炉 ============
+
+def run_smart_reroll(
+    selected_departments: list,
+    revision_feedback: str,
+    dept_order: list,
+    all_dept_results: Dict[str, dict],
+    user_script: str,
+    positive_prompt: str,
+    negative_prompt: str,
+    character_refs: str,
+    cross_debate_pairs: list,
+    existing_cross_results: list,
+    api_url: str,
+    api_key: str,
+    model: str = "deepseek-v4-flash",
+    lang: str = "zh",
+    debate_rounds: int = 2,
+    progress_callback: Callable = None,
+    stats: dict = None,
+) -> Dict:
+    """
+    智能回炉：只重跑选中的部门，然后重新生成交叉辩论和最终产出。
+    
+    Args:
+        selected_departments: 要回炉的部门key列表
+        revision_feedback: 用户修改意见
+        dept_order: 完整的部门执行顺序
+        all_dept_results: 所有部门的现有辩论结果 {dept_key: {"consensus": ..., "debate_log": [...]}}
+        user_script/positive_prompt/negative_prompt/character_refs: 用户输入
+        cross_debate_pairs: 需要重新交叉辩论的部门对
+        existing_cross_results: 现有的交叉辩论结果
+        api_url/api_key/model: LLM配置
+        lang: 语言
+        debate_rounds: 回炉辩论轮数
+        progress_callback: 进度回调
+        stats: Token统计
+    
+    Returns:
+        {
+            "updated_dept_results": {dept_key: {"consensus": ..., "debate_log": [...]}},  # 完整结果（含未修改的）
+            "updated_cross_results": [...],  # 完整交叉辩论结果
+            "final_output": {...},  # run_summary的输出
+            "reroll_log": [{"dept_key": ..., "status": "ok"/"error", "message": ...}],
+            "error": False
+        }
+    """
+    is_zh = lang == "zh"
+    reroll_log = []
+    
+    # 深拷贝现有结果，回炉部门会更新
+    import copy
+    updated_dept_results = copy.deepcopy(all_dept_results)
+    
+    # 构建承上信息：编剧部产出供下游部门参考
+    def _build_input_for_dept(dk: str) -> str:
+        """为指定部门构建输入内容"""
+        script_block = f"用户剧本：\n{user_script}" if is_zh else f"User Script:\n{user_script}"
+        if positive_prompt:
+            script_block += f"\n\n正向提示词：{positive_prompt}" if is_zh else f"\n\nPositive Prompt: {positive_prompt}"
+        if character_refs:
+            script_block += f"\n\n角色参考：{character_refs}" if is_zh else f"\n\nCharacter References: {character_refs}"
+        return script_block
+    
+    # 按dept_order顺序回炉，确保上游产出传递给下游
+    selected_set = set(selected_departments)
+    reroll_order = [dk for dk in dept_order if dk in selected_set]
+    
+    for dk in reroll_order:
+        if progress_callback:
+            dept_name = DEPARTMENTS[dk]["zh_name"] if is_zh else DEPARTMENTS[dk]["en_name"]
+            progress_callback(f"🔄 {dept_name}...")
+        
+        try:
+            # 构建输入：上游部门的最新共识
+            input_content = _build_input_for_dept(dk)
+            
+            # 添加上游部门共识
+            dept_idx = dept_order.index(dk) if dk in dept_order else -1
+            if dept_idx > 0:
+                upstream_text = ""
+                for upstream_dk in dept_order[:dept_idx]:
+                    if upstream_dk in updated_dept_results:
+                        consensus = updated_dept_results[upstream_dk].get("consensus", "")
+                        if consensus:
+                            name = DEPARTMENTS[upstream_dk]["zh_name"] if is_zh else DEPARTMENTS[upstream_dk]["en_name"]
+                            upstream_text += f"\n\n【{name}共识】\n{consensus}"
+                if upstream_text:
+                    prefix = "上游部门共识：\n" if is_zh else "Upstream Department Consensus:\n"
+                    input_content = prefix + upstream_text.strip() + "\n\n---\n\n" + input_content
+            
+            # 回炉辩论
+            result = run_department_debate(
+                department_key=dk,
+                input_content=input_content,
+                api_url=api_url,
+                api_key=api_key,
+                model=model,
+                rounds=debate_rounds,
+                lang=lang,
+                extra_instructions=revision_feedback,
+                stats=stats,
+            )
+            
+            updated_dept_results[dk] = result
+            reroll_log.append({
+                "dept_key": dk,
+                "status": "ok",
+                "message": f"回炉完成" if is_zh else "Re-roll complete",
+            })
+        except Exception as e:
+            reroll_log.append({
+                "dept_key": dk,
+                "status": "error",
+                "message": str(e),
+            })
+    
+    # 重新交叉辩论
+    updated_cross_results = list(existing_cross_results)  # 先保留旧的
+    
+    if cross_debate_pairs:
+        if progress_callback:
+            progress_callback("⚔️ " + ("重新交叉辩论..." if is_zh else "Re-running cross-debates..."))
+        
+        # 找出需要重新跑的交叉辩论：任一端涉及回炉部门
+        affected_cross = []
+        unaffected_cross = []
+        for cr in existing_cross_results:
+            side_a = cr.get("side_a", "")
+            side_b = cr.get("side_b", "")
+            if side_a in selected_set or side_b in selected_set:
+                affected_cross.append(cr)
+            else:
+                unaffected_cross.append(cr)
+        
+        # 重新跑受影响的交叉辩论
+        new_cross_results = []
+        for cr in affected_cross:
+            side_a = cr["side_a"]
+            side_b = cr["side_b"]
+            
+            if side_a in updated_dept_results and side_b in updated_dept_results:
+                try:
+                    cross_result = run_cross_debate(
+                        cross_config=cr,
+                        dept_a_consensus=updated_dept_results[side_a].get("consensus", ""),
+                        dept_b_consensus=updated_dept_results[side_b].get("consensus", ""),
+                        api_url=api_url,
+                        api_key=api_key,
+                        model=model,
+                        lang=lang,
+                        stats=stats,
+                    )
+                    new_cross_results.append(cross_result)
+                except Exception:
+                    # 交叉辩论失败，保留旧的
+                    new_cross_results.append(cr)
+            else:
+                new_cross_results.append(cr)
+        
+        # 合并：新的受影响的 + 未受影响的
+        updated_cross_results = new_cross_results + unaffected_cross
+    
+    # 重新生成最终产出
+    if progress_callback:
+        progress_callback("🎬 " + ("重新生成最终产出..." if is_zh else "Regenerating final output..."))
+    
+    all_consensus = {k: v["consensus"] for k, v in updated_dept_results.items()}
+    
+    try:
+        final_output = run_summary(
+            user_script=user_script,
+            positive_prompt=positive_prompt,
+            negative_prompt=negative_prompt,
+            character_refs=character_refs,
+            all_consensus=all_consensus,
+            cross_results=updated_cross_results,
+            api_url=api_url,
+            api_key=api_key,
+            model=model,
+            lang=lang,
+            stats=stats,
+        )
+    except Exception as e:
+        final_output = {
+            "error": True,
+            "message": str(e),
+            "storyboard_prompt": "",
+            "video_prompt": "",
+        }
+    
+    return {
+        "updated_dept_results": updated_dept_results,
+        "updated_cross_results": updated_cross_results,
+        "final_output": final_output,
+        "reroll_log": reroll_log,
+        "error": False,
+    }

@@ -22,6 +22,7 @@ from debate_engine import (
     run_department_debate, run_cross_debate, run_summary,
     run_spatial_review, run_proofreading, run_spatial_diagram,
     run_auto_revision, run_director_revision, run_output_edit,
+    run_smart_reroll,
     run_department_round, run_department_consensus,
     generate_carry_forward, generate_asset_checklist,
     run_single_agent, run_expert_pool_debate,
@@ -33,7 +34,7 @@ from config_manager import (
     delete_profile, export_config, import_config,
     get_last_used, set_last_used, validate_config, merge_skill_injection,
 )
-from router import analyze_and_configure
+from router import analyze_and_configure, analyze_revision_impact
 
 # ============ 浏览器通知 ============
 
@@ -637,6 +638,8 @@ def init_state():
         "carry_forward_result": "",
         "auto_revision_result": None,
         "output_edit_result": None,
+        "smart_reroll_impact": None,
+        "smart_reroll_result": None,
         # v2.3 Harness Engineering
         "model_profile": "deepseek-v4-flash",
         "custom_api_url": "",
@@ -1800,6 +1803,134 @@ def render_output_tab():
             )
     
     st.divider()
+    
+    # ===== 智能回炉 =====
+    with st.expander("🧠 " + ("智能回炉" if is_zh else "Smart Re-roll"), expanded=False):
+        st.caption(
+            "输入修改意见，AI自动分析应该回炉哪些部门。你可以在此基础上增减部门，只重跑选中的部分。"
+            if is_zh else
+            "Enter revision feedback, AI auto-analyzes which departments to re-roll. You can add/remove departments, only re-running what you select."
+        )
+        
+        revision_feedback = st.text_area(
+            "✏️ " + ("修改意见" if is_zh else "Revision Feedback"),
+            height=100,
+            placeholder=(
+                "例如：沙虫从沙尘墙中破开冲出的瞬间不够震撼，冲击力不够；整体色调偏暖了，改成冷色沙漠感"
+                if is_zh else
+                "e.g. The sandworm bursting out of the dust wall isn't impactful enough; the overall tone is too warm, make it a cold desert feel"
+            ),
+            key="smart_reroll_feedback",
+        )
+        
+        col_analyze, _ = st.columns([2, 3])
+        with col_analyze:
+            if st.button("🔍 " + ("AI分析影响范围" if is_zh else "AI Analyze Impact"), type="secondary", use_container_width=True, key="analyze_reroll_impact"):
+                if not revision_feedback.strip():
+                    st.warning("请先输入修改意见" if is_zh else "Please enter revision feedback first")
+                else:
+                    with st.spinner("🧠 " + ("AI正在分析..." if is_zh else "AI analyzing...")):
+                        impact = analyze_revision_impact(
+                            revision_feedback=revision_feedback,
+                            current_config=st.session_state.get("current_config", {}),
+                            api_url=st.session_state.api_url,
+                            api_key=st.session_state.api_key,
+                            model=st.session_state.model_name,
+                            lang=st.session_state.lang,
+                        )
+                        st.session_state.smart_reroll_impact = impact
+                    st.rerun()
+        
+        impact = st.session_state.get("smart_reroll_impact")
+        if impact and not impact.get("error"):
+            st.success("✅ " + ("AI分析完成！以下是推荐回炉的部门：" if is_zh else "AI analysis complete! Recommended departments to re-roll:"))
+            
+            # 部门选择
+            available_depts = []
+            for dk in DEPT_ORDER:
+                dept = DEPARTMENTS[dk]
+                name = dept["zh_name"] if is_zh else dept["en_name"]
+                available_depts.append((dk, name))
+            
+            # 默认选中AI推荐的部门
+            ai_recommended = set(d.get("dept_key") for d in impact.get("affected_departments", []))
+            
+            st.caption("✅ " + ("勾选要回炉的部门，可增减" if is_zh else "Check departments to re-roll, add/remove as needed"))
+            
+            selected_depts = {}
+            for dk, name in available_depts:
+                # 找AI推荐理由
+                reason = ""
+                for d in impact.get("affected_departments", []):
+                    if d["dept_key"] == dk:
+                        reason = d.get("reason", "")
+                        break
+                
+                label = f"{name} ({dk})"
+                if reason:
+                    label += f" — {reason}"
+                
+                selected_depts[dk] = st.checkbox(
+                    label,
+                    value=(dk in ai_recommended),
+                    key=f"smart_reroll_dept_{dk}",
+                )
+            
+            # 交叉辩论提示
+            cross_pairs = impact.get("cross_debate_pairs", [])
+            if cross_pairs:
+                pairs_text = ", ".join(
+                    f"{DEPARTMENTS[p['side_a']]['zh_name'] if is_zh else DEPARTMENTS[p['side_a']]['en_name']} ↔ {DEPARTMENTS[p['side_b']]['zh_name'] if is_zh else DEPARTMENTS[p['side_b']]['en_name']}"
+                    for p in cross_pairs
+                )
+                st.info("⚔️ " + (f"将重新交叉辩论：{pairs_text}" if is_zh else f"Will re-run cross-debates: {pairs_text}"))
+            
+            # 执行按钮
+            final_selected = [dk for dk, v in selected_depts.items() if v]
+            if final_selected:
+                dept_names = ", ".join(DEPARTMENTS[dk]["zh_name"] if is_zh else DEPARTMENTS[dk]["en_name"] for dk in final_selected)
+                
+                if st.button("🚀 " + (f"执行智能回炉（{len(final_selected)}个部门）" if is_zh else f"Execute Smart Re-roll ({len(final_selected)} depts)"), type="primary", use_container_width=True, key="run_smart_reroll"):
+                    dept_results = st.session_state.get("dept_results", {})
+                    cross_results = st.session_state.get("cross_results", [])
+                    
+                    reroll_cross_pairs = []
+                    for cp in cross_pairs:
+                        if cp["side_a"] in final_selected or cp["side_b"] in final_selected:
+                            reroll_cross_pairs.append(cp)
+                    
+                    progress_placeholder = st.empty()
+                    
+                    with st.spinner("🔄 " + (f"正在回炉{dept_names}..." if is_zh else f"Re-rolling {dept_names}...")):
+                        reroll_result = run_smart_reroll(
+                            selected_departments=final_selected,
+                            revision_feedback=revision_feedback,
+                            dept_order=DEPT_ORDER,
+                            all_dept_results=dept_results,
+                            user_script=st.session_state.script,
+                            positive_prompt=st.session_state.positive_prompt,
+                            negative_prompt=st.session_state.negative_prompt,
+                            character_refs=st.session_state.character_refs,
+                            cross_debate_pairs=reroll_cross_pairs,
+                            existing_cross_results=cross_results,
+                            api_url=st.session_state.api_url,
+                            api_key=st.session_state.api_key,
+                            model=st.session_state.model_name,
+                            lang=st.session_state.lang,
+                            stats=st.session_state.get("current_stats"),
+                        )
+                        
+                        st.session_state.dept_results = reroll_result["updated_dept_results"]
+                        st.session_state.cross_results = reroll_result["updated_cross_results"]
+                        st.session_state.final_output = reroll_result["final_output"]
+                        st.session_state.smart_reroll_result = reroll_result
+                    
+                    st.success("✅ " + ("智能回炉完成！请查看「最终产出」Tab" if is_zh else "Smart re-roll complete! Check Output tab"))
+                    st.rerun()
+            else:
+                st.warning("请至少选择一个部门" if is_zh else "Please select at least one department")
+        elif impact and impact.get("error"):
+            st.error(f"❌ {impact.get('message', '分析失败' if is_zh else 'Analysis failed')}")
     
     # ===== 产出回炉编辑 =====
     with st.expander(t("output_edit"), expanded=False):
