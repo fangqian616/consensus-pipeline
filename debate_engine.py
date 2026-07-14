@@ -2360,6 +2360,7 @@ def run_summary(
 4. 分镜表只写静态定格状态，不写任何动态描述
 5. Shot总数由分镜部辩论决定，不限制为9个
 6. 剪辑部按4-15秒拆分为段落，每段恰好9个Shot（对应3×3九宫格，每格一个关键帧）
+6b. 【锚定破除】总结AI生成分镜表时，必须忽略剪辑部共识中的具体Shot数量分配——剪辑部的Shot数量仅供总结AI参考，总结AI只取用剪辑部的时间范围（如"段落1: 0-8s, 段落2: 8-16s"），然后每段独立产出恰好9个Shot。剪辑部的Shot分配是给剪辑部自己用的，不是给分镜表的约束
 7. 【关键帧不足补充流程】如果某段不足9个Shot：分镜部对接剪辑部，在不改变整体编排时间的前提下协商补充关键帧 → 补充后的Shot重新走灯光部/空间部等流程确认 → 最终每段补齐到9个Shot。补充的关键帧必须与原有叙事逻辑一致，不能凭空插入
 8. 【最重要】每个Shot必须有【完整画面】段——用自然语言描述整帧画面的完整视觉内容，包括前景/中景/背景构成、角色在画面中的位置和整体造型轮廓、环境空间构成、光线的实际画面效果、关键视觉元素的画面表现。这是AI绘图工具唯一能理解的部分，没有它AI无法画出分镜图
 9. 【最重要】分镜表是结构化表格，不是自由文章——每个字段必须从对应部门的共识中提取，AI不做自由改写：
@@ -2492,6 +2493,7 @@ Cross-debate results:
 4. Storyboard contains ONLY static frozen states—NO dynamic descriptions
 5. Total shot count is determined by the Storyboard department debate, NOT limited to 9
 6. The Editing department splits into segments based on 4-15s limits, each segment exactly 9 shots (corresponding to a 3×3 grid, one keyframe per cell)
+6b. [Anchor Breaking] When generating the storyboard, the Summary AI MUST ignore the Editing department's specific shot count allocation—the Editing department's shot count is for reference only. The Summary AI only takes the time ranges from the Editing department (e.g., "Segment 1: 0-8s, Segment 2: 8-16s"), then independently produces exactly 9 shots per segment. The Editing department's shot allocation is for their own use, not a constraint on the storyboard
 7. [Keyframe Gap Fill Protocol] If a segment has fewer than 9 shots: Storyboard department consults Editing department to negotiate additional keyframes WITHOUT changing the overall timeline → supplemented shots re-run through Lighting/Spatial/etc. departments for confirmation → finalize each segment at exactly 9 shots. Supplemented keyframes MUST be logically consistent with existing narrative, no arbitrary insertions
 8. [CRITICAL] Every Shot MUST have a [Complete Frame] section—describe the full visual content of the frame in natural language, including foreground/midground/background composition, character positions and overall silhouette, environment spatial composition, actual visual effect of lighting, how key visual elements appear in frame. This is the ONLY part an AI image tool can understand—without it, AI cannot draw the storyboard
 9. [CRITICAL] The storyboard is a structured table, not free prose—every field MUST be extracted from the corresponding department's consensus, no free rewriting by AI:
