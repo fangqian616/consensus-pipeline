@@ -1038,6 +1038,16 @@ def call_api(
                 else:
                     last_error = f"ERROR: API限流429(已达最大重试次数)"
                     break
+            # 5xx 服务器错误重试（503/502/500等）
+            if resp.status_code >= 500:
+                if attempt < max_retries:
+                    wait_time = retry_delay * (2 ** attempt)
+                    last_error = f"ERROR: API服务器错误{resp.status_code}(等待{wait_time}s后重试, 第{attempt}次)"
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    last_error = f"ERROR: API服务器错误{resp.status_code}(已达最大重试次数)"
+                    break
             resp.raise_for_status()
             data = resp.json()
             # Token统计
