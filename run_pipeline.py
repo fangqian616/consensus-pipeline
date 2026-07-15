@@ -517,13 +517,25 @@ def phase7_final_report(papers, preprints, dept_outputs, cross_results,
     debate_outputs = {}
     for dept_key, output in dept_outputs.items():
         if isinstance(output, dict):
-            dept_name = output.get("dept_name", dept_key)
-            # 提取该部门所有辩手发言
+            dept_name = output.get("department", output.get("dept_name", dept_key))
+            # 提取该部门所有辩手发言 + 共识
             parts = []
-            for role, content in output.items():
-                if role not in ("dept_name", "consensus") and isinstance(content, str):
-                    parts.append(f"**{role}**: {content}")
-            debate_outputs[dept_name] = "\n\n".join(parts) if parts else output.get("consensus", "")
+            # 1) 辩手论点（list of dict）
+            debater_args = output.get("debater_arguments", [])
+            if isinstance(debater_args, list):
+                for arg in debater_args:
+                    if isinstance(arg, dict):
+                        name = arg.get("name", arg.get("debater", "辩手"))
+                        argument = arg.get("argument", "")
+                        if argument:
+                            parts.append(f"**{name}**: {argument}")
+                    elif isinstance(arg, str):
+                        parts.append(f"**辩手**: {arg}")
+            # 2) 共识结论
+            consensus = output.get("consensus", "")
+            if consensus:
+                parts.append(f"**共识**: {consensus}")
+            debate_outputs[dept_name] = "\n\n".join(parts) if parts else ""
 
     # 方法论审查数据
     method_output = dept_outputs.get("methodology_review", {})
