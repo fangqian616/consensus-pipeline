@@ -556,44 +556,59 @@ def backfill_abstracts(papers):
     log("Phase4.7", f"需要回填: {len(to_fill)}篇")
 
     filled = 0
-    for p in to_fill:
-        try:
-            import urllib.request
-            import urllib.parse as _urlp
+    for i, p in enumerate(to_fill):
+        retry_count = 0
+        max_retries = 3
+        success = False
 
-            # 优先用DOI查询
-            if p.doi:
-                url = f"https://api.semanticscholar.org/graph/v1/paper/DOI:{_urlp.quote_plus(p.doi)}?fields=abstract"
-            else:
-                url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={_urlp.quote_plus(p.title[:100])}&limit=1&fields=abstract"
+        while retry_count < max_retries and not success:
+            try:
+                import urllib.request
+                import urllib.parse as _urlp
 
-            req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/5.1.7"})
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                data = json.loads(resp.read())
+                # 优先用DOI查询
+                if p.doi:
+                    url = f"https://api.semanticscholar.org/graph/v1/paper/DOI:{_urlp.quote_plus(p.doi)}?fields=abstract"
+                else:
+                    url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={_urlp.quote_plus(p.title[:100])}&limit=1&fields=abstract"
 
-            # 从搜索结果或直接结果中提取abstract
-            abstract = ""
-            if "abstract" in data and data["abstract"]:
-                abstract = data["abstract"]
-            elif "data" in data and data["data"]:
-                for item in data["data"]:
-                    if item.get("abstract"):
-                        abstract = item["abstract"]
-                        break
+                req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/5.1.7"})
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    data = json.loads(resp.read())
 
-            if abstract:
-                p.abstract = abstract[:500]
-                filled += 1
-                log("Phase4.7", f"  ✓ 回填: {p.title[:50]}...")
-            else:
-                log("Phase4.7", f"  ✗ 无abstract: {p.title[:50]}...")
+                # 从搜索结果或直接结果中提取abstract
+                abstract = ""
+                if "abstract" in data and data["abstract"]:
+                    abstract = data["abstract"]
+                elif "data" in data and data["data"]:
+                    for item in data["data"]:
+                        if item.get("abstract"):
+                            abstract = item["abstract"]
+                            break
 
-            # SS限流：每秒不超过1次
-            time.sleep(1.1)
+                if abstract:
+                    p.abstract = abstract[:500]
+                    filled += 1
+                    log("Phase4.7", f"  ✓ 回填({i+1}/{len(to_fill)}): {p.title[:50]}...")
+                else:
+                    log("Phase4.7", f"  ✗ 无abstract({i+1}/{len(to_fill)}): {p.title[:50]}...")
 
-        except Exception as e:
-            log("Phase4.7", f"  ✗ 回填失败: {p.title[:40]}... ({e})")
-            time.sleep(1)
+                success = True
+                # SS限流：基础3秒间隔
+                time.sleep(3)
+
+            except urllib.error.HTTPError as e:
+                if e.code == 429:
+                    retry_count += 1
+                    wait = min(10 * (2 ** retry_count), 60)  # 指数退避: 20s, 40s, 60s
+                    log("Phase4.7", f"  ⏳ 429限流，等{wait}s后重试({retry_count}/{max_retries}): {p.title[:40]}...")
+                    time.sleep(wait)
+                else:
+                    log("Phase4.7", f"  ✗ HTTP {e.code}: {p.title[:40]}...")
+                    break
+            except Exception as e:
+                log("Phase4.7", f"  ✗ 回填失败: {p.title[:40]}... ({e})")
+                break
 
     log("Phase4.7", f"abstract回填完成: {filled}/{len(to_fill)}篇成功")
 

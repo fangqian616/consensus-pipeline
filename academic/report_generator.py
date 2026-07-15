@@ -514,6 +514,20 @@ class ReportGenerator:
                 verified_body = pattern2.sub(' ', verified_body)
                 # 策略3：对于描述性引用，保留引用但去掉可能编造的描述词
                 # 不做替换，保持原样——让读者自行判断
+
+        # v5.1.7: 清理悬空引用模式 "[参见参考文献，论文清单中无具体编号]"
+        # 这类引用指向被降级/不在清单中的论文，属于不可验证的引用
+        verified_body = re.sub(
+            r'\[参见参考文献[，,]?\s*论文清单中无具体编号\]',
+            '',
+            verified_body
+        )
+        # 清理可能残留的 "参见参考文献" 后面的冗余文字
+        verified_body = re.sub(
+            r'参见参考文献[，,]?\s*论文清单中无具体编号',
+            '',
+            verified_body
+        )
         
         # 重新组合
         if len(ref_split) >= 2:
