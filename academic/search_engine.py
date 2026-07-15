@@ -32,33 +32,39 @@ JOURNAL_QUALITY_REGISTRY = {
 }
 
 
-def classify_journal(journal_name: str) -> Dict[str, Any]:
+def classify_journal(journal_name: str, use_easyscholar: bool = True) -> Dict[str, Any]:
     """
-    对期刊进行质量分级。
+    对期刊进行质量分级（增强版）。
+
+    分级优先级：本地注册表 → easyScholar API → 默认规则
 
     Args:
         journal_name: 期刊名称
+        use_easyscholar: 是否尝试easyScholar API查询
 
     Returns:
-        {"level": "S/A/B/C/D", "if": float, "jcr": str, "note": str}
+        {"level": "S/A/B/C/D", "if_2026": float|None, "jcr": str, "note": str, "source": "local/api/fallback"}
     """
-    # 精确匹配
-    if journal_name in JOURNAL_QUALITY_REGISTRY:
-        return JOURNAL_QUALITY_REGISTRY[journal_name]
+    try:
+        from .journal_classifier import classify_journal_enhanced
+        return classify_journal_enhanced(journal_name, use_easyscholar=use_easyscholar)
+    except ImportError:
+        pass
 
-    # 模糊匹配（去掉标点和多余空格）
+    # Fallback: 原有逻辑
+    if journal_name in JOURNAL_QUALITY_REGISTRY:
+        return {**JOURNAL_QUALITY_REGISTRY[journal_name], "source": "local"}
+
     normalized = journal_name.lower().strip().replace(".", "").replace(",", "")
     for key, val in JOURNAL_QUALITY_REGISTRY.items():
         if normalized == key.lower().strip().replace(".", "").replace(",", ""):
-            return val
+            return {**val, "source": "local"}
 
-    # 未知期刊 → 按默认规则分级
-    # 如果包含已知的S级期刊名缩写
     for key, val in JOURNAL_QUALITY_REGISTRY.items():
         if key.lower() in journal_name.lower():
-            return val
+            return {**val, "source": "local"}
 
-    return {"level": "C", "if_2026": None, "jcr": "未知", "note": "未在注册表中"}
+    return {"level": "C", "if_2026": None, "jcr": "未知", "note": "未在注册表中", "source": "fallback"}
 
 
 @dataclass
@@ -356,7 +362,10 @@ class AcademicSearchEngine:
                 if yearly_avg < self.min_yearly_citations and paper.quality_level not in ["S", "A"]:
                     continue
 
-            # 第三道：作者/机构信号（暂不实现，作为后续扩展点）
+            # 第三道：作者/机构信号
+            if hasattr(paper, 'author_h_index') and paper.author_h_index and paper.author_h_index < 5:
+                if paper.quality_level not in ["S"]:
+                    continue
             # 第四道：内容初筛（暂不实现，由辩论环节处理）
 
             result.append(paper)
