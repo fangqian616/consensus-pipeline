@@ -1,8 +1,10 @@
 """
-PDF导出器 — Consensus Pipeline v4.0
+PDF导出器 — Consensus Pipeline v4.3
 
 将Markdown内容转换为PDF，支持中英文混排。
-支持：学术报告、程序部产出、教程部产出。
+支持：学术报告、程序部产出、教程部产出、事实校验报告。
+
+v4.3: 字体路径改用__file__相对定位，修复多字节字符截断问题
 """
 import os
 import re
@@ -12,14 +14,18 @@ from typing import Optional, List, Dict, Any
 from fpdf import FPDF
 
 
-# 字体路径（优先霞鹜文楷，备选Noto Serif CJK）
+# 字体路径 — 优先项目内fonts目录，备选系统字体
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _FONT_CANDIDATES = [
+    os.path.join(_THIS_DIR, "fonts", "LXGWWenKai-Regular.ttf"),
+    os.path.join(_THIS_DIR, "v4-run", "fonts", "LXGWWenKai-Regular.ttf"),
     "CJK_FONT_PATH_PLACEHOLDER",
     "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
 ]
 
 _FONT_BOLD_CANDIDATES = [
+    os.path.join(_THIS_DIR, "fonts", "LXGWWenKai-Bold.ttf"),
     "/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
 ]
@@ -30,6 +36,15 @@ def _find_font(candidates: List[str]) -> Optional[str]:
         if os.path.exists(path):
             return path
     return None
+
+
+def safe_truncate(text: str, max_chars: int = 200) -> str:
+    """字符级安全截断，避免UTF-8多字节字符边界问题。"""
+    if not text:
+        return ""
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars]
 
 
 class PipelinePDF(FPDF):
@@ -220,8 +235,8 @@ def _write_line(pdf: PipelinePDF, text: str, max_width: int = 190):
     try:
         pdf.multi_cell(max_width, 6, text)
     except Exception:
-        # 降级处理：逐字符
-        pdf.multi_cell(max_width, 6, text[:200])
+        # 降级处理：安全截断
+        pdf.multi_cell(max_width, 6, safe_truncate(text, 200))
 
 
 def _render_code_block(pdf: PipelinePDF, lines: List[str]):
@@ -232,13 +247,13 @@ def _render_code_block(pdf: PipelinePDF, lines: List[str]):
     pdf.set_text_color(50, 50, 50)
 
     code_text = "\n".join(lines)
-    # 限制代码块长度
+    # 限制代码块长度（安全截断）
     if len(code_text) > 3000:
-        code_text = code_text[:3000] + "\n... (truncated)"
+        code_text = safe_truncate(code_text, 3000) + "\n... (truncated)"
 
     for code_line in code_text.split("\n"):
         pdf.set_x(15)
-        pdf.cell(180, 5, code_line[:120], fill=True)
+        pdf.cell(180, 5, safe_truncate(code_line, 120), fill=True)
         pdf.ln()
 
     pdf.ln(3)
@@ -265,7 +280,7 @@ def _render_table(pdf: PipelinePDF, rows: List[List[str]]):
         pdf.set_text_color(30, 30, 30)
         max_h = 6
         for j, cell in enumerate(row[:num_cols]):
-            cell_text = str(cell)[:50]
+            cell_text = safe_truncate(str(cell), 50)
             pdf.cell(col_width, max_h, cell_text, border=1, fill=True)
         pdf.ln()
 
@@ -299,7 +314,7 @@ def generate_academic_pdf(
         PDF文件路径
     """
     # 先用report_generator生成Markdown
-    from .report_generator import ReportGenerator
+    from academic.report_generator import ReportGenerator
     gen = ReportGenerator(output_dir=output_dir)
     result = gen.generate(
         topic=topic,
@@ -342,14 +357,7 @@ def generate_department_pdf(
     # 包装成完整报告
     from datetime import datetime
     now = datetime.now().strftime("%Y年%m月%d日")
-    full_md = f"""# {department_name} 辩论产出报告
-
-> Consensus Pipeline v4.0 | 生成日期：{now}
-
----
-
-{debate_output}
-"""
+    full_md = f"# {department_name} 辩论产出报告\n\n> Consensus Pipeline v4.3 | 生成日期：{now}\n\n---\n\n{debate_output}"
     safe_name = department_name.replace("/", "_").replace("\\", "_")
     pdf_path = os.path.join(output_dir, f"{safe_name}_debate_report.pdf")
     return markdown_to_pdf(full_md, pdf_path, title=f"{department_name} 辩论产出")
