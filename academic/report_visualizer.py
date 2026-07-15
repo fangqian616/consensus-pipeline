@@ -152,18 +152,26 @@ def _plot_method_distribution(papers: List[PaperCandidate], charts_dir: str, top
     import matplotlib.pyplot as plt
 
     # 方法关键词映射（互斥分类：每篇论文只归入第一个匹配的类别）
+    # v5.1.5: 扩展到18类，与report_generator._compute_method_distribution对齐
     method_keywords = {
         "LSTM/GRU": ["lstm", "gru", "rnn", "recurrent"],
         "Transformer": ["transformer", "attention", "bert", "gpt"],
         "CNN": ["cnn", "convolutional", "convnet"],
-        "XGBoost/GBDT": ["xgboost", "gbdt", "gradient boosting", "lightgbm"],
+        "XGBoost/GBDT": ["xgboost", "gbdt", "gradient boosting", "lightgbm", "catboost"],
         "GNN/图网络": ["gnn", "graph neural", "graph convolution"],
-        "因果推断": ["causal", "did", "difference-in-diff", "instrumental"],
+        "因果推断": ["causal", "did", "difference-in-diff", "instrumental", "causal inference"],
         "强化学习": ["reinforcement", "rl ", "deep q", "policy gradient"],
         "贝叶斯方法": ["bayesian", "mcmc", "variational inference"],
         "集成学习": ["ensemble", "stacking", "bagging", "random forest"],
         "优化算法": ["optimization", "pso", "genetic algorithm", "evolutionary"],
+        "NLP/文本": ["nlp", "text mining", "sentiment", "word2vec", "topic model"],
         "联邦学习": ["federated", "federated learning"],
+        "分解-集成": ["emd", "ceemdan", "vmd", "wavelet", "decompos", "empirical mode", "eemd"],
+        "混合模型": ["hybrid", "combined model", "ensemble deep", "multi-model", "fusion"],
+        "物理信息融合": ["physics-informed", "pinns", "physics-guided", "mechanism", "domain knowledge"],
+        "迁移学习": ["transfer learn", "domain adapt", "pre-train", "fine-tun"],
+        "SVAR/计量": ["svar", "var ", "vecm", "cointegrat", "econometric", "granger"],
+        "SVM/SVR": ["svm", "svr", "support vector", "kernel method"],
     }
 
     # 互斥分类：每篇论文只归入第一个匹配的类别
