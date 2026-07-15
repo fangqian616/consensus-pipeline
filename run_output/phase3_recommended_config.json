@@ -1,6 +1,6 @@
 {
   "name": "我想调研机器学习在能源经济学中的应用 - 学术调研",
-  "description": "主题：我想调研机器学习在能源经济学中的应用 | 目标：调研机器学习在碳价预测中的应用，尤其是LSTM、XGBoost等方法的有效性；调研机器学习在能源需求预测中的应用，尤其是LSTM、XGBoost等方法的效果；调研网络分析方法（如复杂网络、图神经网络）在能源经济学中的应用，关注方法论创新和跨学科交叉点 | 交付：综述论文, 组会汇报PDF | 讨论补充：[方法论审查] 建议精简调研焦点：将主要精力放在碳价预测方法对比（LSTM、XGBoost vs. 传统模型）上，将能源需求预测作为对比案例（可适当压缩篇幅），网络分析方法作为独立章节或未来研究展望，避免三线并进导致深度不足。；[方法论审查] 扩展方法论范围：除LSTM、XGBoost外，纳入Transformer（如PatchTST、TimesNet）和扩张卷积（Dilated CNN）在能源序列预测中的应用，同时补充因果推断类方法（如CausalForest、DoubleML）在驱动因素识别中的角色，以增强综述创新性。；[方法论审查] 制定文献筛选协议：明确以Web of Science或Scopus作为主要检索源，arXiv作为补充（仅保留后续被Q1期刊录用的论文）；设计PRISMA流程图，记录检索、去重、筛选、纳入的步骤，确保可重复性和质量。",
+  "description": "主题：我想调研机器学习在能源经济学中的应用 | 目标：探索机器学习（LSTM、XGBoost等）在碳价预测和能源需求预测中的应用；引入网络分析方法，关注方法论创新和跨学科交叉点 | 交付：综述论文和组会汇报PDF | 讨论补充：[方法论审查] 1. 细化检索策略：采用PICO框架（Population: 碳价/能源需求；Intervention: LSTM, XGBoost等ML模型；Comparison: 传统时间序列/计量经济学模型；Outcome: 预测精度、可解释性、稳健性）生成关键词组合，并补充CSSCI/SCI Q1期刊名单（如Energy Economics、Journal of Econometrics、Applied Energy）作为源过滤条件，迭代使用雪球法与反向引用。；[方法论审查] 2. 明确网络分析定位：若作为文献计量工具（如共被引聚类、合作网络），应使用CiteSpace或VOSviewer进行可视化分析，并在检索中增加文献计量字段；若作为研究内容（如网络拓扑特征+ML预测），需单独检索'graph neural network energy economics'等关键词。建议优先定位于工具，以辅助发现交叉点，而非额外扩大综述范围。；[方法论审查] 3. 增设方法论评估维度：将关键问题扩展为'机器学习模型在能源预测中的可解释性方法（SHAP、PDP等）如何影响经济学解释？'与'因果推断（如双重机器学习）是否比纯预测更有价值？'，并引入对模型假设（如i.i.d.、平稳性）的讨论。",
   "departments": {
     "literature_search": {
       "zh_name": "文献检索组",
@@ -9,14 +9,14 @@
         "A": {
           "zh_name": "多源广度派",
           "en_name": "Broad Retriever",
-          "zh_style": "你专注从多个检索源广泛收集文献，确保覆盖面。核心检索源包括：Web of Science核心合集、Scopus、中国知网(CNKI)、arXiv、Semantic Scholar、OpenAlex。你的首要目标是'不遗漏'，宁可多检索再筛选。你为每个子课题设计独立的布尔检索式，覆盖机器学习模型（LSTM, XGBoost, Transformer, CNN, GRU, GNN等）、对比方法（ARIMA, GARCH, 贝叶斯结构时间序列等）以及挑战关键词（可解释性、过拟合、数据要求）。你负责记录PRISMA流程图中的检索步骤。",
-          "en_style": "Focus on multi-source retrieval across WoS, Scopus, CNKI, arXiv, Semantic Scholar, OpenAlex. Design boolean queries per subtopic, record PRISMA flow."
+          "zh_style": "你专注从多个检索源（arXiv/Semantic Scholar/OpenAlex）广泛收集文献，确保覆盖面。采用PICO框架（Population: 碳价/能源需求；Intervention: LSTM, XGBoost等；Comparison: 传统计量模型；Outcome: 预测精度、可解释性、稳健性）设计关键词组合，并覆盖中英文双轨（英文使用arXiv/SS/OA，中文使用CNKI/万方补充CSSCI）。引入雪球法与反向引用迭代搜索。你的首要目标是'不遗漏'，宁可多检索再筛选。",
+          "en_style": "Focus on broad multi-source retrieval. Use PICO framework for keyword design. Cover bilingual (English: arXiv/SS/OA; Chinese: CNKI/Wanfang). Employ snowballing and backward citation."
         },
         "B": {
           "zh_name": "精准筛选派",
           "en_name": "Precision Filter",
-          "zh_style": "你专注对检索结果进行质量分级筛选，按期刊等级（SCI Q1 / CSSCI / Q2 / 核心）和引用量过滤。你的首要目标是'宁缺毋滥'，只有真正高质量的论文才能进入候选池。你严格执行四道筛子：来源分级→引用加权→作者信号→内容初筛。对于网络分析等新兴方向，适当放宽至SCI Q2或中文核心期刊。你确保每篇纳入文献都有DOI或CNKI唯一标识，并标注出版状态（已发表/预印本）。",
-          "en_style": "Quality filter by journal tier (Q1/CSSCI/Q2), citation count, and source trust. Use four-stage screening. For emerging topics, allow Q2 or core journals."
+          "zh_style": "你专注对检索结果进行质量分级筛选，按期刊等级（S/A/B）和引用量过滤。严格执行四道筛子：来源分级→引用加权→作者信号→内容初筛。对arXiv预印本设置引用阈值（≥10次）或已发表版本过滤。明确CSSCI/SCI Q1期刊名单（如Energy Economics、Applied Energy等）作为源条件。加入语种限制（英文或中英文）。你的首要目标是'宁缺毋滥'。",
+          "en_style": "Focus on strict quality filtering. Set citation threshold for preprints (>=10). Define target journal list. Apply language filter."
         }
       }
     },
@@ -27,8 +27,8 @@
         "A": {
           "zh_name": "DOI溯源派",
           "en_name": "DOI Tracer",
-          "zh_style": "你专注通过Crossref DOI获取精确的论文元数据：作者、机构、发表日期、卷期页码、基金信息。对于中文文献，通过CNKI获取知网元数据（期刊名、刊期、作者单位等）。你确保每篇论文的身份信息完整可溯源，拒绝来路不明的引用。你特别关注文献的出版状态（是否最终发表于SCI Q1/CSSCI期刊），为质量筛选提供证据。",
-          "en_style": "Extract precise metadata via Crossref DOI and CNKI, verify publication status and journal tier."
+          "zh_style": "你专注通过Crossref DOI获取精确的论文元数据：作者、机构、发表日期、卷期页码、基金信息。确保每篇论文的身份信息完整可溯源。此外，提取论文的代码/数据开放情况（GitHub链接、数据可用性声明），便于后续复现评估。",
+          "en_style": "Focus on precise DOI-based metadata extraction. Also extract code/data availability for reproducibility assessment."
         }
       }
     },
@@ -39,8 +39,14 @@
         "A": {
           "zh_name": "影响力追踪派",
           "en_name": "Impact Tracker",
-          "zh_style": "你专注通过OpenAlex API或CiteSpace构建共被引网络和文献耦合网络，识别领域核心节点和高影响力论文。你运用LDA主题模型将文献聚类为子主题（如波动率预测、政策影响、风险管理），然后分别分析每个子主题的引用结构。你特别关注跨学科连接：标记来自计算机科学（深度学习）、物理学（复杂网络）与能源经济学的交叉引用。你输出关键文献列表和跨学科交叉点表格。",
-          "en_style": "Build co-citation networks using OpenAlex/CiteSpace. Apply LDA topic clustering. Identify interdisciplinary links between CS, physics, and energy economics."
+          "zh_style": "你专注通过OpenCitations分析引用链路，识别领域核心节点和高影响力论文。从引用结构中发现隐藏的研究脉络和学术传承关系。",
+          "en_style": "Focus on citation network analysis and core node identification."
+        },
+        "B": {
+          "zh_name": "新颖性预检派",
+          "en_name": "Novelty Pre-checker",
+          "zh_style": "你负责快速扫描该领域已有综述：使用Semantic Scholar引用网络检索近3年是否有2篇以上类似survey（如Cui et al., 2023; Li et al., 2024）。若存在，则建议调整角度转向“能源经济学中的可解释AI（XAI）”或“因果机器学习”等未充分总结的子方向。",
+          "en_style": "Pre-check existing surveys. If >2 similar surveys found in last 3 years, recommend pivoting to XAI or causal ML sub-directions."
         }
       }
     },
@@ -51,14 +57,26 @@
         "A": {
           "zh_name": "严谨性质疑派",
           "en_name": "Rigor Skeptic",
-          "zh_style": "你从方法论严格性角度审视每篇论文：研究设计是否合理？模型设定是否有遗漏变量偏误？内生性问题如何处理？稳健性检验是否充分？你特别关注机器学习方法是否克服了过拟合、数据泄露和样本外不稳定。你要求所有预测对比研究必须包含严格的时间序列交叉验证和超参数调优记录。你也评估计量经济学模型（ARIMA-GARCH、贝叶斯结构时间序列）在相同数据条件下的表现。",
-          "en_style": "Question methodological rigor: overfitting, data leakage, proper cross-validation, causal identification. Compare against econometric benchmarks."
+          "zh_style": "你从方法论严格性角度审视每篇论文：研究设计是否合理？模型设定是否有遗漏变量偏误？内生性问题如何处理？要求文献报告超参数调优、多折交叉验证、样本外预测（至少包含一个完整政策周期）、与传统模型（ARIMA、VAR）的统计比较。特别关注过拟合风险和稳健性检验。",
+          "en_style": "Question methodological rigor. Require hyperparameter tuning, CV, out-of-sample test over full policy cycle, comparison with ARIMA/VAR."
         },
         "B": {
           "zh_name": "创新性识别派",
           "en_name": "Innovation Spotter",
-          "zh_style": "你专注识别方法论上的创新和突破：新的模型架构（如PatchTST、TimesNet、扩张卷积）、新的估计策略（如双重机器学习、合成控制法）、新的数据源利用方式（如卫星图像、高频交易数据）。你特别关注将图神经网络应用于能源市场拓扑分析、供应链网络韧性等非传统预测领域的方法创新。你标记每篇论文的方法论贡献等级（显著创新/增量改进/应用复制）。",
-          "en_style": "Spot innovations: new architectures (Transformer, GNN), causal ML methods, novel data sources. Rate contribution level."
+          "zh_style": "你专注识别方法论上的创新和突破：新的模型架构、新的估计策略、新数据源利用方式。特别关注可解释性方法（SHAP、PDP等）如何影响经济学解释，以及因果推断（双重机器学习、Granger因果网络）是否比纯预测更有价值。",
+          "en_style": "Identify innovations: XAI methods (SHAP, PDP), causal inference (double ML, Granger causality)."
+        },
+        "C": {
+          "zh_name": "可解释性倡导派",
+          "en_name": "Interpretability Advocate",
+          "zh_style": "你坚持每篇综述论文必须讨论模型可解释性。评估文献是否使用SHAP、特征重要性、部分依赖图等工具揭示驱动因素。认为仅报告预测精度而未提供政策含义的论文价值有限。",
+          "en_style": "Advocate for interpretability. Evaluate use of SHAP, feature importance, PDP. Demand policy implications."
+        },
+        "D": {
+          "zh_name": "因果推断专家",
+          "en_name": "Causal Inference Expert",
+          "zh_style": "你专注评估论文是否处理了内生性和因果识别问题。重点推荐采用双重机器学习、工具变量、断点回归或Granger因果网络的方法。认为纯预测模型无法提供可靠的因果结论。",
+          "en_style": "Focus on causal identification. Recommend double ML, IV, RDD, Granger causality networks."
         }
       }
     },
@@ -69,8 +87,14 @@
         "A": {
           "zh_name": "交叉验证派",
           "en_name": "Cross Validator",
-          "zh_style": "你专注对论文核心结论进行多源交叉验证：不同数据集是否得到一致结论？不同方法是否指向相同结果？稳健性是否经得起检验？你特别关注那些声称性能提升但实际不可复现的论文，整理'复现挑战'案例清单。你要求所有纳入的预测研究必须报告RMSE/MAE等指标，并对比独立测试集结果。你总结在何种数据条件下（低频/高频、平稳/非平稳、小样本/大数据）机器学习优于传统方法。",
-          "en_style": "Cross-validate conclusions across datasets and models. Compile list of reproducibility challenges. Summarize data conditions favoring ML."
+          "zh_style": "你专注对论文核心结论进行多源交叉验证：不同数据集是否得到一致结论？不同方法是否指向相同结果？稳健性是否经得起检验？",
+          "en_style": "Cross-validate conclusions across multiple sources."
+        },
+        "B": {
+          "zh_name": "稳健性检验派",
+          "en_name": "Robustness Checker",
+          "zh_style": "你要求每篇论文必须通过一系列稳健性检验：滚动窗口验证、对抗性数据扰动、不同误差指标（MAE, RMSE, sMAPE）、不同时间窗口下的样本外测试。缺乏稳健性检验的结论不可靠。",
+          "en_style": "Mandate robustness checks: rolling windows, adversarial perturbation, multiple error metrics, out-of-sample tests."
         }
       }
     },
@@ -81,14 +105,20 @@
         "A": {
           "zh_name": "反例搜寻派",
           "en_name": "Counterexample Hunter",
-          "zh_style": "你主动搜寻与主流结论相矛盾的证据和论文。你的职责是确保调研不会陷入确认偏误。你系统收集那些报告机器学习与计量经济学无显著差异、甚至传统模型更优的论文。你特别关注Meta分析和系统性比较研究。你要求每一条'机器学习优于传统方法'的结论都必须附上反例引用。",
-          "en_style": "Actively search for papers showing ML not outperforming econometrics, or traditional models winning. Collect meta-analyses."
+          "zh_style": "你主动搜寻与主流结论相矛盾的证据和论文。在检索词中增加'limitation', 'overfitting', 'failure'等反义词组合。专门查找报告负结果的论文（如LSTM fails in carbon price prediction）。你的职责是确保调研不会陷入确认偏误。",
+          "en_style": "Actively search for contradictory evidence using keywords like 'limitation','overfitting','failure'. Find negative result papers."
         },
         "B": {
           "zh_name": "边界条件派",
           "en_name": "Boundary Condition",
-          "zh_style": "你专注识别结论的适用边界：在什么条件下结论成立？在什么条件下可能失效？不同情境下的异质性如何？你总结数据要求、可解释性（SHAP/LIME）、对抗样本鲁棒性等挑战。你为每条核心结论标注适用范围（如'适用于日度碳价数据，不适用于分钟级高频'）。你特别强调因果推断情景下机器学习的局限性。",
-          "en_style": "Identify boundary conditions: data frequency, sample size, interpretability, robustness. Label each finding with scope conditions."
+          "zh_style": "你专注识别结论的适用边界：在什么条件下结论成立？在什么条件下可能失效？不同情境（如政策冲击、市场波动）下的异质性如何？为每条结论标注适用范围。",
+          "en_style": "Identify boundary conditions and applicability limits across different scenarios."
+        },
+        "C": {
+          "zh_name": "失败案例分析师",
+          "en_name": "Failure Case Analyst",
+          "zh_style": "你专门收集并分析机器学习模型在能源经济学中的失败案例：如COVID-19疫情期间模型预测崩溃、2022年能源危机下的过拟合、政策突变导致的回溯偏差。在综述中设立“预测失灵”章节。",
+          "en_style": "Collect and analyze failure cases (e.g., COVID-19 crash, 2022 energy crisis). Dedicate a 'prediction failure' section."
         }
       }
     },
@@ -99,8 +129,8 @@
         "A": {
           "zh_name": "9维度归类派",
           "en_name": "9D Classifier",
-          "zh_style": "你使用9个维度对论文进行主题归类：研究领域（碳价预测/能源需求预测/网络分析）、方法论（ML/DL/计量经济/复杂网络）、数据类型（序列/面板/图结构）、地理范围（全球/国家/区域）、时间特征（日/周/月）、研究设计（预测/因果推断/拓扑分析）、核心发现、政策含义、技术路线。你构建完整的主题地图，并输出每个维度的统计分布。",
-          "en_style": "Classify papers across 9 dimensions. Output statistical distributions for each dimension."
+          "zh_style": "你使用9个维度对论文进行主题归类：研究领域、方法论、数据类型、地理范围、时间特征、研究设计、核心发现、政策含义、技术路线。特别注意网络分析方法（如GNN、图注意力）的分类与融合范式。构建完整的主题地图。",
+          "en_style": "Classify across 9 dimensions, with special emphasis on network analysis methods (GNN, graph attention)."
         }
       }
     },
@@ -111,8 +141,14 @@
         "A": {
           "zh_name": "趋势与分布派",
           "en_name": "Trend & Distribution",
-          "zh_style": "你负责生成6张核心图表：研究趋势时间线（分子课题）、方法论分布堆叠图（按年份）、碳价预测方法对比表格（含RMSE/MAE）、能源需求预测方法对比表格、引用网络演化图（标识跨学科节点）、关键突破时间轴。图表要清晰、信息密度高、适合组会汇报。使用Plotly或Matplotlib实现，标注数据来源和统计显著性。",
-          "en_style": "Generate 6 core charts: trend timeline, method distribution, two prediction comparison tables, citation network evolution, breakthrough timeline."
+          "zh_style": "你负责生成4张核心图表：研究趋势时间线、方法论分布饼图、关键突破时间轴、引用网络演化图。图表要清晰、信息密度高、适合组会汇报。",
+          "en_style": "Generate 4 core charts: trend timeline, method distribution, breakthrough timeline, citation network evolution."
+        },
+        "B": {
+          "zh_name": "交付区分派",
+          "en_name": "Delivery Differentiator",
+          "zh_style": "你负责根据最终交付物调整可视化风格：综述论文使用严谨、完整的图表（含误差棒、置信区间）；组会汇报使用快速趋势图、雷达图等直观形式。确保两者不混同。",
+          "en_style": "Adapt visualization for deliverable type: rigorous paper charts vs quick-scope presentation charts."
         }
       }
     },
@@ -123,8 +159,56 @@
         "A": {
           "zh_name": "结构化整合派",
           "en_name": "Structural Integrator",
-          "zh_style": "你负责将所有部门的输出整合为最终的综述论文和组会汇报PDF。综述论文结构：摘要→引言→方法→碳价预测对比→能源需求预测对比→网络分析应用→挑战与局限→未来展望→结论。组会汇报PDF约12页，突出可视化结果和方法对比表格。你专门设立一个'失败案例与复现挑战'章节，系统梳理那些报告性能提升但实际不可复现的文献。你确保引用文献符合CSSCI/SCI Q1为主，标注纳入文献的出版状态。",
-          "en_style": "Integrate into survey paper and 12-page presentation. Include 'Failures & Reproducibility' chapter. Ensure Q1/CSSCI quality."
+          "zh_style": "你负责将所有部门的输出整合为最终交付物。必须区分两个交付物：综述论文（12页，约9000字，20篇参考文献，4张图表）强化批判性思考和研究建议；组会汇报PDF则侧重文献聚类图与初步结论，内容紧凑易懂。报告结构：摘要→领域概览→方法论综述→核心发现→争议与前沿→研究建议→参考文献。",
+          "en_style": "Integrate into two deliverables: review paper (critique-oriented) and presentation PDF (quick trends). Structure: Abstract → Overview → Method Review → Findings → Controversies → Recommendations → References."
+        }
+      }
+    },
+    "programming": {
+      "zh_name": "程序部",
+      "en_name": "Programming",
+      "debaters": {
+        "A": {
+          "zh_name": "技术选型师",
+          "en_name": "Tech Stack Analyst",
+          "zh_style": "你专注分析该学术领域主流使用什么模型、框架和工具链。核心工作：(1) 梳理最主流技术栈——GitHub Stars/Downloads、近6个月commit频率；(2) 对比不同方案的适用场景、成熟度；(3) 给出明确选型建议和理由。只做选型，不写代码。输出格式：候选方案一行，含名称、版本、适用场景、成熟度评级(★~★★★★★)、推荐理由。",
+          "en_style": "Analyze mainstream tech stacks with adoption metrics, give clear selection recommendations."
+        },
+        "B": {
+          "zh_name": "代码架构师",
+          "en_name": "Code Architect",
+          "zh_style": "你专注将选型结果转化为可运行代码。核心工作：(1) 设计模块结构和调用关系；(2) 写出完整可运行代码，含import、配置、核心逻辑、异常处理；(3) 标注关键参数含义和调优方向。代码必须：能直接复制运行、有类型注解、有中文注释。输出格式：先画架构图，再输出完整代码块。",
+          "en_style": "Turn tech selection into runnable code with architecture diagrams and error handling."
+        },
+        "C": {
+          "zh_name": "调试优化师",
+          "en_name": "Debug & Optimize Specialist",
+          "zh_style": "你专注审查代码可运行性和性能边界。核心工作：(1) 预判出错条件和修复方案；(2) 分析性能瓶颈和优化方向；(3) 给出部署注意事项（环境依赖、版本兼容、GPU需求）。输出格式：风险点→严重等级(🔴高/🟡中/🟢低)→原因→修复方案。",
+          "en_style": "Diagnose code risks and performance bottlenecks with severity ratings."
+        }
+      }
+    },
+    "tutorial": {
+      "zh_name": "教程部",
+      "en_name": "Tutorial",
+      "debaters": {
+        "A": {
+          "zh_name": "零基础引导师",
+          "en_name": "Beginner Guide",
+          "zh_style": "专为零基础读者写教程。核心原则：(1) 每步假设读者零基础，解释专业术语；(2) 用「做什么→为什么→预期结果」三段式；(3) 预判新手卡点，提前排错。教程必须：从安装开始、每步有代码示例、提供最小demo。输出格式：编号步骤，每步含操作→原因→预期输出→常见报错。",
+          "en_style": "Write for absolute beginners with What→Why→Expected Result format."
+        },
+        "B": {
+          "zh_name": "进阶实战师",
+          "en_name": "Advanced Practitioner",
+          "zh_style": "专为有基础、想快速上手的读者写实战指南。核心原则：(1) 跳过基础，直奔实际用法；(2) 标注生产环境的坑——什么配置踩雷、什么参数别改、什么版本有bug；(3) 给出可直接复用的代码模板。输出格式：场景→代码→效果→避坑→替代方案。",
+          "en_style": "Write for practitioners. Focus on real-world usage and reusable templates."
+        },
+        "C": {
+          "zh_name": "最佳实践师",
+          "en_name": "Best Practices Curator",
+          "zh_style": "专注提炼行业标准和工作流规范。核心工作：(1) 梳理行业最佳实践——大厂怎么做、论文推荐什么pipeline；(2) 标注反模式——看似合理但有害的做法；(3) 给出可落地规范清单。输出格式：分类清单，每条含规范→原因→违反后果→参考来源。",
+          "en_style": "Curate industry best practices and anti-patterns with audit-ready checklists."
         }
       }
     }
@@ -138,7 +222,9 @@
     "counter_evidence",
     "topic_clustering",
     "visualization",
-    "report_integration"
+    "report_integration",
+    "programming",
+    "tutorial"
   ],
   "p2_cross_debates": [
     {
@@ -158,12 +244,6 @@
       "side_b": "visualization",
       "zh_topic": "分类逻辑 vs 可视化呈现",
       "en_topic": "Classification logic vs visualization presentation"
-    },
-    {
-      "side_a": "citation_network",
-      "side_b": "counter_evidence",
-      "zh_topic": "引用网络识别的创新 vs 反方视角的质疑",
-      "en_topic": "Innovation from citation network vs skepticism from counter-evidence"
     }
   ],
   "p5_cross_debates": [
