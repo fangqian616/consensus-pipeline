@@ -200,20 +200,44 @@ class ReportGenerator:
 
     @staticmethod
     def _compress_text(text: str, max_chars: int = 80) -> str:
-        """将长文本压缩为一句话摘要。优先取第一句，截断到max_chars。"""
+        """将长文本压缩为一句话摘要。跳过LLM寒暄语，提取实质结论。"""
         if not text:
             return ""
-        # 去掉Markdown标记
+        # 去掉Markdown标记和常见LLM寒暄语
         clean = text.replace("**", "").replace("###", "").replace("##", "").strip()
-        # 取第一个句号/换行前的内容
-        for sep in ["。", ".\n", ". ", "\n\n", "\n"]:
-            idx = clean.find(sep)
-            if 10 < idx <= max_chars:
-                return clean[:idx + 1].strip()
-        # 没找到合适断点，硬截断
-        if len(clean) > max_chars:
-            return clean[:max_chars - 1] + "…"
-        return clean
+        # 跳过寒暄语行
+        skip_prefixes = [
+            "好的", "好的，", "作为", "以下是", "根据", "基于",
+            "我来", "我将", "经过", "通过", "针对",
+        ]
+        lines = clean.split("\n")
+        substantive_lines = []
+        for line in lines:
+            line = line.strip().lstrip("- ").lstrip("* ").strip()
+            if not line or len(line) < 8:
+                continue
+            is_fluff = False
+            for pref in skip_prefixes:
+                if line.startswith(pref):
+                    is_fluff = True
+                    break
+            if not is_fluff:
+                substantive_lines.append(line)
+
+        if not substantive_lines:
+            # 全是寒暄语，取最长的一行
+            substantive_lines = sorted(lines, key=len, reverse=True)
+
+        result = substantive_lines[0] if substantive_lines else clean[:max_chars]
+
+        if len(result) > max_chars:
+            # 找第一个句号断点
+            for sep in ["。", ". "]:
+                idx = result.find(sep, 10)
+                if 10 < idx <= max_chars:
+                    return result[:idx + 1].strip()
+            return result[:max_chars - 1] + "…"
+        return result
 
     def _build_final_findings(
         self,
