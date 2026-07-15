@@ -238,6 +238,8 @@ class ReportGenerator:
             # 综述需要长输出，用专用调用
             report = self._llm_call_long(system_prompt, user_prompt, temperature=0.25)
             if report and len(report) > 500:
+                # 用论文元数据重建参考文献，保证引用序号一一对应
+                report = self._rebuild_references(report, papers)
                 # 补充页脚
                 if fact_check_summary:
                     report += f"\n\n---\n\n> 📋 事实校验：{fact_check_summary}"
@@ -253,6 +255,59 @@ class ReportGenerator:
         sections.append(self._build_final_trends(papers))
         sections.append(self._build_final_references(s_papers, a_papers))
         return "\n\n".join(sections)
+
+    @staticmethod
+    def _rebuild_references(report: str, papers: List[PaperCandidate]) -> str:
+        """从AI综述中提取所有[N]引用，用论文元数据重建参考文献段，保证一一对应"""
+        import re
+        # 1. 提取正文中所有引用序号
+        cited_indices = set()
+        for m in re.finditer(r'\[(\d+)\]', report):
+            idx = int(m.group(1))
+            if 1 <= idx <= len(papers):
+                cited_indices.add(idx)
+
+        if not cited_indices:
+            return report  # 无引用则不改
+
+        # 2. 找到参考文献section的位置，替换
+        # 匹配 "## 参考文献" 或 "### 参考文献" 及其后到文末的内容
+        ref_pattern = re.compile(r'(\n#{1,3}\s*参考文献.*)', re.DOTALL)
+        match = ref_pattern.search(report)
+        if not match:
+            # 没有参考文献section，追加
+            ref_section = "\n\n## 参考文献\n\n"
+        else:
+            # 替换已有参考文献section
+            report = report[:match.start()]
+            ref_section = "\n\n## 参考文献\n\n"
+
+        # 3. 用论文元数据生成参考文献列表
+        ref_lines = []
+        for idx in sorted(cited_indices):
+            p = papers[idx - 1]  # 1-based to 0-based
+            authors_str = ", ".join(p.authors[:3])
+            if len(p.authors) > 3:
+                authors_str += ", 等"
+            elif len(p.authors) > 1:
+                authors_str = authors_str.replace(", ", ", ", 1)  # 保持原样
+                # 最后一个作者前用"和"
+                parts = authors_str.rsplit(", ", 1)
+                if len(parts) == 2:
+                    authors_str = f"{parts[0]}和{parts[1]}"
+
+            title = p.title.rstrip(".")
+            journal = p.journal or "arXiv预印本"
+            year = p.year or "n/a"
+            doi_str = f". doi:{p.doi}" if p.doi else ""
+
+            if p.source == "arxiv" or not p.journal:
+                ref_lines.append(f"[{idx}] {authors_str}. {title}. *{journal}*, {year}{doi_str}.  ")
+            else:
+                ref_lines.append(f"[{idx}] {authors_str}. {title}. *{journal}*, {year}{doi_str}.  ")
+
+        ref_section += "\n".join(ref_lines)
+        return report + ref_section
 
     @staticmethod
     def _format_paper_list(papers: List[PaperCandidate], max_papers: int = 80) -> str:
