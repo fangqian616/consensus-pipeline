@@ -211,15 +211,14 @@ class RequirementStructurer:
         self, doc: RequirementDocument, current_roles: List[Dict]
     ) -> List[Dict]:
         """使用LLM细化角色建议"""
-        system_prompt = """你是需求分析专家。根据用户的需求文档，调整讨论组角色建议。
+        roles_json = json.dumps(current_roles, ensure_ascii=False)
+        system_prompt = f"""你是需求分析专家。根据用户的需求文档，调整讨论组角色建议。
 当前角色列表：
-{roles}
+{roles_json}
 
 请输出调整后的角色列表JSON，格式：
-[{"role": "角色名", "reason": "理由"}]
-只输出JSON，不要其他文字。""".format(
-            roles=json.dumps(current_roles, ensure_ascii=False)
-        )
+[{{"role": "角色名", "reason": "理由"}}]
+只输出JSON，不要其他文字。"""
 
         user_msg = f"需求文档：\n{doc.to_json()}"
         response = self.llm_call_fn(system_prompt, user_msg)
