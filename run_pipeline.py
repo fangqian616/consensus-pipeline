@@ -273,15 +273,16 @@ def phase5_debate(config, papers, preprints):
 def _build_papers_summary(papers):
     """构建论文摘要文本供辩论使用"""
     lines = []
-    for i, p in enumerate(papers[:30], 1):  # 限制30篇避免token爆炸
+    for i, p in enumerate(papers[:50], 1):  # 扩展到50篇
         authors = ", ".join(p.authors[:3])
         if len(p.authors) > 3:
             authors += " et al."
+        abstract_text = p.abstract[:300] if p.abstract else 'N/A'
         lines.append(
             f"[{i}] {p.title}\n"
             f"    作者: {authors} | 期刊: {p.journal} | 年份: {p.year} | "
             f"被引: {p.citation_count} | 等级: {p.quality_level}\n"
-            f"    摘要: {p.abstract[:200] if p.abstract else 'N/A'}..."
+            f"    摘要: {abstract_text}"
         )
     return "\n".join(lines)
 
@@ -352,13 +353,19 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
 
 {task_prompt}
 
+【引用忠实性规则——必须严格遵守】
+1. 引用论文[N]时，只能描述该论文标题和摘要中明确出现的信息
+2. 严禁编造论文中不存在的具体实验结果、方法细节、数据指标或案例
+3. 如果你对某论文的具体内容不确定，写"参见[N]"，不要凭空编造描述
+4. 你输出的每个[N]引用和对应描述，都将被后续环节自动校验
+
 请给出你的专业分析和观点。要求：
 1. 基于论文列表中的具体证据，不要空泛
 2. 明确指出关键发现和问题
 3. 给出可操作的建议
 4. 中文输出，结构化格式"""
 
-        user_msg = f"论文列表：\n{papers_summary[:6000]}"
+        user_msg = f"论文列表：\n{papers_summary[:8000]}"
 
         log("Phase5", f"  辩手 {debater['name']} 发言中...")
         response = llm_call(system_prompt, user_msg, temperature=0.4)
