@@ -227,4 +227,27 @@ JOURNAL_QUALITY_REGISTRY = {
     "PLOS ONE": {"level": "B", "if_2026": 3.7, "jcr": "Q2", "note": "开源综合，谨慎收录"},
     "Royal Society Open Science": {"level": "B", "if_2026": 3.2, "jcr": "Q2", "note": "皇家学会开源"},
     "Scientific Reports": {"level": "B", "if_2026": 4.6, "jcr": "Q1", "note": "综合子刊"},
+
+    # === v5.1.2新增：科研助理注册表扩展（管理/统计/运筹/环境顶刊）===
+    "IEEE Transactions on Pattern Analysis and Machine Intelligence (TPAMI)": {"level": "S", "if_2026": 24.0, "jcr": "Q1", "note": "AI/ML/模式识别顶刊"},
+    "IEEE Transactions on Pattern Analysis and Machine Intelligence": {"level": "S", "if_2026": 24.0, "jcr": "Q1", "note": "AI/ML/模式识别顶刊"},
+    "Academy of Management Journal": {"level": "S", "if_2026": 10.5, "jcr": "Q1", "note": "管理学顶刊"},
+    "Academy of Management Review": {"level": "S", "if_2026": 12.0, "jcr": "Q1", "note": "管理评论顶刊"},
+    "Administrative Science Quarterly": {"level": "S", "if_2026": 9.3, "jcr": "Q1", "note": "管理科学"},
+    "Strategic Management Journal": {"level": "S", "if_2026": 8.8, "jcr": "Q1", "note": "战略管理"},
+    "Organization Science": {"level": "S", "if_2026": 7.5, "jcr": "Q1", "note": "组织科学"},
+    "Management Science": {"level": "S", "if_2026": 7.2, "jcr": "Q1", "note": "管理科学"},
+    "Environmental Science & Technology": {"level": "S", "if_2026": 11.4, "jcr": "Q1", "note": "环境科学与技术"},
+    "Annual Review of Environment and Resources": {"level": "S", "if_2026": 14.5, "jcr": "Q1", "note": "环境与资源年度评论"},
+    "Journal of the Royal Statistical Society: Series B (Statistical Methodology)": {"level": "S", "if_2026": 5.8, "jcr": "Q1", "note": "统计方法学顶刊"},
+    "Annals of Statistics": {"level": "S", "if_2026": 4.5, "jcr": "Q1", "note": "统计学年鉴"},
+    "Journal of the American Statistical Association (JASA)": {"level": "S", "if_2026": 4.8, "jcr": "Q1", "note": "美国统计学会"},
+    "Operations Research": {"level": "S", "if_2026": 4.5, "jcr": "Q1", "note": "运筹学顶刊"},
+    "European Journal of Operational Research": {"level": "S", "if_2026": 6.4, "jcr": "Q1", "note": "欧洲运筹学"},
+    "Mathematical Programming": {"level": "S", "if_2026": 3.8, "jcr": "Q1", "note": "数学规划"},
+    # 别名映射
+    "TPAMI": {"level": "S", "if_2026": 24.0, "jcr": "Q1", "note": "别名→IEEE TPAMI"},
+    "JASA": {"level": "S", "if_2026": 4.8, "jcr": "Q1", "note": "别名→Journal of the American Statistical Association"},
+    "Proceedings of the National Academy of Sciences": {"level": "S", "if_2026": 11.1, "jcr": "Q1", "note": "美国科学院院刊（PNAS全称）"},
+    "Proceedings of the National Academy of Sciences of the United States of America": {"level": "S", "if_2026": 11.1, "jcr": "Q1", "note": "PNAS全称变体"},
 }

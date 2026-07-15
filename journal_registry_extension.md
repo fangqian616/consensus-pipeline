@@ -5,7 +5,7 @@ AIGC:
     ProduceID: 3946566099419012_0/project_7662589641924722984-files/对接文件/journal_registry_extension.md
     ReservedCode1: ""
     ContentPropagator: 001191110102MACQD9K64028705
-    PropagateID: 3946566099419012#1784105123626
+    PropagateID: 3946566099419012#1784116308585
     ReservedCode2: ""
 ---
 # 期刊注册表扩展
