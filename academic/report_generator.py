@@ -191,7 +191,9 @@ class ReportGenerator:
 7. 语言学术化但不晦涩，避免空话套话
 8. 只引用论文清单中提供的论文，不要凭空编造不存在的论文
 9. 清单中标注⚠️的论文与本主题不相关，请不要引用
-10. 清单中可能包含与主题不太相关的论文（如化学、材料学等），请仅引用与主题直接相关的论文"""
+10. 清单中可能包含与主题不太相关的论文（如化学、材料学等），请仅引用与主题直接相关的论文
+11. 【相关性硬规则】被正式引用[编号]的论文，其标题或摘要中必须同时出现以下两类关键词之一：(a)能源/碳/电力/气候/排放/负荷/价格预测 AND (b)机器学习/深度学习/神经网络/因果推断/强化学习/预测模型/时序预测。仅作为领域背景的论文使用脚注"参见[编号]"而非正文正式引用
+12. 【反面证据】核心发现章节中，每个主流结论必须至少配1条反对或质疑证据，标注置信度🟢高🟡中🔴低"""
 
         user_prompt = f"""请撰写「{topic}」领域的学术动向综述报告。
 
@@ -244,6 +246,13 @@ class ReportGenerator:
             if report and len(report) > 500:
                 # 用论文元数据重建参考文献，保证引用序号一一对应
                 report = self._rebuild_references(report, qualified)
+
+                # 生成可视化图表并嵌入报告
+                chart_section = self._embed_charts(qualified, topic)
+                if chart_section:
+                    # 在"一、研究概况"章节后插入图表
+                    report = self._insert_charts_after_section(report, chart_section)
+
                 # 补充页脚
                 if fact_check_summary:
                     report += f"\n\n---\n\n> 📋 事实校验：{fact_check_summary}"
@@ -271,6 +280,25 @@ class ReportGenerator:
             if 1 <= idx <= len(papers):
                 cited_indices.add(idx)
 
+        # 1.5 移除超出论文清单范围的引用（AI编造的序号）
+        # 把[68]、[79]等超出len(papers)的引用替换为空或注释
+        out_of_range = set()
+        for m in re.finditer(r'\[(\d+)\]', report):
+            idx = int(m.group(1))
+            if idx > len(papers) or idx < 1:
+                out_of_range.add(idx)
+
+        if out_of_range:
+            # 将超出范围的[N]替换为"参见相关研究"
+            for idx in sorted(out_of_range, reverse=True):
+                report = report.replace(f'[{idx}]', '（参见相关研究）')
+            # 重新提取有效引用
+            cited_indices = set()
+            for m in re.finditer(r'\[(\d+)\]', report):
+                idx = int(m.group(1))
+                if 1 <= idx <= len(papers):
+                    cited_indices.add(idx)
+
         if not cited_indices:
             return report  # 无引用则不改
 
@@ -286,32 +314,155 @@ class ReportGenerator:
             report = report[:match.start()]
             ref_section = "\n\n## 参考文献\n\n"
 
-        # 3. 用论文元数据生成参考文献列表
-        ref_lines = []
+        # 3. 用论文元数据生成参考文献列表——按等级分组
+        s_refs, a_refs, b_refs = [], [], []
         for idx in sorted(cited_indices):
             p = papers[idx - 1]  # 1-based to 0-based
             authors_str = ", ".join(p.authors[:3])
             if len(p.authors) > 3:
                 authors_str += ", 等"
-            elif len(p.authors) > 1:
-                authors_str = authors_str.replace(", ", ", ", 1)  # 保持原样
-                # 最后一个作者前用"和"
-                parts = authors_str.rsplit(", ", 1)
-                if len(parts) == 2:
-                    authors_str = f"{parts[0]}和{parts[1]}"
 
             title = p.title.rstrip(".")
             journal = p.journal or "arXiv预印本"
             year = p.year or "n/a"
             doi_str = f". doi:{p.doi}" if p.doi else ""
+            level = p.quality_level or "B"
 
-            if p.source == "arxiv" or not p.journal:
-                ref_lines.append(f"[{idx}] {authors_str}. {title}. *{journal}*, {year}{doi_str}.  ")
+            entry = f"[{idx}] {authors_str}. {title}. *{journal}*, {year}{doi_str}.  "
+
+            if level == "S":
+                s_refs.append(entry)
+            elif level == "A":
+                a_refs.append(entry)
             else:
-                ref_lines.append(f"[{idx}] {authors_str}. {title}. *{journal}*, {year}{doi_str}.  ")
+                b_refs.append(entry)
 
-        ref_section += "\n".join(ref_lines)
-        return report + ref_section
+        # 按等级分组输出
+        ref_section_parts = []
+        if s_refs:
+            ref_section_parts.append("### S级（顶刊）")
+            ref_section_parts.extend(s_refs)
+        if a_refs:
+            ref_section_parts.append("\n### A级（优秀）")
+            ref_section_parts.extend(a_refs)
+        if b_refs:
+            ref_section_parts.append("\n### B级（良好）")
+            ref_section_parts.extend(b_refs)
+
+        ref_section += "\n".join(ref_section_parts)
+        report = report + ref_section
+
+        # 4. 最终校验：移除正文中未被引用的参考文献条目
+        report = ReportGenerator._validate_references(report)
+        return report
+
+    @staticmethod
+    def _validate_references(report: str) -> str:
+        """校验引用一致性：正文[N] ↔ 参考文献列表 一一对应"""
+        import re
+        ref_split = report.split("## 参考文献")
+        if len(ref_split) < 2:
+            return report
+
+        body = ref_split[0]
+        ref_part = ref_split[-1]
+
+        # 提取正文中的所有[N]
+        body_refs = set(int(m) for m in re.findall(r'\[(\d+)\]', body))
+
+        # 提取参考文献中的[N]
+        ref_entries = {}
+        current_subsection = ""
+        subsections = []
+        ref_lines = ref_part.split("\n")
+        cleaned_lines = []
+
+        for line in ref_lines:
+            if line.strip().startswith("### "):
+                current_subsection = line.strip()
+                subsections.append(current_subsection)
+                cleaned_lines.append(line)
+                continue
+            m = re.match(r'^\[(\d+)\]', line.strip())
+            if m:
+                idx = int(m.group(1))
+                if idx in body_refs:
+                    ref_entries[idx] = line
+                    cleaned_lines.append(line)
+                # else: 正文没有引用这个编号，移除
+            else:
+                cleaned_lines.append(line)
+
+        # 重建参考文献部分
+        new_ref = "\n".join(cleaned_lines)
+        return ref_split[0] + "## 参考文献" + new_ref
+
+    def _embed_charts(self, papers: List[PaperCandidate], topic: str) -> str:
+        """生成可视化图表并返回Markdown嵌入文本"""
+        try:
+            from .report_visualizer import generate_report_charts
+            chart_paths = generate_report_charts(papers, self.output_dir, topic)
+
+            lines = []
+            if chart_paths.get("year_trend"):
+                # 使用绝对路径便于PDF渲染
+                abs_path = os.path.abspath(chart_paths["year_trend"])
+                lines.append(f"![年度发文量趋势]({abs_path})")
+                lines.append("")
+                lines.append("*图1：年度发文量趋势（红色柱体为高活跃年份）*")
+                lines.append("")
+
+            if chart_paths.get("method_dist"):
+                abs_path = os.path.abspath(chart_paths["method_dist"])
+                lines.append(f"![方法论分布]({abs_path})")
+                lines.append("")
+                lines.append("*图2：方法论占比分布*")
+                lines.append("")
+
+            if chart_paths.get("grade_dist"):
+                abs_path = os.path.abspath(chart_paths["grade_dist"])
+                lines.append(f"![期刊等级分布]({abs_path})")
+                lines.append("")
+                lines.append("*图3：期刊等级分布（S级=顶刊，A级=优秀，B级=良好）*")
+                lines.append("")
+
+            return "\n".join(lines) if lines else ""
+        except Exception as e:
+            print(f"  [WARN] 图表生成失败: {e}")
+            return ""
+
+    @staticmethod
+    def _insert_charts_after_section(report: str, chart_section: str) -> str:
+        """在"研究概况"章节后插入图表。如果没找到该章节，在摘要后插入。"""
+        # 尝试在"一、研究概况"章节后插入
+        import re
+        # 匹配 "## 一、研究概况" 到下一个 "## " 之间的内容
+        pattern = re.compile(r'(##\s*一[、．.]\s*研究概况.*?)(\n##\s)', re.DOTALL)
+        match = pattern.search(report)
+        if match:
+            # 在该章节末尾、下一个章节前插入
+            insert_pos = match.end() - len('\n## ')
+            report = report[:insert_pos] + "\n\n" + chart_section + "\n" + report[insert_pos:]
+            return report
+
+        # 回退：在摘要后插入
+        pattern2 = re.compile(r'(##\s*摘要.*?)(\n##\s)', re.DOTALL)
+        match2 = pattern2.search(report)
+        if match2:
+            insert_pos = match2.end() - len('\n## ')
+            report = report[:insert_pos] + "\n\n" + chart_section + "\n" + report[insert_pos:]
+            return report
+
+        # 最终回退：追加到文末（参考文献前）
+        ref_pattern = re.compile(r'(\n#{1,3}\s*参考文献)', re.DOTALL)
+        match3 = ref_pattern.search(report)
+        if match3:
+            insert_pos = match3.start()
+            report = report[:insert_pos] + "\n\n" + chart_section + "\n" + report[insert_pos:]
+            return report
+
+        # 实在找不到，追加到末尾
+        return report + "\n\n" + chart_section
 
     @staticmethod
     def _format_paper_list(papers: List[PaperCandidate], max_papers: int = 80) -> str:
