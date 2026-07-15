@@ -1,8 +1,10 @@
 """
-事实校验模块 — Consensus Pipeline v4.0
+事实校验模块 — Consensus Pipeline v4.3
 
 共识提取后，调用外部检索工具交叉验证关键结论，
 为共识结论锚定具体文献DOI。
+
+v4.3: 修复中文分词失效（单字符滑动窗口兜底）
 """
 import json
 from typing import List, Dict, Any, Optional
@@ -33,6 +35,32 @@ class FactCheckReport:
 
     def to_json(self, indent: int = 2) -> str:
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
+
+
+def _extract_ngrams(text: str, n: int = 2) -> set:
+    """
+    从文本中提取n-gram，兼容中文和英文。
+    
+    英文：按空格分词后取n-gram
+    中文：按单字符滑动窗口取n-gram
+    """
+    text = text.lower().strip()
+    # 判断是否主要是中文
+    chinese_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
+    total_chars = sum(1 for c in text if c.strip())
+    
+    if chinese_chars > total_chars * 0.3:
+        # 中文为主：字符级n-gram
+        chars = [c for c in text if c.strip()]
+        if len(chars) < n:
+            return {"".join(chars)} if chars else set()
+        return {"".join(chars[i:i+n]) for i in range(len(chars) - n + 1)}
+    else:
+        # 英文为主：词级n-gram
+        words = [w for w in text.split() if len(w) > 2]
+        if len(words) < n:
+            return set(words)
+        return {" ".join(words[i:i+n]) for i in range(len(words) - n + 1)}
 
 
 class FactChecker:
@@ -153,17 +181,23 @@ class FactChecker:
         return result
 
     def _judge_stance(self, claim: str, title: str, abstract: str) -> str:
-        """判断论文对结论的态度"""
+        """
+        判断论文对结论的态度。
+        
+        v4.3: 使用n-gram重叠替代空格分词，兼容中英文。
+        """
         if not self.llm_call_fn:
-            # 简单关键词匹配
+            # n-gram关键词匹配（兼容中英文）
             text = f"{title} {abstract}".lower()
-            claim_lower = claim.lower()
+            claim_ngrams = _extract_ngrams(claim, n=2)
+            
+            if not claim_ngrams:
+                return "neutral"
+            
+            overlap = sum(1 for ng in claim_ngrams if ng in text)
+            ratio = overlap / len(claim_ngrams)
 
-            # 提取关键术语
-            words = [w for w in claim_lower.split() if len(w) > 3]
-            overlap = sum(1 for w in words if w in text)
-
-            if overlap > len(words) * 0.5:
+            if ratio > 0.3:
                 return "supporting"
             return "neutral"
 

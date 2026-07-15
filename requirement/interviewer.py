@@ -234,19 +234,26 @@ class RequirementInterviewer:
     # ============ 内部方法 ============
 
     def _detect_domain(self, text: str) -> str:
-        """从用户输入识别领域"""
+        """从用户输入识别领域（v4.3: '方法'需与学术关键词共现）"""
         text_lower = text.lower()
-        academic_keywords = [
+        # 强学术信号关键词（单独即可判定学术领域）
+        academic_strong = [
             "调研", "研究", "论文", "学术", "文献", "期刊",
             "综述", "检索", "引用", "cssci", "sci", "ssci",
-            "arxiv", "方法", "实证", "计量",
+            "arxiv", "实证", "计量",
         ]
+        # 弱学术信号（需与强信号共现才计分）
+        academic_weak = ["方法", "模型", "数据"]
+        
+        academic_score = sum(1 for kw in academic_strong if kw in text_lower)
+        # 弱信号仅在强信号存在时才计分
+        if academic_score > 0:
+            academic_score += sum(1 for kw in academic_weak if kw in text_lower)
+        
         animation_keywords = [
             "动画", "分镜", "视频", "镜头", "特效", "3d", "2d",
             "渲染", "角色", "场景", "prompt", "剪辑",
         ]
-
-        academic_score = sum(1 for kw in academic_keywords if kw in text_lower)
         animation_score = sum(1 for kw in animation_keywords if kw in text_lower)
 
         if academic_score > animation_score:
@@ -321,24 +328,51 @@ class RequirementInterviewer:
             self._extract_info_rule_based(user_message)
 
     def _extract_info_rule_based(self, user_message: str):
-        """基于规则的信息提取"""
+        """基于规则的信息提取（v4.3: 正则拆解时间/方法/等级，不再整段存objective）"""
+        import re
         msg = user_message.strip()
+        extracted_something = False
 
-        # 尝试匹配当前追问的维度，补充到对应字段
+        # 时间范围提取
+        time_match = re.search(r'近(\d+)\s*年|(\d{4})\s*[-–—]\s*(\d{4})\s*年', msg)
+        if time_match:
+            if time_match.group(1):
+                self.doc.constraints["time_range"] = f"近{time_match.group(1)}年"
+            elif time_match.group(2):
+                self.doc.constraints["time_range"] = f"{time_match.group(2)}-{time_match.group(3)}"
+            extracted_something = True
+
+        # 方法提取
+        method_keywords = ["机器学习", "深度学习", "强化学习", "计量", "面板数据",
+                           "ML", "神经网络", "因果推断", "混合方法", "定性", "定量"]
+        methods = [kw for kw in method_keywords if kw in msg]
+        if methods:
+            self.doc.constraints["methodology"] = "、".join(methods)
+            extracted_something = True
+
+        # 等级提取
+        level_match = re.search(r'(CSSCI|SCI|SSCI|Q1|Q2|核心|CSCD)', msg, re.IGNORECASE)
+        if level_match:
+            self.doc.constraints["quality_level"] = level_match.group(1).upper()
+            extracted_something = True
+
+        # 交付物提取
+        deliverable_match = re.search(r'(PDF|汇报|综述|论文|报告|组会|答辩)', msg)
+        if deliverable_match:
+            self.doc.deliverable_type = deliverable_match.group(1)
+            extracted_something = True
+
+        # 如果第一轮且没提取到结构化字段，存为objective
         if self._current_round == 1 and not self.doc.objectives:
             self.doc.objectives.append(msg)
-        elif any(kw in msg for kw in ["年", "时间", "近期", "最近"]):
-            self.doc.constraints["time_range"] = msg
-        elif any(kw in msg for kw in ["方法", "计量", "ML", "机器学习", "深度学习"]):
-            self.doc.constraints["methodology"] = msg
-        elif any(kw in msg for kw in ["CSSCI", "SCI", "SSCI", "Q1", "质量", "等级"]):
-            self.doc.constraints["quality_level"] = msg
-        elif any(kw in msg for kw in ["PDF", "汇报", "综述", "论文", "报告", "交付"]):
-            self.doc.deliverable_type = msg
-        elif not self.doc.key_questions:
-            self.doc.key_questions.append(msg)
-        else:
-            self.doc.objectives.append(msg)
+            extracted_something = True
+        
+        # 兜底：如果没匹配到任何字段，存为key_question
+        if not extracted_something:
+            if not self.doc.key_questions:
+                self.doc.key_questions.append(msg)
+            else:
+                self.doc.objectives.append(msg)
 
     def _extract_info_with_llm(self, user_message: str):
         """使用LLM的信息提取"""

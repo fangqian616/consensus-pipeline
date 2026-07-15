@@ -1,11 +1,13 @@
 """
-期刊质量查询器 — Consensus Pipeline v4.2
+期刊质量查询器 — Consensus Pipeline v4.3
 
 支持两种模式：
 1. 本地硬编码注册表（默认，零配置）
 2. easyScholar API（免费，覆盖30+分级体系，需注册获取密钥）
 
 注册地址：https://www.easyscholar.cc → 用户中心 → 开放接口
+
+v4.3: 修复循环导入（改从journal_registry导入）、修复模糊匹配过于激进
 """
 import os
 import json
@@ -13,7 +15,7 @@ import requests
 from typing import Dict, Any, Optional, List
 from functools import lru_cache
 
-from .search_engine import JOURNAL_QUALITY_REGISTRY
+from .journal_registry import JOURNAL_QUALITY_REGISTRY
 
 
 # ============================================================
@@ -104,6 +106,8 @@ def classify_journal_enhanced(
     """
     增强版期刊分级：本地注册表 → easyScholar API → 默认规则。
 
+    v4.3: 修复模糊匹配 — 精确优先，子串匹配仅当长度比例>=80%时才触发
+
     Args:
         journal_name: 期刊名称
         use_easyscholar: 是否尝试easyScholar API
@@ -111,12 +115,25 @@ def classify_journal_enhanced(
     Returns:
         {"level": "S/A/B/C/D", "if_2026": float|None, "jcr": str, "note": str, "source": "local/api/fallback"}
     """
-    # 1. 本地注册表优先（已人工校验）
     normalized = journal_name.lower().strip().replace(".", "").replace(",", "")
+
+    # 1. 本地注册表 — 精确匹配优先
     for key, val in JOURNAL_QUALITY_REGISTRY.items():
         key_norm = key.lower().strip().replace(".", "").replace(",", "")
-        if normalized == key_norm or normalized in key_norm or key_norm in normalized:
+        if normalized == key_norm:
             return {**val, "source": "local"}
+
+    # 子串匹配 — 仅当较短的字符串长度 >= 较长字符串的80%时才触发
+    # 避免"Energy"匹配到所有含Energy的期刊
+    for key, val in JOURNAL_QUALITY_REGISTRY.items():
+        key_norm = key.lower().strip().replace(".", "").replace(",", "")
+        shorter = min(len(normalized), len(key_norm))
+        longer = max(len(normalized), len(key_norm))
+        if longer == 0:
+            continue
+        if shorter / longer >= 0.8:
+            if normalized in key_norm or key_norm in normalized:
+                return {**val, "source": "local"}
 
     # 2. easyScholar API
     if use_easyscholar and EASYSCHOLAR_SECRET_KEY:
