@@ -3230,7 +3230,7 @@ def render_requirement_tab():
     # ---- LLM 配置（从sidebar获取） ----
     api_url = st.session_state.get("api_url", "")
     api_key = st.session_state.get("api_key", "")
-    model = st.session_state.get("model", "")
+    model = st.session_state.get("model_name", "")
     
     def _llm_call(system_prompt: str, user_prompt: str) -> str:
         """统一的LLM调用，复用app的API配置"""
