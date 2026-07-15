@@ -3338,13 +3338,13 @@ def render_requirement_tab():
                 with st.spinner("🤔 " + ("调研AI正在分析..." if is_zh else "Research AI analyzing...")):
                     # 初始化或继续访谈
                     if "req_interviewer" not in st.session_state or st.session_state.get("req_interviewer") is None:
-                        st.session_state.req_interviewer = RequirementInterviewer()
+                        st.session_state.req_interviewer = RequirementInterviewer(llm_call_fn=_llm_call)
                         result = st.session_state.req_interviewer.start(user_input=follow_up)
                     else:
                         result = st.session_state.req_interviewer.chat(user_message=follow_up)
                     
                     # 保存AI追问
-                    next_q = result.get("next_question", "")
+                    next_q = result.get("question", "")
                     if next_q:
                         understanding = result.get("current_understanding", "")
                         ai_msg = ""
@@ -3354,7 +3354,7 @@ def render_requirement_tab():
                         st.session_state.req_interview_history.append({"role": "assistant", "content": ai_msg})
                     
                     # 保存需求文档（如果访谈完成）
-                    if result.get("completed", False):
+                    if result.get("is_complete", False):
                         st.session_state.req_document = st.session_state.req_interviewer.get_requirement_document()
                 
                 st.rerun()
