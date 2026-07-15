@@ -1,257 +1,298 @@
-好的，作为一名能源经济学机器学习领域的技术专家，我将基于您提供的论文列表和我的专业知识，为您完成三大任务。我将以中文、Markdown格式输出。
+# 任务1：技术选型分析
+
+在能源经济学领域，碳价预测需要兼顾时序依赖性与多维特征驱动。以下针对四种主流方案进行对比分析，并结合前沿文献（如《Machine learning in energy economics and finance: A review》等）给出选型建议。
+
+| 方案名称 | 适用场景 | 成熟度评级 | 推荐理由 |
+|----------|----------|------------|----------|
+| **LSTM/GRU** | 纯时序预测、高频数据（日/时）、需捕捉长期依赖的序列 | ★★★★☆ | 对碳价的非线性和时序模式（如周期性、趋势性）建模能力强；GRU较LSTM参数少，适合小样本场景。缺点是对外部特征利用不足，易过拟合。 |
+| **XGBoost/LightGBM** | 多特征驱动预测、特征工程丰富、样本量中等 | ★★★★★ | 擅长处理高维特征（如宏观经济、能源价格、政策变量），可解释性较好（通过SHAP）；LightGBM速度更快，适合迭代调优。但在纯时序任务中忽略顺序信息。 |
+| **Transformer（含Attention）** | 长序列预测、多变量联动、需要并行计算 | ★★★☆☆ | 可捕捉全局依赖，但需要大量数据（>10⁵样本）才能发挥优势，计算资源要求高；在碳价这种有限样本（通常仅几千条）下易欠拟合。 |
+| **混合模型（CNN-LSTM, Attention-XGBoost等）** | 综合时序与特征维度，兼顾局部模式与整体趋势 | ★★★★☆ | 结合LSTM的时序能力和XGBoost的特征处理能力可互补。如先提取时序特征再输入XGBoost，或LSTM输出注意力权重后加权特征。在碳价预测中已有成功案例（见《Machine learning for a sustainable energy future》）。 |
+
+**最终选型建议**：推荐使用 **LSTM + XGBoost 混合模型**。理由如下：
+- 碳价受到历史价格时序（LSTM擅长）和外部因素（XGBoost擅长）共同影响，单一模型难以兼顾。
+- 混合模型成熟度中等偏高（★★★★），已有大量实证（如《Artificial intelligence and machine learning approaches to energy demand-side response》中提及混合模型在能源预测中的优势）。
+- 计算成本可控，适合学术研究和工业应用。
 
 ---
 
-### 任务1：技术选型分析
+# 任务2：碳价预测完整代码（LSTM + XGBoost 混合模型）
 
-在能源经济学，特别是碳价预测领域，不同的机器学习模型有其独特的优势和适用场景。以下是对您提出的四种方案的对比分析及选型建议。
-
-| 方案名称 | 适用场景 | 成熟度评级 | 推荐理由 |
-| :--- | :--- | :--- | :--- |
-| **LSTM/GRU** | 纯时间序列预测、捕捉长期依赖关系、数据具有明显时序模式。 | ★★★★★ | **成熟度高**，是时间序列预测的经典深度学习模型。GRU作为LSTM的简化变体，计算效率更高。其“门控”机制能有效处理碳价序列中的记忆效应和趋势。但需要足够的时序数据量，且对特征工程依赖相对较低。 |
-| **XGBoost/LightGBM** | 特征驱动预测、高维特征空间、需要模型可解释性（特征重要性）、数据包含大量结构性特征（如宏观经济指标、天气、政策变量）。 | ★★★★★ | **成熟度极高**，是Kaggle等竞赛中的常胜将军。在处理表格型数据、非线性关系和特征交互方面表现优异。LightGBM相比XGBoost训练速度更快，内存占用更小。在碳价预测中，如果大量外部影响因素（如能源价格、股票指数、政策事件）被量化，该方案优势巨大。缺点是缺乏对时间序列长期依赖的显式建模。 |
-| **Transformer** | 长序列建模、捕捉序列中的远距离依赖关系、多变量时间序列预测。 | ★★★★☆ | 近年来最先进的序列模型。多头自注意力机制能同时关注序列中任意位置的信息，理论上在处理长期交互方面优于LSTM。但**成熟度相对较低**，对数据量和计算资源要求高，训练不稳定，在小数据集上容易过拟合。在碳价预测中，除非数据量极大，否则其优势可能不如LSTM，且有被更高效的Informer、Autoformer等变体取代的趋势。 |
-| **混合模型 (CNN-LSTM, Attention-XGBoost等)** | 充分利用不同模型的优势、应对复杂时间序列+特征工程问题、追求更高预测精度。 | ★★★★☆ | **为解决单一模型瓶颈而设计的范本**。`CNN-LSTM`: CNN提取局部特征（如短期波动模式），LSTM处理长序列依赖。`Attention-XGBoost`: 用注意力机制为时间步或特征动态加权，再送入XGBoost进行稳健预测。`LSTM+XGBoost`: (本项目推荐) LSTM提取时序深层特征，XGBoost作为强学习器进行最终预测或特征组合。**成熟度中等**，但效果往往最好，是工程实践中的优选。 |
-
-**选型建议**：
-
-1.  **初级或快速原型**：推荐 **XGBoost/LightGBM**。它们上手快、效果稳定、可解释性强，是建立基准模型的绝佳选择。
-2.  **专注时间序列动态**：推荐 **LSTM/GRU**。如果数据量充足（例如每日或每小时数据），且主要依赖历史碳价本身进行预测，LSTM是核心模型。
-3.  **追求极致精度与鲁棒性**：**强烈推荐使用混合模型**，特别是 **LSTM + XGBoost**。`LSTM`负责从复杂的时间序列中提取深层特征（如潜在趋势、周期），而`XGBoost`则利用这些特征和原始特征进行更稳健的预测，这正是本代码所实践的。
-
-### 任务2：碳价预测完整代码（LSTM + XGBoost混合模型）
-
-以下是一个完整的、可直接运行的Python项目。由于公开的欧盟碳配额(EUA)期货数据通常来自金融数据提供商（如Wind, Refinitiv），本例将使用一个**模拟数据集**（可以认为是真实数据的典型形态）来演示完整流程，并在注释中说明如何替换为真实数据源（如Yahoo Finance或Investing.com的EOD数据）。代码包含丰富的中文注释和类型注解。
+以下提供可直接运行的Python项目。由于真实碳价数据需从交易所获取，代码中提供两种方式：①使用网络下载公开数据（示例采用ICE EUA期货数据，需网络）；②若不可用，则生成模拟数据供演示。实际使用时，请将数据源替换为官方CSV文件。
 
 ```python
 """
-项目：基于LSTM+XGBoost混合模型的碳价预测
-作者：AI能源经济专家
-功能：
-    1. 从模拟数据（或真实CSV）加载碳价数据。
-    2. 进行数据预处理和特征工程。
-    3. 使用LSTM模型提取时间序列深层特征。
-    4. 使用XGBoost模型进行最终预测。
-    5. 评估模型性能（MSE, MAE, R²）。
-依赖：pip install numpy pandas scikit-learn tensorflow keras xgboost matplotlib
+碳价预测 - LSTM + XGBoost 混合模型
+完全可运行，包含数据预处理、特征工程、模型训练与评估。
+依赖：pandas, numpy, matplotlib, yfinance, scikit-learn, tensorflow, xgboost, shap
+安装：pip install pandas numpy matplotlib yfinance scikit-learn tensorflow xgboost shap
 """
 
-import numpy as np
+import os
+import warnings
+from typing import Tuple, Optional, Any
 import pandas as pd
-from typing import Tuple, List, Optional
+import numpy as np
+import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import LSTM, Dense, Dropout, Input
 from tensorflow.keras.callbacks import EarlyStopping
-from xgboost import XGBRegressor
-import warnings
-import matplotlib.pyplot as plt
+from tensorflow.keras.optimizers import Adam
+import xgboost as xgb
+import shap
 
 warnings.filterwarnings('ignore')
 
-# 设置随机种子以保证可复现
-np.random.seed(42)
-
-# ----------------------------------------------
-# 1. 数据加载与预处理 (Data Loading & Preprocessing)
-# ----------------------------------------------
-
-def generate_synthetic_carbon_price_data(
-    n_points: int = 1000,
-    start_price: float = 50.0,
-    noise_level: float = 1.0
-) -> pd.DataFrame:
+# ---------------------- 1. 数据获取 ----------------------
+def fetch_data(source: str = 'yfinance') -> pd.DataFrame:
     """
-    生成模拟的碳价时间序列数据。
-    实际应用中，请用 pd.read_csv('carbon_prices.csv') 替代。
-    模拟数据包含：日期（假设为每日）、Close（收盘价）、Volume（成交量）、
-    以及几个外部特征：天然气价格 (NatGas)、煤炭价格 (Coal)、
-    欧盟股票指数 (EU_Stock)。
+    从公开数据集获取碳价数据。
+    优先使用yfinance下载ICE EUA期货连续合约（代码：MO1.F），若失败则生成模拟数据。
+    
+    Returns:
+        DataFrame 包含日期和收盘价（'Close'列）
     """
-    dates = pd.date_range(start='2020-01-01', periods=n_points, freq='D')
-    
-    # 生成一个带趋势和周期性的随机游走收盘价
-    trend = np.linspace(0, 15, n_points)
-    seasonality = 5 * np.sin(np.linspace(0, 20 * np.pi, n_points))
-    random_walk = np.cumsum(np.random.randn(n_points) * noise_level)
-    close_prices = start_price + trend + seasonality + random_walk
-    close_prices = np.maximum(close_prices, 10)  # 限制最低价
-    
-    # 生成外部特征
-    nat_gas = close_prices * 0.8 + np.random.randn(n_points) * 2
-    coal = close_prices * 0.5 + np.random.randn(n_points) * 3
-    eu_stock = close_prices * 0.1 + 3000 + np.random.randn(n_points) * 50
-    
-    df = pd.DataFrame({
-        'Date': dates,
-        'Close': close_prices,
-        'Volume': np.random.randint(1000, 10000, n_points),
-        'NatGas': nat_gas,
-        'Coal': coal,
-        'EU_Stock': eu_stock
-    })
+    if source == 'yfinance':
+        try:
+            import yfinance as yf
+            # ICE EUA期货（MO1.F）从Yahoo Finance获取（历史数据可能有限）
+            df = yf.download('MO1.F', start='2010-01-01', end='2025-12-31', progress=False)
+            if not df.empty:
+                print("成功从Yahoo Finance获取数据")
+                return df[['Close']].reset_index()
+        except Exception as e:
+            print(f"yfinance下载失败: {e}，使用模拟数据")
+    # 备选：生成模拟碳价数据（用于演示）
+    print("生成模拟碳价数据（仅用于演示流程）")
+    np.random.seed(42)
+    dates = pd.date_range(start='2010-01-01', end='2024-12-31', freq='D')
+    # 模拟趋势+季节+噪声
+    trend = np.linspace(5, 80, len(dates))
+    season = 10 * np.sin(2 * np.pi * np.arange(len(dates)) / 365)
+    noise = np.random.normal(0, 3, len(dates))
+    price = trend + season + noise
+    df = pd.DataFrame({'Date': dates, 'Close': price})
     return df
 
-def create_sequences(
-    data: np.ndarray,
-    seq_length: int = 10
-) -> Tuple[np.ndarray, np.ndarray]:
+# ---------------------- 2. 特征工程 ----------------------
+def create_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    将时间序列数据转换为监督学习所需的序列格式。
-    :param data: 形状 (n_samples, n_features)
-    :param seq_length: 用于预测的时间步长（窗口大小）
-    :return: X (n_samples-seq_length, seq_length, n_features),
-             y (n_samples-seq_length, 1)
+    构建时间序列特征和外部特征（可扩展）。
+    
+    Args:
+        df: 包含'Date'和'Close'的DataFrame
+    
+    Returns:
+        带特征列的DataFrame
     """
-    xs, ys = [], []
-    for i in range(len(data) - seq_length):
-        xs.append(data[i:i + seq_length, :])  # 输入序列
-        ys.append(data[i + seq_length, 0])     # 预测下一个时间步的Close价格
-    return np.array(xs), np.array(ys)
+    data = df.copy()
+    data.set_index('Date', inplace=True)
+    
+    # 滞后特征 (lag1-lag7)
+    for lag in [1, 2, 3, 7]:
+        data[f'lag_{lag}'] = data['Close'].shift(lag)
+    
+    # 滚动统计 (窗口7, 30天)
+    for window in [7, 30]:
+        data[f'rolling_mean_{window}'] = data['Close'].rolling(window).mean()
+        data[f'rolling_std_{window}'] = data['Close'].rolling(window).std()
+        data[f'rolling_max_{window}'] = data['Close'].rolling(window).max()
+        data[f'rolling_min_{window}'] = data['Close'].rolling(window).min()
+    
+    # 差分特征
+    data['diff_1'] = data['Close'].diff(1)
+    data['diff_7'] = data['Close'].diff(7)
+    
+    # 时间特征
+    data['dayofweek'] = data.index.dayofweek
+    data['month'] = data.index.month
+    data['quarter'] = data.index.quarter
+    data['dayofyear'] = data.index.dayofyear
+    
+    # 虚拟变量 (月份)
+    data = pd.get_dummies(data, columns=['month'], prefix='month')
+    
+    # 添加外部特征示例：油价、天然气价格（如需，可补充）
+    # 此处简化，仅用滞后特征
+    
+    # 删除缺失值
+    data.dropna(inplace=True)
+    return data
 
-def load_and_preprocess_data(
-    filepath: Optional[str] = None
-) -> Tuple[np.ndarray, np.ndarray, MinMaxScaler, np.ndarray, np.ndarray, MinMaxScaler]:
+# ---------------------- 3. 数据预处理 ----------------------
+def prepare_lstm_data(data: pd.DataFrame, feature_cols: list, target_col: str = 'Close', 
+                      lookback: int = 30, test_size: float = 0.2) -> Tuple:
     """
-    数据加载与预处理主函数。
-    返回用于LSTM训练的X_train/y_train/输入scalar，以及原始y的scalar。
+    为LSTM准备序列数据。
+    
+    Args:
+        data: 特征DataFrame
+        feature_cols: 特征列名列表
+        target_col: 目标列名
+        lookback: 时间步长
+        test_size: 测试集比例
+    
+    Returns:
+        X_train, X_test, y_train, y_test, scaler_feat, scaler_target
     """
-    # 加载数据 (模拟或真实)
-    if filepath:
-        df = pd.read_csv(filepath, parse_dates=['Date'])
-    else:
-        df = generate_synthetic_carbon_price_data()
-    
-    print(f"数据形状: {df.shape}")
-    print(f"时间范围: {df['Date'].min()} 至 {df['Date'].max()}")
-    
-    # ---------- 特征工程 ----------
-    # 1. 时间特征衍生
-    df['Year'] = df['Date'].dt.year
-    df['Month'] = df['Date'].dt.month
-    df['DayOfWeek'] = df['Date'].dt.dayofweek
-    
-    # 2. 历史特征（滞后特征）
-    df['Close_Lag1'] = df['Close'].shift(1)
-    df['Close_Lag3'] = df['Close'].shift(3)
-    df['Close_MA5'] = df['Close'].rolling(window=5).mean()
-    df['Volume_Lag1'] = df['Volume'].shift(1)
-    
-    # 3. 外部特征变化率
-    df['NatGas_Change'] = df['NatGas'].pct_change()
-    df['Coal_Change'] = df['Coal'].pct_change()
-    df['EU_Stock_Change'] = df['EU_Stock'].pct_change()
-    
-    # 4. 去掉NaN值
-    df = df.dropna().reset_index(drop=True)
-    
-    # 选择用于建模的特征列
-    feature_cols = [
-        'Close', 'Volume', 'NatGas', 'Coal', 'EU_Stock',
-        'Year', 'Month', 'DayOfWeek',
-        'Close_Lag1', 'Close_Lag3', 'Close_MA5', 'Volume_Lag1',
-        'NatGas_Change', 'Coal_Change', 'EU_Stock_Change'
-    ]
-    
-    data = df[feature_cols].values
-    
-    # ---------- 数据归一化 ----------
-    # 两个Scaler: 一个用于所有特征（LSTM输入），一个仅用于预测目标Close（便于反归一化）
-    scaler_features = MinMaxScaler(feature_range=(0, 1))
+    scaler_feat = MinMaxScaler(feature_range=(0, 1))
     scaler_target = MinMaxScaler(feature_range=(0, 1))
     
-    # 对目标（Close）单独拟合
-    scaler_target.fit(data[:, 0].reshape(-1, 1))
-    # 对所有特征进行归一化
-    scaled_data = scaler_features.fit_transform(data)
+    # 归一化
+    scaled_feat = scaler_feat.fit_transform(data[feature_cols])
+    scaled_target = scaler_target.fit_transform(data[[target_col]])
     
-    # ---------- 创建时间序列样本 ----------
-    seq_length = 20  # 使用过去20天的数据预测下一天
-    X, y = create_sequences(scaled_data, seq_length)
+    # 创建时间序列样本
+    X, y = [], []
+    for i in range(lookback, len(scaled_feat)):
+        X.append(scaled_feat[i-lookback:i])
+        y.append(scaled_target[i])
+    X, y = np.array(X), np.array(y)
     
-    # 执行训练/测试划分 (时间序列必须按时间顺序划分)
-    split_idx = int(len(X) * 0.8)
-    X_train, X_test = X[:split_idx], X[split_idx:]
-    y_train, y_test = y[:split_idx], y[split_idx:]
+    # 按时间顺序分割
+    split = int(len(X) * (1 - test_size))
+    X_train, X_test = X[:split], X[split:]
+    y_train, y_test = y[:split], y[split:]
     
-    # 注意: y_train, y_test 现在是归一化后的值（因为scaled_data中的第一列是归一化后的Close）
-    # 我们需要将其值保持在0-1之间，但为了后续反归一化评估，应将y也进行目标缩放
-    # 实际上y已经是归一化的，这是因为scaler_target拟合的是原始Close，但在scaled_data中第一列用了不同的scaler
-    # 更严谨的做法是：在scaled_data中，第一列也使用scaler_features，但y使用scaler_target单独处理
-    # 为简化，这里我们重新计算：实际目标是原始的Close值，我们需要对y做单独缩放。
-    
-    # 重新提取原始Close值进行单独缩放
-    raw_close = data[:, 0]  # 原始Close (第0列)
-    _, y_raw = create_sequences(np.column_stack([raw_close, np.zeros_like(raw_close)]), seq_length)
-    y_raw = y_raw.reshape(-1, 1)  # 原始未缩放的Close目标值
-    
-    # 对y_raw进行缩放
-    y_scaled = scaler_target.transform(y_raw)
-    
-    # 重新划分y_scaled
-    y_train_scaled = y_scaled[:split_idx].flatten()
-    y_test_scaled = y_scaled[split_idx:].flatten()
-    
-    # y_train_scaled, y_test_scaled 是归一化后的目标值
-    # X_train, X_test 是归一化后的特征
-    
-    print(f"训练样本数: {X_train.shape[0]}, 测试样本数: {X_test.shape[0]}")
-    print(f"输入形状: {X_train.shape[1:]} (时间步, 特征数)")
-    
-    return (X_train, y_train_scaled, X_test, y_test_scaled, 
-            scaler_features, scaler_target, df, seq_length, feature_cols)
+    return X_train, X_test, y_train, y_test, scaler_feat, scaler_target
 
-
-# ----------------------------------------------
-# 2. LSTM模型构建与训练 (LSTM Model)
-# ----------------------------------------------
-
-def build_lstm_model(
-    input_shape: Tuple[int, int],
-    units: int = 64,
-    dropout_rate: float = 0.2
-) -> Model:
+# ---------------------- 4. LSTM模型 ----------------------
+def build_lstm_model(input_shape: Tuple[int, int]) -> Sequential:
     """
-    构建LSTM特征提取模型。
-    :param input_shape: (时间步, 特征数)
-    :param units: LSTM神经元数量
-    :param dropout_rate: Dropout比例，防止过拟合
-    :return: Keras模型
+    构建LSTM模型。
+    
+    Args:
+        input_shape: (时间步长, 特征数)
+    
+    Returns:
+        Keras Sequential模型
     """
     model = Sequential([
-        LSTM(units=units, return_sequences=False, input_shape=input_shape),
-        Dropout(dropout_rate),
-        Dense(units // 2, activation='relu'),
-        Dropout(dropout_rate),
-        Dense(1)  # 输出层，预测未来一个时间步
+        LSTM(64, return_sequences=True, input_shape=input_shape, activation='tanh'),
+        Dropout(0.2),
+        LSTM(32, return_sequences=False, activation='tanh'),
+        Dropout(0.2),
+        Dense(16, activation='relu'),
+        Dense(1)
     ])
-    model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+    model.compile(optimizer=Adam(learning_rate=0.001), loss='mse', metrics=['mae'])
     return model
 
-# ----------------------------------------------
-# 3. 混合模型训练流水线 (Hybrid Pipeline)
-# ----------------------------------------------
+# ---------------------- 5. XGBoost模型 ----------------------
+def build_xgb_model() -> xgb.XGBRegressor:
+    """
+    构建XGBoost回归模型，用于第二层预测。
+    """
+    model = xgb.XGBRegressor(
+        n_estimators=300,
+        max_depth=5,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        random_state=42,
+        n_jobs=-1
+    )
+    return model
 
-class HybridLSTMXGBoostPredictor:
+# ---------------------- 6. 混合模型训练与预测 ----------------------
+def train_lstm_xgb_hybrid(data: pd.DataFrame, feature_cols: list, target_col: str = 'Close',
+                           lookback: int = 30, epochs: int = 50, batch_size: int = 32):
     """
-    LSTM + XGBoost 混合预测器。
-    LSTM负责从时间序列中提取深层特征（LSTM层输出向量），
-    XGBoost则将这些特征与部分原始统计特征结合，进行最终预测。
+    完整训练流程：LSTM提取时序特征，然后XGBoost使用LSTM输出+原始特征做最终预测。
     """
+    # 准备LSTM数据
+    X_train_lstm, X_test_lstm, y_train_lstm, y_test_lstm, scaler_feat, scaler_target = \
+        prepare_lstm_data(data, feature_cols, target_col, lookback)
     
-    def __init__(
-        self,
-        lstm_units: int = 64,
-        lstm_epochs: int = 50,
-        lstm_batch_size: int = 32,
-        xgb_params: Optional[dict] = None
-    ):
-        self.lstm_units = lstm_units
-        self.lstm_epochs = lstm_epochs
-        self.lstm_batch_size = lstm_batch_size
-        self.xgb_params = xgb_params or {
-            'n_estimators': 200,
-            'max_depth': 6,
-            '
+    # 训练LSTM
+    lstm_input_shape = (X_train_lstm.shape[1], X_train_lstm.shape[2])
+    lstm_model = build_lstm_model(lstm_input_shape)
+    early_stop = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+    history = lstm_model.fit(
+        X_train_lstm, y_train_lstm,
+        validation_data=(X_test_lstm, y_test_lstm),
+        epochs=epochs,
+        batch_size=batch_size,
+        callbacks=[early_stop],
+        verbose=1
+    )
+    
+    # LSTM预测（中间特征）—— 用于XGBoost
+    lstm_train_pred = lstm_model.predict(X_train_lstm)
+    lstm_test_pred = lstm_model.predict(X_test_lstm)
+    
+    # 构建XGBoost的输入：将LSTM预测值与原始特征（或LSTM中间层输出）拼接
+    # 这里使用LSTM的预测值 + 最新时刻的特征（即X_test_lstm[:,-1,:]）
+    X_train_feat = X_train_lstm[:, -1, :]  # 最后一个时间步的特征
+    X_test_feat = X_test_lstm[:, -1, :]
+    
+    X_train_xgb = np.hstack([X_train_feat, lstm_train_pred])
+    X_test_xgb = np.hstack([X_test_feat, lstm_test_pred])
+    
+    # 目标值（原始尺度，但XGBoost可以直接使用归一化后的，最后再反归一化）
+    # 为了XGBoost能够学习残差，我们使用原始目标（已归一化）
+    y_train_xgb = y_train_lstm.ravel()
+    y_test_xgb = y_test_lstm.ravel()
+    
+    # 训练XGBoost
+    xgb_model = build_xgb_model()
+    xgb_model.fit(
+        X_train_xgb, y_train_xgb,
+        eval_set=[(X_test_xgb, y_test_xgb)],
+        early_stopping_rounds=20,
+        verbose=False
+    )
+    
+    # 最终预测（反归一化）
+    pred_scaled = xgb_model.predict(X_test_xgb).reshape(-1, 1)
+    pred = scaler_target.inverse_transform(pred_scaled)
+    y_test_orig = scaler_target.inverse_transform(y_test_lstm.reshape(-1, 1))
+    
+    # 评估
+    mse = mean_squared_error(y_test_orig, pred)
+    mae = mean_absolute_error(y_test_orig, pred)
+    r2 = r2_score(y_test_orig, pred)
+    print(f"混合模型测试集评估: MSE={mse:.2f}, MAE={mae:.2f}, R2={r2:.4f}")
+    
+    # 绘制预测结果
+    plt.figure(figsize=(12, 6))
+    plt.plot(y_test_orig, label='真实值', color='blue')
+    plt.plot(pred, label='预测值', color='red', linestyle='--')
+    plt.title('碳价预测对比 (LSTM + XGBoost 混合模型)')
+    plt.xlabel('样本序号')
+    plt.ylabel('碳价 (EUR/吨)')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+    
+    return lstm_model, xgb_model, scaler_feat, scaler_target
+
+# ---------------------- 主程序 ----------------------
+if __name__ == "__main__":
+    # 1. 获取数据
+    df = fetch_data('yfinance')  # 如需真实数据，请确保网络可用；否则自动使用模拟数据
+    
+    # 2. 特征工程
+    feature_data = create_features(df)
+    print(f"数据样本数: {len(feature_data)}，特征数: {len(feature_data.columns)}")
+    
+    # 3. 选择特征列（排除目标列和不需要的列）
+    exclude_cols = ['Close']
+    feature_cols = [col for col in feature_data.columns if col not in exclude_cols]
+    
+    # 4. 训练混合模型
+    lstm_model, xgb_model, scaler_feat, scaler_target = train_lstm_xgb_hybrid(
+        feature_data, feature_cols, target_col='Close',
+        lookback=30, epochs=100, batch_size=32
+    )
+    
+    # 5. （可选）解释性分析：使用SHAP对XGBoost进行解释
+    print("正在计算SHAP值...")
+    # 获取测试集的特征（需与训练时一致）
+    _, X_test_lstm, _, y_test_lstm, _, _ = prepare_lstm_data(
+        feature_data, feature_cols, 'Close', lookback=30, test_size=0.2
+    )
+   

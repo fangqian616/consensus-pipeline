@@ -1,0 +1,179 @@
+{
+  "topic": "我想调研机器学习在能源经济学中的应用",
+  "domain": "学术调研",
+  "domain_code": "academic_research",
+  "objectives": [
+    "调研机器学习方法（特别是LSTM、XGBoost等）在碳价预测中的应用",
+    "调研机器学习方法（特别是LSTM、XGBoost等）在能源需求预测中的应用",
+    "调研引用网络分析方法，关注方法论创新和跨学科交叉点"
+  ],
+  "key_questions": [
+    "如何利用LSTM、XGBoost等机器学习方法进行碳价预测？其预测性能如何？",
+    "如何利用LSTM、XGBoost等机器学习方法进行能源需求预测？其预测性能如何？",
+    "现有研究中方法选择的依据和局限性是什么？",
+    "如何通过引用网络分析识别机器学习在能源经济学中的方法论创新和跨学科交叉点？"
+  ],
+  "constraints": {},
+  "deliverable_type": [
+    "综述论文",
+    "组会汇报PDF"
+  ],
+  "quality_criteria": "目标受众：导师和同门；需覆盖arXiv、Semantic Scholar、OpenAlex三个源",
+  "suggested_roles": [
+    {
+      "role": "方法论审查",
+      "reason": "评估LSTM、XGBoost等预测方法的选择合理性，以及引用网络分析方法的有效性"
+    },
+    {
+      "role": "反方视角",
+      "reason": "挑战预测模型假设、数据局限性及引用网络分析的可能盲点，如过拟合、样本外性能、交叉学科界定的主观性"
+    },
+    {
+      "role": "预测性能评估",
+      "reason": "专门评估碳价和能源需求预测任务中LSTM、XGBoost等的精度、鲁棒性与对比研究"
+    },
+    {
+      "role": "数据源与质量审查",
+      "reason": "确保覆盖arXiv、Semantic Scholar、OpenAlex三个源，且文献符合CSSCI及以上、SCI Q1的质量标准，时间范围2021-2026"
+    },
+    {
+      "role": "引用网络分析",
+      "reason": "识别方法论创新和跨学科交叉点，检查引用链完整性及关键文献是否遗漏"
+    }
+  ],
+  "department_hints": [
+    {
+      "type": "retrieval",
+      "description": "多源文献检索（arXiv/SS/OA）"
+    },
+    {
+      "type": "metadata",
+      "description": "DOI精确元数据提取"
+    },
+    {
+      "type": "citation_network",
+      "description": "引用网络分析"
+    },
+    {
+      "type": "methodology_review",
+      "description": "方法论严格性评估"
+    },
+    {
+      "type": "data_validation",
+      "description": "交叉验证与数据一致性"
+    },
+    {
+      "type": "counter_evidence",
+      "description": "反面证据搜寻"
+    },
+    {
+      "type": "topic_clustering",
+      "description": "9维度主题聚类"
+    },
+    {
+      "type": "visualization",
+      "description": "趋势/分布/突破图表"
+    },
+    {
+      "type": "report_integration",
+      "description": "PDF/Markdown报告整合"
+    }
+  ],
+  "source_doc": {
+    "topic": "我想调研机器学习在能源经济学中的应用",
+    "domain": "学术调研",
+    "objectives": [
+      "调研机器学习方法（特别是LSTM、XGBoost等）在碳价预测中的应用",
+      "调研机器学习方法（特别是LSTM、XGBoost等）在能源需求预测中的应用",
+      "调研引用网络分析方法，关注方法论创新和跨学科交叉点"
+    ],
+    "constraints": {},
+    "key_questions": [
+      "如何利用LSTM、XGBoost等机器学习方法进行碳价预测？其预测性能如何？",
+      "如何利用LSTM、XGBoost等机器学习方法进行能源需求预测？其预测性能如何？",
+      "现有研究中方法选择的依据和局限性是什么？",
+      "如何通过引用网络分析识别机器学习在能源经济学中的方法论创新和跨学科交叉点？"
+    ],
+    "deliverable_type": [
+      "综述论文",
+      "组会汇报PDF"
+    ],
+    "quality_criteria": "目标受众：导师和同门；需覆盖arXiv、Semantic Scholar、OpenAlex三个源",
+    "interview_history": [
+      {
+        "role": "user",
+        "content": "我想调研机器学习在能源经济学中的应用"
+      },
+      {
+        "role": "assistant",
+        "content": "您说的“应用”范围很广——是更关注用机器学习预测能源价格、负荷需求，还是识别因果效应（比如政策干预的影响）？另外，这次调研的最终产出是用于组会汇报、写一篇综述论文，还是辅助您自己的研究选题？"
+      },
+      {
+        "role": "user",
+        "content": "我关注碳价预测和能源需求预测，方法论偏机器学习（LSTM、XGBoost等）"
+      },
+      {
+        "role": "assistant",
+        "content": "您提到的两项预测任务都很具体，请问这次调研的最终产出是用于组会汇报、撰写一篇综述论文，还是辅助您自己的研究设计？这会影响我后续梳理文献的深度和结构。"
+      },
+      {
+        "role": "user",
+        "content": "近5年，2021-2026年的论文"
+      },
+      {
+        "role": "assistant",
+        "content": "明白了，您的时间范围已确认。那么关于最终交付物——您这次调研是为了给组会做汇报、写一篇综述论文，还是辅助自己的研究选题？另外，最终受众是导师、同门还是期刊评审？这决定了文献检索的深度和引用网络分析的侧重。"
+      },
+      {
+        "role": "user",
+        "content": "CSSCI及以上，SCI Q1为主"
+      },
+      {
+        "role": "assistant",
+        "content": "您还没有告诉我这次调研的最终产出形式——是组会汇报、撰写综述论文，还是用于辅助自己的研究设计？另外，主要受众是导师、同门还是期刊评审？这会影响我后续梳理文献的深度和结构侧重。"
+      },
+      {
+        "role": "user",
+        "content": "预期交付综述论文和组会汇报PDF"
+      },
+      {
+        "role": "assistant",
+        "content": "您提到关注LSTM、XGBoost等方法的预测性能，请问您更侧重描述性预测（如模型拟合精度），还是希望进一步探讨预测结果背后的因果机制（如碳价与政策因素的因果关系）？"
+      },
+      {
+        "role": "user",
+        "content": "目标受众是导师和同门，需要覆盖arXiv、Semantic Scholar、OpenAlex三个源"
+      },
+      {
+        "role": "assistant",
+        "content": "您提到关注预测性能，但未明确是否涉及因果机制。请问您希望综述仅聚焦于描述性预测模型（如精度对比），还是需要涵盖因果推断（如碳价与政策因素的Granger因果、SHAP解释等）？这会影响文献筛选的侧重点。"
+      },
+      {
+        "role": "user",
+        "content": "需要引用网络分析，关注方法论创新和跨学科交叉点"
+      },
+      {
+        "role": "assistant",
+        "content": "您提到需要引用网络分析来识别创新点，但关于预测部分，您是否希望综述也涵盖因果机制分析（如SHAP解释、Granger因果检验等）？这会决定文献筛选时是否纳入方法论解释性研究。"
+      }
+    ],
+    "domain_specific": {
+      "search_sources": [
+        "arxiv",
+        "semantic_scholar",
+        "openalex"
+      ],
+      "quality_level": "CSSCI及以上，SCI Q1为主",
+      "time_range": "2021-2026"
+    }
+  },
+  "domain_specific": {
+    "search_sources": [
+      "arxiv",
+      "semantic_scholar",
+      "openalex"
+    ],
+    "quality_level": "CSSCI及以上，SCI Q1为主",
+    "time_range": "2021-2026"
+  }
+}
