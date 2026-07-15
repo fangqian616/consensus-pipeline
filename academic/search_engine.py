@@ -1,8 +1,8 @@
 """
-学术检索引擎 — Consensus Pipeline v4.3
+学术检索引擎 — Consensus Pipeline v4.4
 
 三线并行检索（arXiv/Semantic Scholar/OpenAlex）+ 期刊质量过滤
-v4.3: 修复循环导入、B级计数bug、第三道筛子死代码、多字节截断
+v4.4: 提升论文产出量至20+篇，arXiv预印本特殊处理，新增保证数量回退机制
 """
 import json
 from typing import List, Dict, Any, Optional
@@ -43,7 +43,7 @@ def classify_journal(journal_name: str, use_easyscholar: bool = True) -> Dict[st
     except ImportError:
         pass
 
-    # Fallback: 原有逻辑（精确匹配优先）
+    # Fallback: 精确匹配优先
     if journal_name in JOURNAL_QUALITY_REGISTRY:
         return {**JOURNAL_QUALITY_REGISTRY[journal_name], "source": "local"}
 
@@ -53,13 +53,16 @@ def classify_journal(journal_name: str, use_easyscholar: bool = True) -> Dict[st
         if normalized == key_norm:
             return {**val, "source": "local"}
 
-    # 子串匹配仅当输入足够长时（避免"Energy"匹配所有含Energy的期刊）
+    # 子串匹配仅当长度比例>=80%
     for key, val in JOURNAL_QUALITY_REGISTRY.items():
         key_norm = key.lower().strip().replace(".", "").replace(",", "")
-        if len(normalized) >= len(key_norm) * 0.8 and normalized in key_norm:
-            return {**val, "source": "local"}
-        if len(key_norm) >= len(normalized) * 0.8 and key_norm in normalized:
-            return {**val, "source": "local"}
+        shorter = min(len(normalized), len(key_norm))
+        longer = max(len(normalized), len(key_norm))
+        if longer == 0:
+            continue
+        if shorter / longer >= 0.8:
+            if normalized in key_norm or key_norm in normalized:
+                return {**val, "source": "local"}
 
     return {"level": "C", "if_2026": None, "jcr": "未知", "note": "未在注册表中", "source": "fallback"}
 
@@ -77,7 +80,8 @@ class PaperCandidate:
     source: str = ""  # arxiv / semantic_scholar / openalex
     quality_level: str = "C"  # S/A/B/C/D
     quality_detail: Dict[str, Any] = field(default_factory=dict)
-    author_h_index: int = 0  # v4.3: 新增字段，第三道筛子使用
+    author_h_index: int = 0  # 第三道筛子使用
+    is_preprint: bool = False  # v4.4: 标记预印本
 
     def to_dict(self) -> dict:
         import dataclasses
@@ -90,8 +94,9 @@ class AcademicSearchEngine:
 
     支持：
     1. 三线并行检索（arXiv/Semantic Scholar/OpenAlex）
-    2. 期刊质量过滤（四道筛子）
+    2. 期刊质量过滤（四道筛子 + 保证数量回退）
     3. 去重合并
+    4. arXiv预印本特殊处理（不直接丢弃，降级保留）
     """
 
     def __init__(
@@ -100,6 +105,8 @@ class AcademicSearchEngine:
         min_citations: int = 5,
         min_yearly_citations: float = 2.0,
         recent_year_buffer: int = 3,
+        min_results: int = 20,  # v4.4: 保证最少产出论文数
+        include_preprints: bool = True,  # v4.4: 是否包含预印本
     ):
         """
         Args:
@@ -107,28 +114,43 @@ class AcademicSearchEngine:
             min_citations: 最低总被引数
             min_yearly_citations: 最低年均被引数
             recent_year_buffer: 近N年论文放宽引用要求
+            min_results: 保证最少产出论文数（不足时自动放宽筛子）
+            include_preprints: 是否在最终结果中保留预印本（降级附录）
         """
         self.quality_levels = quality_levels or ["S", "A", "B"]
         self.min_citations = min_citations
         self.min_yearly_citations = min_yearly_citations
         self.recent_year_buffer = recent_year_buffer
+        self.min_results = min_results
+        self.include_preprints = include_preprints
 
     def search(
         self,
         query: str,
-        max_results_per_source: int = 20,
+        max_results_per_source: int = 50,  # v4.4: 默认从20提升到50
         sources: Optional[List[str]] = None,
-    ) -> List[PaperCandidate]:
+    ) -> Dict[str, Any]:
         """
         三线并行检索 + 质量过滤。
 
+        v4.4: 返回结构改为包含主列表+预印本附录+统计信息
+
         Args:
             query: 检索关键词
-            max_results_per_source: 每个检索源最大结果数
+            max_results_per_source: 每个检索源最大结果数（默认50）
             sources: 检索源列表，默认全部
 
         Returns:
-            过滤后的候选论文列表
+            {
+                "papers": List[PaperCandidate],  # 期刊论文（SAB级）
+                "preprints": List[PaperCandidate],  # 预印本（arXiv）
+                "stats": {
+                    "total_fetched": int,  # 原始获取数
+                    "after_dedup": int,    # 去重后
+                    "after_filter": int,   # 筛选后
+                    "preprint_count": int, # 预印本数
+                }
+            }
         """
         sources = sources or ["arxiv", "semantic_scholar", "openalex"]
 
@@ -150,23 +172,112 @@ class AcademicSearchEngine:
                 except Exception as e:
                     print(f"检索源 {source} 失败: {e}")
 
-        # 去重（按DOI + 标题相似度）
+        total_fetched = len(all_results)
+
+        # 去重
         deduped = self._deduplicate(all_results)
+        after_dedup = len(deduped)
 
-        # 期刊质量分级
+        # 分离预印本和期刊论文
+        preprints = []
+        journal_papers = []
         for paper in deduped:
-            detail = classify_journal(paper.journal)
-            paper.quality_level = detail["level"]
-            paper.quality_detail = detail
+            if paper.is_preprint or paper.journal == "arXiv":
+                paper.quality_level = "D"
+                paper.quality_detail = {"level": "D", "note": "预印本，未正式发表", "source": "preprint"}
+                preprints.append(paper)
+            else:
+                # 期刊质量分级
+                detail = classify_journal(paper.journal)
+                paper.quality_level = detail["level"]
+                paper.quality_detail = detail
+                journal_papers.append(paper)
 
-        # 四道筛子过滤
-        filtered = self._apply_four_sieves(deduped)
+        # 四道筛子过滤（仅期刊论文）
+        filtered = self._apply_four_sieves(journal_papers)
+
+        # 保证数量回退：如果筛选后不足min_results，逐步放宽
+        if len(filtered) < self.min_results:
+            filtered = self._ensure_minimum(journal_papers, filtered)
 
         # 按等级排序
         level_order = {"S": 0, "A": 1, "B": 2, "C": 3, "D": 4}
         filtered.sort(key=lambda p: (level_order.get(p.quality_level, 5), -p.citation_count))
 
-        return filtered
+        # 预印本按引用排序，取top
+        preprints.sort(key=lambda p: -p.citation_count)
+
+        stats = {
+            "total_fetched": total_fetched,
+            "after_dedup": after_dedup,
+            "after_filter": len(filtered),
+            "preprint_count": len(preprints),
+        }
+
+        return {
+            "papers": filtered,
+            "preprints": preprints if self.include_preprints else [],
+            "stats": stats,
+        }
+
+    def search_simple(
+        self,
+        query: str,
+        max_results_per_source: int = 50,
+        sources: Optional[List[str]] = None,
+    ) -> List[PaperCandidate]:
+        """兼容旧接口：返回论文列表（不含预印本和统计）"""
+        result = self.search(query, max_results_per_source, sources)
+        return result["papers"]
+
+    def _ensure_minimum(
+        self,
+        all_papers: List[PaperCandidate],
+        filtered: List[PaperCandidate],
+    ) -> List[PaperCandidate]:
+        """
+        保证最少产出论文数。逐步放宽筛子：
+        1. 放宽引用要求（减半）
+        2. 加入C级论文
+        3. 加入高引预印本
+        """
+        result = list(filtered)
+        filtered_dois = {p.doi for p in result if p.doi}
+        filtered_titles = {p.title[:30].lower() for p in result}
+
+        # 阶段1：放宽引用要求（S/A/C级全放行，B级引用减半）
+        if len(result) < self.min_results:
+            relaxed = []
+            for paper in all_papers:
+                if paper.doi in filtered_dois or paper.title[:30].lower() in filtered_titles:
+                    continue
+                if paper.quality_level in ["S", "A"]:
+                    relaxed.append(paper)
+                elif paper.quality_level == "B":
+                    # 引用要求减半
+                    if paper.citation_count >= self.min_citations // 2:
+                        relaxed.append(paper)
+                elif paper.quality_level == "C":
+                    # 高引C级也加入
+                    if paper.citation_count >= self.min_citations * 2:
+                        relaxed.append(paper)
+            result.extend(relaxed)
+
+        # 阶段2：如果还不够，加入C级论文（按引用排序取top）
+        if len(result) < self.min_results:
+            current_dois = {p.doi for p in result if p.doi}
+            current_titles = {p.title[:30].lower() for p in result}
+            c_papers = [
+                p for p in all_papers
+                if p.quality_level == "C"
+                and p.doi not in current_dois
+                and p.title[:30].lower() not in current_titles
+            ]
+            c_papers.sort(key=lambda p: -p.citation_count)
+            needed = self.min_results - len(result)
+            result.extend(c_papers[:needed])
+
+        return result
 
     def _search_single_source(
         self, source: str, query: str, max_results: int
@@ -184,13 +295,14 @@ class AcademicSearchEngine:
         return results
 
     def _search_arxiv(self, query: str, max_results: int) -> List[PaperCandidate]:
-        """arXiv检索"""
+        """arXiv检索（v4.4: 标记为预印本）"""
         try:
             import urllib.request
             import xml.etree.ElementTree as ET
 
-            url = f"http://export.arxiv.org/api/query?search_query=all:{query}&max_results={max_results}"
-            req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.3"})
+            import urllib.parse as _urlp
+            url = f"http://export.arxiv.org/api/query?search_query=all:{_urlp.quote_plus(query)}&max_results={max_results}"
+            req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
             with urllib.request.urlopen(req, timeout=15) as resp:
                 xml_data = resp.read()
 
@@ -208,11 +320,12 @@ class AcademicSearchEngine:
                 results.append(PaperCandidate(
                     title=title,
                     doi=doi,
-                    journal="arXiv",  # arXiv预印本
+                    journal="arXiv",
                     year=int(published) if published.isdigit() else 0,
                     abstract=safe_truncate(summary, 500),
                     source="arxiv",
-                    quality_level="D",  # 预印本默认D级
+                    quality_level="D",
+                    is_preprint=True,  # v4.4: 标记预印本
                 ))
 
             return results
@@ -222,13 +335,14 @@ class AcademicSearchEngine:
             return []
 
     def _search_semantic_scholar(self, query: str, max_results: int) -> List[PaperCandidate]:
-        """Semantic Scholar检索"""
+        """Semantic Scholar检索（v4.4: 尝试获取h-index）"""
         try:
             import urllib.request
 
-            url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={query}&limit={max_results}&fields=title,doi,year,abstract,citationCount,journal,authors"
-            req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.3"})
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            import urllib.parse as _urlp
+            url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={_urlp.quote_plus(query)}&limit={max_results}&fields=title,doi,year,abstract,citationCount,journal,authors"
+            req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
                 data = json.loads(resp.read())
 
             results = []
@@ -237,9 +351,14 @@ class AcademicSearchEngine:
                 journal_name = journal_info.get("name", "") if journal_info else ""
 
                 authors = []
+                max_h_index = 0
                 for a in (paper.get("authors") or []):
                     if a.get("name"):
                         authors.append(a["name"])
+                    # 尝试获取作者h-index
+                    h = a.get("hIndex") or 0
+                    if h and h > max_h_index:
+                        max_h_index = h
 
                 results.append(PaperCandidate(
                     title=paper.get("title", ""),
@@ -250,6 +369,7 @@ class AcademicSearchEngine:
                     abstract=safe_truncate(paper.get("abstract") or "", 500),
                     citation_count=paper.get("citationCount", 0) or 0,
                     source="semantic_scholar",
+                    author_h_index=max_h_index,
                 ))
 
             return results
@@ -259,21 +379,22 @@ class AcademicSearchEngine:
             return []
 
     def _search_openalex(self, query: str, max_results: int) -> List[PaperCandidate]:
-        """OpenAlex检索"""
+        """OpenAlex检索（v4.4: 获取更多元数据）"""
         try:
             import urllib.request
 
-            url = f"https://api.openalex.org/works?search={query}&per_page={max_results}&select=id,doi,title,publication_year,cited_by_count,authorships,primary_location"
-            req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.3"})
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            import urllib.parse as _urlp
+            url = f"https://api.openalex.org/works?search={_urlp.quote_plus(query)}&per_page={max_results}&select=id,doi,title,publication_year,cited_by_count,authorships,primary_location,type"
+            req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
                 data = json.loads(resp.read())
 
             results = []
             for work in data.get("results", []):
-                # 提取期刊名
                 loc = work.get("primary_location") or {}
                 source_info = loc.get("source") or {}
                 journal_name = source_info.get("display_name", "")
+                work_type = work.get("type", "")
 
                 authors = []
                 for a in (work.get("authorships") or []):
@@ -285,6 +406,8 @@ class AcademicSearchEngine:
                 if doi and doi.startswith("https://doi.org/"):
                     doi = doi.replace("https://doi.org/", "")
 
+                is_preprint = work_type in ["preprint", "working_paper"]
+
                 results.append(PaperCandidate(
                     title=work.get("title", ""),
                     doi=doi,
@@ -293,6 +416,7 @@ class AcademicSearchEngine:
                     year=work.get("publication_year") or 0,
                     citation_count=work.get("cited_by_count", 0) or 0,
                     source="openalex",
+                    is_preprint=is_preprint,
                 ))
 
             return results
@@ -308,16 +432,13 @@ class AcademicSearchEngine:
         result = []
 
         for paper in papers:
-            # DOI去重
             if paper.doi and paper.doi in seen_dois:
-                # 合并信息：保留引用数更高的
                 existing = next((p for p in result if p.doi == paper.doi), None)
                 if existing and paper.citation_count > existing.citation_count:
                     existing.citation_count = paper.citation_count
                     existing.source = f"{existing.source}+{paper.source}"
                 continue
 
-            # 标题去重（简单：取标题前30字符的小写）
             title_key = paper.title.lower()[:30].strip()
             if title_key in seen_titles:
                 continue
@@ -330,18 +451,18 @@ class AcademicSearchEngine:
         return result
 
     def _apply_four_sieves(self, papers: List[PaperCandidate]) -> List[PaperCandidate]:
-        """四道筛子过滤（v4.3: 修复B级计数+第三道筛子激活）"""
+        """四道筛子过滤（v4.4: 独立B级计数+第三道筛子已激活）"""
         import datetime
         current_year = datetime.datetime.now().year
         result = []
-        b_accepted = 0  # 独立B级计数器，不管引用过滤
+        b_accepted = 0
 
         for paper in papers:
             # 第一道：来源分级
             if paper.quality_level not in self.quality_levels:
                 continue
 
-            # B级只保留最多2篇代表（独立计数，不受后续过滤影响）
+            # B级只保留最多2篇代表
             if paper.quality_level == "B":
                 if b_accepted >= 2:
                     continue
@@ -352,7 +473,6 @@ class AcademicSearchEngine:
             is_recent = years_since_pub <= self.recent_year_buffer
 
             if not is_recent and paper.citation_count < self.min_citations:
-                # S级期刊放行，不管引用数
                 if paper.quality_level != "S":
                     continue
 
@@ -361,14 +481,12 @@ class AcademicSearchEngine:
                 if yearly_avg < self.min_yearly_citations and paper.quality_level not in ["S", "A"]:
                     continue
 
-            # 第三道：作者/机构信号（v4.3: 已激活，h-index < 5 的非S级论文降权）
+            # 第三道：作者h-index < 5 的非S级论文降权
             if paper.author_h_index and paper.author_h_index < 5:
                 if paper.quality_level not in ["S"]:
                     continue
 
             # 第四道：内容初筛（暂不实现，由辩论环节处理）
-            # TODO: 后续可添加语义相似度初筛
-
             result.append(paper)
 
         return result

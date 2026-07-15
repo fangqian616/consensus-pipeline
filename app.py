@@ -2173,9 +2173,10 @@ def render_proofread_tab():
                 def _search_fn(query, max_results=5):
                     try:
                         from academic.search_engine import AcademicSearchEngine
-                        engine = AcademicSearchEngine(quality_levels=["S", "A", "B"])
-                        results = engine.search(query, max_results_per_source=max_results)
-                        return [{"title": p.title, "doi": p.doi, "abstract": p.abstract} for p in results[:max_results]]
+                        engine = AcademicSearchEngine(quality_levels=["S", "A", "B"], min_results=max_results)
+                        result = engine.search(query, max_results_per_source=max(20, max_results * 4))
+                        papers = result["papers"] + result.get("preprints", [])[:3]  # 期刊+少量高引预印本
+                        return [{"title": p.title, "doi": p.doi, "abstract": p.abstract} for p in papers[:max_results]]
                     except Exception:
                         return []
                 

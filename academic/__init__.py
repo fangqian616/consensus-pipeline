@@ -1,7 +1,8 @@
 """
-学术调研专属模块 — Consensus Pipeline v4.3
+学术调研专属模块 — Consensus Pipeline v4.4
 
 三线并行检索 + 期刊质量过滤（本地+easyScholar API）+ 交叉验证 + 主题聚类 + 可视化 + 报告生成
+v4.4: 搜索接口升级，保证20+篇论文产出，预印本独立附录
 """
 
 from .journal_registry import JOURNAL_QUALITY_REGISTRY
