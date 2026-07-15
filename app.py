@@ -1,5 +1,6 @@
 """
-AI Consensus Pipeline v3.0 - 通用AI多部门辩论内容创作框架
+AI Consensus Pipeline v4.0 - 通用AI多部门辩论内容创作框架
+v4.0: 需求调研Tab(Phase 0-4) + 程序部/教程部 + 学术调研集成
 支持逐步模式：每轮辩论后暂停，导演可审阅并给出纠正指令
 v3.0: Consensus Pipeline重构——智能配组Tab + 预设/用户配置管理 + AI Router自动配组
 v2.4: 市场模式+候选竞选+投票选举+补丁修正
@@ -35,6 +36,15 @@ from config_manager import (
     get_last_used, set_last_used, validate_config, merge_skill_injection,
 )
 from router import analyze_and_configure, analyze_revision_impact
+
+# v4.0 需求调研模块
+from requirement import (
+    RequirementDocument, RequirementInterviewer,
+    StructuredRequirement, RequirementStructurer,
+    DiscussionGroup, DiscussionResult,
+    ConfigRecommender,
+    FactChecker, FactCheckReport, FactCheckResult,
+)
 
 # ============ 浏览器通知 ============
 
@@ -3019,6 +3029,408 @@ def render_config_tab():
             st.success(t("config_applied"))
 
 
+
+# ============ v4.0 需求调研 Tab ============
+
+def render_requirement_tab():
+    """渲染需求调研Tab — Phase 0~4 的完整流程"""
+    is_zh = st.session_state.get("lang", "zh") == "zh"
+    
+    st.header("🔬 " + ("需求调研" if is_zh else "Requirement Research"))
+    st.caption("v4.0 " + ("对话式需求调研 → 结构化 → 讨论组 → 配置推荐 → 审核" if is_zh else "Interview → Structure → Discussion → Recommend → Review"))
+    
+    # ---- LLM 配置（从sidebar获取） ----
+    api_url = st.session_state.get("api_url", "")
+    api_key = st.session_state.get("api_key", "")
+    model = st.session_state.get("model", "")
+    
+    def _llm_call(system_prompt: str, user_prompt: str) -> str:
+        """统一的LLM调用，复用app的API配置"""
+        import requests as _req
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.3,
+            "max_tokens": 4096,
+        }
+        try:
+            resp = _req.post(api_url, headers=headers, json=payload, timeout=120)
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+        except Exception as e:
+            return f"[ERROR] {str(e)}"
+    
+    llm_available = bool(api_url and api_key and model)
+    
+    # ---- Phase 状态管理 ----
+    if "req_phase" not in st.session_state:
+        st.session_state.req_phase = 0
+    if "req_document" not in st.session_state:
+        st.session_state.req_document = None
+    if "req_structured" not in st.session_state:
+        st.session_state.req_structured = None
+    if "req_discussion" not in st.session_state:
+        st.session_state.req_discussion = None
+    if "req_config" not in st.session_state:
+        st.session_state.req_config = None
+    if "req_interview_history" not in st.session_state:
+        st.session_state.req_interview_history = []
+    
+    phase = st.session_state.req_phase
+    
+    # ---- 进度条 ----
+    phase_names = ["Phase 0: 需求调研", "Phase 1: 需求结构化", "Phase 2: 讨论组", "Phase 3: 配置推荐", "Phase 4: 用户审核"] if is_zh else \
+                  ["Phase 0: Interview", "Phase 1: Structure", "Phase 2: Discussion", "Phase 3: Recommend", "Phase 4: Review"]
+    progress_val = (phase + 1) / 5
+    st.progress(progress_val)
+    
+    cols = st.columns(5)
+    for i, name in enumerate(phase_names):
+        with cols[i]:
+            label = f"**{name}**" if i <= phase else name
+            color = "✅" if i < phase else ("🔵" if i == phase else "⬜")
+            st.markdown(f"{color} {label}")
+    
+    st.divider()
+    
+    # ================================================================
+    # Phase 0: 对话式需求调研
+    # ================================================================
+    if phase == 0:
+        st.subheader("Phase 0: " + ("对话式需求调研" if is_zh else "Requirement Interview"))
+        
+        # 领域选择
+        domain_options = {
+            "academic_research": "📚 学术调研" if is_zh else "📚 Academic Research",
+            "animation": "🎬 动画制作" if is_zh else "🎬 Animation",
+            "programming_tutorial": "💻 程序与教程" if is_zh else "💻 Programming & Tutorial",
+            "general": "🌐 通用" if is_zh else "🌐 General",
+        }
+        selected_domain = st.selectbox(
+            "选择领域" if is_zh else "Domain",
+            options=list(domain_options.keys()),
+            format_func=lambda x: domain_options[x],
+            key="req_domain_select",
+        )
+        
+        # 初始需求输入
+        user_topic = st.text_area(
+            "描述你的需求" if is_zh else "Describe your requirement",
+            placeholder="例如：我想调研机器学习在能源经济学中的前沿应用..." if is_zh else "e.g., I want to research ML applications in energy economics...",
+            height=120,
+            key="req_topic_input",
+        )
+        
+        # 已有的访谈历史
+        if st.session_state.req_interview_history:
+            st.markdown("#### " + ("访谈记录" if is_zh else "Interview History"))
+            for i, turn in enumerate(st.session_state.req_interview_history):
+                with st.chat_message("user" if turn["role"] == "user" else "assistant"):
+                    st.markdown(turn["content"])
+        
+        # 追问输入
+        follow_up = st.chat_input(
+            ("回答追问 / 补充信息" if st.session_state.req_interview_history else "开始调研") if is_zh else \
+            ("Answer follow-up / Add info" if st.session_state.req_interview_history else "Start research"),
+            key="req_follow_up_input",
+        )
+        
+        if follow_up:
+            if not llm_available:
+                st.error("⚠️ " + ("请先在侧边栏配置LLM API" if is_zh else "Please configure LLM API in sidebar"))
+            else:
+                # 添加用户消息
+                st.session_state.req_interview_history.append({"role": "user", "content": follow_up})
+                
+                # AI追问
+                with st.spinner("🤔 " + ("调研AI正在分析..." if is_zh else "Research AI analyzing...")):
+                    # 初始化或继续访谈
+                    if "req_interviewer" not in st.session_state or st.session_state.get("req_interviewer") is None:
+                        st.session_state.req_interviewer = RequirementInterviewer()
+                        result = st.session_state.req_interviewer.start(user_input=follow_up)
+                    else:
+                        result = st.session_state.req_interviewer.chat(user_message=follow_up)
+                    
+                    # 保存AI追问
+                    next_q = result.get("next_question", "")
+                    if next_q:
+                        understanding = result.get("current_understanding", "")
+                        ai_msg = ""
+                        if understanding:
+                            ai_msg = "📋 " + ("当前理解" if is_zh else "Current understanding") + ":\n" + understanding + "\n\n---\n"
+                        ai_msg += f"**{("追问" if is_zh else "Follow-up")}:** {next_q}"
+                        st.session_state.req_interview_history.append({"role": "assistant", "content": ai_msg})
+                    
+                    # 保存需求文档（如果访谈完成）
+                    if result.get("completed", False):
+                        st.session_state.req_document = st.session_state.req_interviewer.get_requirement_document()
+                
+                st.rerun()
+        
+        # 结束调研按钮
+        if st.session_state.req_interview_history:
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("✅ " + ("需求已明确，进入结构化" if is_zh else "Requirement clear, proceed to structure"), type="primary", key="req_finish_interview"):
+                    # 如果没有AI生成过文档，用用户输入手动构建
+                    if not st.session_state.req_document:
+                        st.session_state.req_document = RequirementDocument(
+                            topic=user_topic or follow_up or "",
+                            domain=selected_domain,
+                            objectives=[],
+                            constraints={},
+                            key_questions=[],
+                            deliverable_type="",
+                            quality_criteria="",
+                            interview_history=st.session_state.req_interview_history,
+                            domain_specific={},
+                        )
+                    st.session_state.req_phase = 1
+                    st.rerun()
+            with col2:
+                if st.button("🔄 " + ("重新开始" if is_zh else "Restart"), key="req_restart_interview"):
+                    st.session_state.req_phase = 0
+                    st.session_state.req_interview_history = []
+                    st.session_state.req_document = None
+                    st.rerun()
+    
+    # ================================================================
+    # Phase 1: 需求结构化
+    # ================================================================
+    elif phase == 1:
+        st.subheader("Phase 1: " + ("需求结构化" if is_zh else "Requirement Structuring"))
+        
+        if st.session_state.req_document:
+            req_doc = st.session_state.req_document
+            
+            # 展示需求文档
+            with st.expander("📋 " + ("需求文档" if is_zh else "Requirement Document"), expanded=True):
+                if isinstance(req_doc, dict):
+                    st.json(req_doc)
+                else:
+                    st.json(req_doc.to_dict() if hasattr(req_doc, 'to_dict') else str(req_doc))
+            
+            # 结构化按钮
+            if st.button("🔧 " + ("结构化需求" if is_zh else "Structure Requirement"), type="primary", key="req_structure_btn"):
+                with st.spinner("🤔 " + ("结构化中..." if is_zh else "Structuring...")):
+                    structurer = RequirementStructurer(llm_call_fn=_llm_call if llm_available else None)
+                    structured = structurer.structure(doc=req_doc)
+                    st.session_state.req_structured = structured
+                    st.session_state.req_phase = 2
+                    st.rerun()
+        else:
+            st.warning("⚠️ " + ("请先完成Phase 0的需求调研" if is_zh else "Please complete Phase 0 interview first"))
+            if st.button("⬅️ " + ("返回Phase 0" if is_zh else "Back to Phase 0"), key="req_back_p0"):
+                st.session_state.req_phase = 0
+                st.rerun()
+    
+    # ================================================================
+    # Phase 2: 讨论组
+    # ================================================================
+    elif phase == 2:
+        st.subheader("Phase 2: " + ("需求讨论组" if is_zh else "Requirement Discussion Group"))
+        
+        if st.session_state.req_structured:
+            structured = st.session_state.req_structured
+            
+            # 展示结构化结果
+            with st.expander("📊 " + ("结构化需求" if is_zh else "Structured Requirement"), expanded=False):
+                if isinstance(structured, dict):
+                    st.json(structured)
+                else:
+                    st.json(structured.to_dict() if hasattr(structured, 'to_dict') else str(structured))
+            
+            # 讨论组配置预览
+            st.markdown("#### " + ("讨论组成员" if is_zh else "Discussion Panel"))
+            roles = structured.get("suggested_roles", []) if isinstance(structured, dict) else (structured.suggested_roles if hasattr(structured, 'suggested_roles') else [])
+            if roles:
+                for role_info in roles:
+                    role_name = role_info.get("role", "") if isinstance(role_info, dict) else str(role_info)
+                    reason = role_info.get("reason", "") if isinstance(role_info, dict) else ""
+                    st.markdown(f"- **{role_name}**: {reason}")
+            else:
+                st.info(("将使用默认3角色：方法论审查 / 反方视角 / 落地可行性" if is_zh else "Default 3 roles: Methodology Review / Counter-perspective / Feasibility"))
+            
+            # 运行讨论
+            if st.button("💬 " + ("运行讨论组" if is_zh else "Run Discussion"), type="primary", key="req_discuss_btn"):
+                with st.spinner("🤔 " + ("讨论组正在审议..." if is_zh else "Discussion panel deliberating...")):
+                    discussion = DiscussionGroup(llm_call_fn=_llm_call if llm_available else None)
+                    result = discussion.discuss(requirement=structured)
+                    st.session_state.req_discussion = result
+                    st.session_state.req_phase = 3
+                    st.rerun()
+        else:
+            st.warning("⚠️ " + ("请先完成Phase 1的结构化" if is_zh else "Please complete Phase 1 structuring first"))
+            if st.button("⬅️ " + ("返回Phase 1" if is_zh else "Back to Phase 1"), key="req_back_p1"):
+                st.session_state.req_phase = 1
+                st.rerun()
+    
+    # ================================================================
+    # Phase 3: 配置推荐
+    # ================================================================
+    elif phase == 3:
+        st.subheader("Phase 3: " + ("部门配置推荐" if is_zh else "Department Config Recommendation"))
+        
+        if st.session_state.req_discussion and st.session_state.req_structured:
+            discussion = st.session_state.req_discussion
+            structured = st.session_state.req_structured
+            
+            # 展示讨论结果
+            with st.expander("💬 " + ("讨论纪要" if is_zh else "Discussion Minutes"), expanded=False):
+                if isinstance(discussion, dict):
+                    st.json(discussion)
+                else:
+                    st.json(discussion.to_dict() if hasattr(discussion, 'to_dict') else str(discussion))
+            
+            # 生成配置推荐
+            if st.button("⚙️ " + ("生成部门配置" if is_zh else "Generate Department Config"), type="primary", key="req_config_btn"):
+                with st.spinner("🤔 " + ("正在推荐部门配置..." if is_zh else "Generating config recommendation...")):
+                    recommender = ConfigRecommender(llm_call_fn=_llm_call if llm_available else None)
+                    config = recommender.recommend(requirement=structured, discussion=discussion)
+                    st.session_state.req_config = config
+                    st.session_state.req_phase = 4
+                    st.rerun()
+        else:
+            st.warning("⚠️ " + ("请先完成Phase 2的讨论组" if is_zh else "Please complete Phase 2 discussion first"))
+            if st.button("⬅️ " + ("返回Phase 2" if is_zh else "Back to Phase 2"), key="req_back_p2"):
+                st.session_state.req_phase = 2
+                st.rerun()
+    
+    # ================================================================
+    # Phase 4: 用户审核
+    # ================================================================
+    elif phase == 4:
+        st.subheader("Phase 4: " + ("用户审核" if is_zh else "User Review"))
+        
+        if st.session_state.req_config:
+            config = st.session_state.req_config
+            
+            st.markdown("### " + ("推荐的部门配置" if is_zh else "Recommended Department Config"))
+            
+            # 全量呈现 + 可折叠
+            departments = config.get("departments", {}) if isinstance(config, dict) else (config.get("departments", {}) if hasattr(config, 'get') else {})
+            dept_order = config.get("dept_order", list(departments.keys())) if isinstance(config, dict) else []
+            
+            # 基本信息编辑
+            config_name = st.text_input(
+                ("配置名称" if is_zh else "Config Name"),
+                value=config.get("name", "") if isinstance(config, dict) else "",
+                key="req_config_name",
+            )
+            config_desc = st.text_area(
+                ("配置描述" if is_zh else "Description"),
+                value=config.get("description", "") if isinstance(config, dict) else "",
+                key="req_config_desc",
+            )
+            
+            # 逐部门展示（可折叠）
+            edited_departments = {}
+            for dept_key in dept_order:
+                dept = departments.get(dept_key, {})
+                zh_name = dept.get("zh_name", dept_key) if isinstance(dept, dict) else dept_key
+                en_name = dept.get("en_name", "") if isinstance(dept, dict) else ""
+                
+                with st.expander(f"🏢 {zh_name} / {en_name} (`{dept_key}`)", expanded=False):
+                    # 部门信息可编辑
+                    d_zh = st.text_input("中文名", value=zh_name, key=f"req_dept_zh_{dept_key}")
+                    d_en = st.text_input("英文名", value=en_name, key=f"req_dept_en_{dept_key}")
+                    
+                    debaters = dept.get("debaters", {}) if isinstance(dept, dict) else {}
+                    edited_debaters = {}
+                    
+                    for debater_key, debater in debaters.items():
+                        if not isinstance(debater, dict):
+                            continue
+                        st.markdown(f"**辩手 {debater_key}**: {debater.get('zh_name', '')}")
+                        
+                        db_zh_name = st.text_input("辩手中文名", value=debater.get("zh_name", ""), key=f"req_db_zh_{dept_key}_{debater_key}")
+                        db_en_name = st.text_input("辩手英文名", value=debater.get("en_name", ""), key=f"req_db_en_{dept_key}_{debater_key}")
+                        db_zh_style = st.text_area("中文风格（Prompt）", value=debater.get("zh_style", ""), height=100, key=f"req_db_zhs_{dept_key}_{debater_key}")
+                        db_en_style = st.text_area("英文风格（Prompt）", value=debater.get("en_style", ""), height=80, key=f"req_db_ens_{dept_key}_{debater_key}")
+                        
+                        edited_debaters[debater_key] = {
+                            "zh_name": db_zh_name,
+                            "en_name": db_en_name,
+                            "zh_style": db_zh_style,
+                            "en_style": db_en_style,
+                        }
+                    
+                    edited_departments[dept_key] = {
+                        "zh_name": d_zh,
+                        "en_name": d_en,
+                        "debaters": edited_debaters,
+                    }
+            
+            # 审核操作
+            st.divider()
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if st.button("✅ " + ("确认配置，进入辩论" if is_zh else "Confirm & Start Debate"), type="primary", key="req_confirm_btn"):
+                    # 将审核后的配置写入session_state，让智能配组Tab可以使用
+                    final_config = {
+                        "name": config_name,
+                        "description": config_desc,
+                        "departments": edited_departments,
+                        "dept_order": list(edited_departments.keys()),
+                        "p2_cross_debates": config.get("p2_cross_debates", []) if isinstance(config, dict) else [],
+                        "p5_cross_debates": config.get("p5_cross_debates", []) if isinstance(config, dict) else [],
+                        "proofread_departments": config.get("proofread_departments", []) if isinstance(config, dict) else [],
+                        "debate_rounds": config.get("debate_rounds", 2) if isinstance(config, dict) else 2,
+                        "negative_prompts": config.get("negative_prompts", "") if isinstance(config, dict) else "",
+                    }
+                    
+                    # 写入当前配置
+                    apply_config(final_config)
+                    st.session_state.req_phase = 0  # 重置
+                    st.session_state.req_interview_history = []
+                    st.session_state.req_document = None
+                    st.session_state.req_structured = None
+                    st.session_state.req_discussion = None
+                    st.session_state.req_config = None
+                    
+                    st.success("✅ " + ("配置已确认并加载！请切换到「部门辩论」Tab开始辩论" if is_zh else "Config confirmed! Switch to Debate tab to start"))
+                    st.balloons()
+            
+            with col2:
+                if st.button("🔄 " + ("修改配置" if is_zh else "Edit Config"), key="req_edit_btn"):
+                    # 保持在Phase 4让用户继续编辑
+                    pass
+            
+            with col3:
+                if st.button("⬅️ " + ("退回Phase 3" if is_zh else "Back to Phase 3"), key="req_back_p3"):
+                    st.session_state.req_phase = 3
+                    st.rerun()
+            
+            # 保存配置为预设
+            with st.expander("💾 " + ("导出为预设" if is_zh else "Export as Preset"), expanded=False):
+                preset_name = st.text_input(("预设名称" if is_zh else "Preset Name"), value=config_name, key="req_export_name")
+                if st.button(("保存预设" if is_zh else "Save Preset"), key="req_save_preset_btn"):
+                    final_config = {
+                        "name": preset_name,
+                        "description": config_desc,
+                        "departments": edited_departments,
+                        "dept_order": list(edited_departments.keys()),
+                        "p2_cross_debates": config.get("p2_cross_debates", []) if isinstance(config, dict) else [],
+                        "p5_cross_debates": config.get("p5_cross_debates", []) if isinstance(config, dict) else [],
+                        "proofread_departments": config.get("proofread_departments", []) if isinstance(config, dict) else [],
+                        "debate_rounds": config.get("debate_rounds", 2) if isinstance(config, dict) else 2,
+                        "negative_prompts": config.get("negative_prompts", "") if isinstance(config, dict) else "",
+                    }
+                    save_profile(preset_name, final_config)
+                    st.success(("预设已保存！" if is_zh else "Preset saved!"))
+        else:
+            st.warning("⚠️ " + ("请先完成Phase 3的配置推荐" if is_zh else "Please complete Phase 3 recommendation first"))
+            if st.button("⬅️ " + ("返回Phase 3" if is_zh else "Back to Phase 3"), key="req_back_p3_empty"):
+                st.session_state.req_phase = 3
+                st.rerun()
+
+
+
 def main():
     st.set_page_config(
         page_title="AI Consensus Pipeline" if st.session_state.get("lang", "zh") == "zh" else "AI Consensus Pipeline",
@@ -3031,7 +3443,8 @@ def main():
     st.title(t("title"))
     st.caption(t("subtitle"))
     
-    tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+        t("tab_requirement"),
         t("tab_config"),
         t("tab_input"),
         t("tab_debate"),
@@ -3043,20 +3456,22 @@ def main():
     ])
     
     with tab0:
-        render_config_tab()
+        render_requirement_tab()
     with tab1:
-        render_input_tab()
+        render_config_tab()
     with tab2:
-        render_debate_tab()
+        render_input_tab()
     with tab3:
-        render_cross_tab()
+        render_debate_tab()
     with tab4:
-        render_output_tab()
+        render_cross_tab()
     with tab5:
-        render_proofread_tab()
+        render_output_tab()
     with tab6:
-        render_compare_tab()
+        render_proofread_tab()
     with tab7:
+        render_compare_tab()
+    with tab8:
         render_market_tab()
 
 
