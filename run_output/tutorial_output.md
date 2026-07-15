@@ -1,412 +1,395 @@
-# 能源经济学机器学习三大教程
+# 三大教程：能源经济学中的机器学习应用
 
 ---
 
-## 教程1：零基础入门教程  
-**目标读者**：无Python/ML基础，希望用机器学习预测能源价格或需求的学生、研究员或从业者。
+## 教程1：零基础入门教程
 
----
+### 1. Python + Anaconda 安装
 
-### 1.1 Python + Anaconda 安装
+#### **操作**
+1. 访问 [Anaconda 官网](https://www.anaconda.com/products/individual) 下载对应操作系统（Windows/macOS/Linux）的安装包。
+2. 双击安装，选择 **“Just Me”**（推荐）或 **“All Users”**。  
+   - Windows 用户务必勾选 **“Add Anaconda to my PATH environment variable”**（否则后续需手动配置）。
+3. 安装完成后，打开终端（Windows 搜索 “Anaconda Prompt”），输入：
+   ```bash
+   conda --version
+   ```
 
-**操作**：  
-- 访问 [Anaconda官网](https://www.anaconda.com/products/individual) 下载对应系统的安装包（推荐Python 3.9+版本）。  
-- 双击安装，勾选 **“Add Anaconda to my PATH environment variable”**（可选，便于命令行使用）。  
-- 安装完成后，打开 **Anaconda Prompt**（Windows）或终端（Mac/Linux），输入 `conda --version` 验证。
+#### **原因**
+- Anaconda 自带 Python、包管理器 conda 及常用科学计算库，避免手动配置环境变量和依赖冲突。
+- 能源数据分析频繁使用 pandas、scikit-learn、TensorFlow 等，Anaconda 提供开箱即用的集成环境。
 
-**原因**：  
-Anaconda集成Python解释器、包管理器（conda）和常用科学计算库，避免手动安装依赖冲突。
-
-**预期输出**：  
+#### **预期输出**
 ```
-conda 23.7.4
+conda 23.x.x
 ```
 
-**常见报错**：  
-- `conda 不是内部或外部命令` → 未添加PATH，手动添加或使用Anaconda Prompt。  
-- `Python 版本过低` → 安装时选择最新版Anaconda，或之后用 `conda update python`。
+#### **常见报错**
+- **`conda 不是内部或外部命令`**：未将 Anaconda 添加到 PATH。重新安装时勾选 “Add to PATH”，或手动添加环境变量（Windows：路径 `C:\Users\你的用户名\anaconda3\Scripts`）。
+- **`python 版本冲突`**：安装后创建独立环境（见下节）解决。
 
----
+### 2. 必要库安装
 
-### 1.2 必要库安装
-
-**操作**：  
-在终端/Anaconda Prompt中依次执行：
+#### **操作**
+创建并激活虚拟环境（推荐，避免与系统 Python 冲突）：
 ```bash
-conda install pandas scikit-learn tensorflow xgboost -y
-pip install keras   # 若tensorflow不包含keras
+conda create -n energy_ml python=3.9
+conda activate energy_ml
 ```
 
-**原因**：  
-- `pandas`：处理时间序列数据（能源价格时间表）。  
-- `scikit-learn`：基础ML工具（数据处理、评估）。  
-- `tensorflow/keras`：深度学习（LSTM）。  
-- `xgboost`：树模型，适合表格数据预测。
+在新环境中安装核心库：
+```bash
+pip install pandas scikit-learn tensorflow xgboost matplotlib jupyter
+```
 
-**预期输出**：  
-每个包安装后显示进度和成功信息，最后可输入 `python -c "import pandas; print('ok')"` 检查无报错。
+#### **原因**
+- **pandas**：处理 CSV、Excel 等能源时间序列数据。
+- **scikit-learn**：提供数据预处理（标准化、训练-测试拆分）、传统 ML 模型（随机森林等）。
+- **TensorFlow/Keras**：构建深度学习模型（LSTM 等）。
+- **XGBoost**：梯度提升树，在能源预测竞赛中表现优异。
+- **matplotlib**：可视化能源价格/需求曲线。
+- **jupyter**：交互式编程，便于探索性数据分析。
 
-**常见报错**：  
-- `CondaHTTPError` → 换国内镜像源：  
-  ```bash
-  conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
-  conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/
-  ```
-- `tensorflow安装后无法import` → 检查Python版本（TensorFlow 2.10+需Python 3.9~3.11）。
+#### **预期输出**
+无报错，终端返回结束信息。可验证：
+```bash
+python -c "import pandas; print(pandas.__version__)"
+```
 
----
+#### **常见报错**
+- **`ModuleNotFoundError: No module named 'tensorflow'`**：pip 未安装成功。尝试 `conda install tensorflow`（conda 版本更稳定）。
+- **`pip install 速度慢`**：使用国内镜像，如 `pip install -i https://pypi.tuna.tsinghua.edu.cn/simple 包名`。
+- **`numpy 冲突`**：尽量通过 conda 安装，或先升级 numpy：`pip install --upgrade numpy`。
 
-### 1.3 数据获取（从公开数据源下载能源价格数据）
+### 3. 数据获取（从公开数据源下载能源价格数据）
 
-**操作**：  
-使用 **EIA（美国能源信息署）** 公开API获取日度天然气价格。注册免费API密钥后调用：
+#### **操作**
+以美国能源信息署（EIA）的电力需求数据为例。  
+使用 `pandas-datareader` 从 FRED（联邦储备经济数据）获取 **PJECOWV**（西部电力需求）：
 ```python
-import pandas as pd
-import requests
+import pandas_datareader.data as web
+import datetime
 
-api_key = "YOUR_API_KEY"   # 在 https://www.eia.gov/opendata/ 注册
-url = f"https://api.eia.gov/v2/natural-gas/pri/sum/data/?api_key={api_key}&frequency=daily&data[0]=value&facets[duoarea][]=NUS&sort[0][column]=period&sort[0][direction]=desc&length=1000"
-response = requests.get(url)
-data = response.json()
-df = pd.json_normalize(data['response']['data'])
-df['period'] = pd.to_datetime(df['period'])
-df = df.sort_values('period').reset_index(drop=True)  # 升序
-df.to_csv('gas_prices.csv', index=False)
+start = datetime.datetime(2015, 1, 1)
+end = datetime.datetime(2022, 12, 31)
+
+# PJECOWV：西部电网电力需求（百万千瓦时）
+df = web.DataReader("PJECOWV", "fred", start, end)
+df.to_csv("energy_demand.csv")
+print(df.head())
 ```
 
-**原因**：  
-EIA数据免费、结构化、有长期历史记录，适合入门实验。
+#### **原因**
+- FRED、EIA 提供免费、规范的能源时序数据，适合初学者练习。
+- 真实数据包含噪声、缺失值，贴近实际工程场景。
 
-**预期输出**：  
-- 控制台打印请求状态码200，当前目录生成 `gas_prices.csv` 文件，包含 `period`, `value` 等列。
+#### **预期输出**
+```
+            PJECOWV
+DATE               
+2015-01-01   6002.0
+2015-01-02   6010.0
+...             ...
+```
+并生成 `energy_demand.csv` 文件。
 
-**常见报错**：  
-- `KeyError: 'response'` → API请求失败，检查API密钥或网络。可先用 `print(response.text)` 调试。  
-- `pandas.errors.EmptyDataError` → 数据为空，增加 `length` 参数或检查日期范围。
+#### **常见报错**
+- **`ImportError: No module named 'pandas_datareader'`**：`pip install pandas-datareader`。
+- **`RemoteDataError: Unable to connect to FRED`**：检查网络，FRED 需科学上网或使用国内镜像（如 `web.DataReader(..., data_source='eia')` 需注册 API key）。
 
----
+### 4. 第一个ML模型：用XGBoost预测能源需求
 
-### 1.4 第一个ML模型：用XGBoost预测能源需求（替换为价格预测）
-
-既然有价格数据，我们预测**次日天然气价格**。步骤：特征工程 → 训练 → 预测。
-
+#### **操作**
+基于历史需求预测未来一周的需求（滞后特征）：
 ```python
 import pandas as pd
 import numpy as np
-from xgboost import XGBRegressor
-from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_absolute_error
+import xgboost as xgb
 
-# 加载数据
-df = pd.read_csv('gas_prices.csv', parse_dates=['period'])
-df = df.set_index('period')['value'].sort_index()
-
-# 构造滞后特征（前7天价格）
-for lag in range(1, 8):
-    df[f'lag_{lag}'] = df.shift(lag)
+# 读取数据
+df = pd.read_csv("energy_demand.csv", index_col=0, parse_dates=True)
+# 构造滞后特征（前7天）
+for i in range(1, 8):
+    df[f'lag_{i}'] = df['PJECOWV'].shift(i)
 df = df.dropna()
 
-# 特征和标签
-X = df.drop(columns='value')
-y = df['value']
+# 划分特征和标签
+X = df[[f'lag_{i}' for i in range(1, 8)]]
+y = df['PJECOWV']
 
-# 划分（按时间顺序，不用随机）
-split = int(len(df) * 0.8)
+# 训练集（前80%），测试集（后20%）
+split = int(len(X) * 0.8)
 X_train, X_test = X.iloc[:split], X.iloc[split:]
 y_train, y_test = y.iloc[:split], y.iloc[split:]
 
 # 训练XGBoost
-model = XGBRegressor(n_estimators=200, max_depth=3, learning_rate=0.1, random_state=42)
+model = xgb.XGBRegressor(n_estimators=100, learning_rate=0.1, random_state=42)
 model.fit(X_train, y_train)
 
-# 预测
-preds = model.predict(X_test)
-
-# 评估
-mae = mean_absolute_error(y_test, preds)
-rmse = np.sqrt(mean_squared_error(y_test, preds))
-print(f"MAE: {mae:.4f}, RMSE: {rmse:.4f}")
-print(f"预测范围：{preds.min():.2f} ~ {preds.max():.2f}，实际范围：{y_test.min():.2f} ~ {y_test.max():.2f}")
+# 预测与评估
+y_pred = model.predict(X_test)
+mae = mean_absolute_error(y_test, y_pred)
+print(f"平均绝对误差 (MAE): {mae:.2f} 百万千瓦时")
 ```
 
-**原因**：  
-- XGBoost对表格时间序列效果良好，且不易过拟合（设置 `max_depth=3` 限制复杂度）。  
-- 仅用滞后特征作为简单入门，后续可增加外部变量。
+#### **原因**
+- 能源需求具有自相关性，使用滞后变量作为特征简单有效。
+- XGBoost 对缺失值鲁棒，无需过多特征工程。
 
-**预期输出**：
+#### **预期输出**
 ```
-MAE: 0.2351, RMSE: 0.4162
-预测范围：2.10 ~ 4.50，实际范围：1.98 ~ 4.78
+平均绝对误差 (MAE): 120.34 百万千瓦时
 ```
+（实际数值因数据而异，但 MAE 应在合理范围内。）
 
-**常见报错**：  
-- `ValueError: could not convert string to float` → 确保 `value` 列为数值型，用 `pd.to_numeric(df['value'], errors='coerce')`。  
-- `XGBoostError: [14:53:13] ... Check failed: ...` → 版本不兼容，升级xgboost：`pip install xgboost --upgrade`。
+#### **常见报错**
+- **`ValueError: The feature names should not contain `lag_1``**（罕见）– 检查列名是否有特殊字符。
+- **`XGBoostError: Unknown data type`**：确保 X 和 y 均为数值型浮点数。
 
----
+### 5. 模型评估和结果解读
 
-### 1.5 模型评估和结果解读
-
-**操作**：  
-绘制真实值与预测值对比图：
+#### **操作**
+绘制预测 vs 真实值曲线，计算更多指标：
 ```python
 import matplotlib.pyplot as plt
+from sklearn.metrics import mean_absolute_percentage_error, r2_score
 
-plt.figure(figsize=(10, 4))
-plt.plot(y_test.index, y_test, label='Actual', color='blue')
-plt.plot(y_test.index, preds, label='Predicted', color='red', alpha=0.7)
-plt.title('Natural Gas Price Prediction - XGBoost')
-plt.xlabel('Date')
-plt.ylabel('Price ($/MMBtu)')
+mape = mean_absolute_percentage_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+print(f"MAPE: {mape*100:.2f}%")
+print(f"R²: {r2:.3f}")
+
+plt.figure(figsize=(10,5))
+plt.plot(y_test.index, y_test.values, label='真实需求')
+plt.plot(y_test.index, y_pred, label='预测需求')
+plt.title('XGBoost 电力需求预测结果')
+plt.xlabel('日期')
+plt.ylabel('需求量 (百万千瓦时)')
 plt.legend()
-plt.grid(True)
 plt.show()
-
-# 特征重要性
-importance = pd.Series(model.feature_importances_, index=X.columns).sort_values(ascending=False)
-print("Top-5 important features:")
-print(importance.head(5))
 ```
 
-**原因**：  
-可视化直观判断模型是否捕捉趋势；特征重要性分析滞后几天的价格影响最大。
+#### **原因**
+- **MAE**：绝对误差平均，直观反映平均偏差。
+- **MAPE**：相对误差，便于比较不同量级预测。
+- **R²**：模型解释方差的比例，越接近1越好。
+- 图形化查看趋势和异常点。
 
-**预期输出**：  
-- 一张折线图显示两条曲线大致重合。  
-- 控制台输出类似：
-  ```
-  Top-5 important features:
-  lag_1    0.45
-  lag_2    0.22
-  lag_3    0.12
-  lag_7    0.08
-  lag_5    0.05
-  dtype: float64
-  ```
+#### **预期输出**
+控制台输出类似：
+```
+MAPE: 2.53%
+R²: 0.976
+```
+并展示叠合曲线图，预测与真实基本重合。
 
-**常见报错**：  
-- `ImportError: No module named matplotlib` → 安装：`conda install matplotlib`。  
-- 图形窗口不显示 → 在Jupyter中运行或添加 `%matplotlib inline`。
+#### **常见报错**
+- **`ValueError: x and y must have same first dimension`**：绘图时索引长度不一致，确保 y_test 和 y_pred 对齐（已在测试集中对齐）。
+- **`matplotlib 中文乱码`**：添加 `plt.rcParams['font.sans-serif']=['SimHei']` 和 `plt.rcParams['axes.unicode_minus']=False`。
 
 ---
 
-## 教程2：进阶实战指南  
-**目标读者**：有Python+ML基础，希望在能源时序预测中提升效果并部署。
+## 教程2：进阶实战指南
 
----
+### 1. LSTM时序预测最佳实践
 
-### 2.1 LSTM时序预测最佳实践
+#### **操作步骤**
+1. **数据归一化**：LSTM 对输入尺度敏感，使用 MinMaxScaler 压缩到 [0,1]。
+2. **构造滑动窗口监督学习**：将时序数据转换为 `(样本数, 时间步长, 特征数)` 三维数组。
+3. **定义模型结构**：LSTM 层数 1~2，Dropout 防止过拟合，Dense 输出层。
+4. **优化器与损失**：Adam（学习率 0.001），MAE 或 MSE。
+5. **加入早停（EarlyStopping）** 防止训练过拟合。
 
-**核心要点**：  
-1. **数据缩放**：LSTM对输入尺度敏感，用 `MinMaxScaler` 缩放到[0,1]。  
-2. **序列构造**：使用 `lookback` 窗口生成监督学习格式（Sample = 过去 n 步特征，Target = 未来一步）。  
-3. **状态保持**：`LSTM(stateful=True)` 可在长序列中维持内部状态，需手动重置。
-
-**代码片段**（预测次日电价）：
 ```python
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.callbacks import EarlyStopping
 
-# 加载电价数据（假设有 'price' 列）
-df = pd.read_csv('electricity_prices.csv', parse_dates=['datetime'])
-df = df.set_index('datetime')['price'].sort_index()
-
+# 加载数据和归一化
+df = pd.read_csv("energy_demand.csv", index_col=0, parse_dates=True)
 scaler = MinMaxScaler()
-scaled = scaler.fit_transform(df.values.reshape(-1,1))
+scaled = scaler.fit_transform(df)
 
-lookback = 10  # 用过去10小时预测下一小时
-X, y = [], []
-for i in range(lookback, len(scaled)):
-    X.append(scaled[i-lookback:i, 0])
-    y.append(scaled[i, 0])
-X = np.array(X).reshape((-1, lookback, 1))
-y = np.array(y)
+# 创建滑动窗口
+def create_sequences(data, seq_length=30):
+    X, y = [], []
+    for i in range(len(data)-seq_length):
+        X.append(data[i:i+seq_length])
+        y.append(data[i+seq_length])
+    return np.array(X), np.array(y)
 
-# 划分
+X, y = create_sequences(scaled, seq_length=30)
+# 时间序列切分：前80%训练，剩余测试
 split = int(0.8 * len(X))
 X_train, X_test = X[:split], X[split:]
 y_train, y_test = y[:split], y[split:]
 
-# 模型（双层LSTM+Dropout）
+# 构建LSTM模型
 model = Sequential([
-    LSTM(50, return_sequences=True, input_shape=(lookback, 1)),
+    LSTM(50, activation='relu', return_sequences=True, input_shape=(30, 1)),
     Dropout(0.2),
-    LSTM(50, return_sequences=False),
+    LSTM(50, activation='relu'),
     Dropout(0.2),
     Dense(1)
 ])
-model.compile(optimizer='adam', loss='mse')
+model.compile(optimizer='adam', loss='mae')
 
-# 早停法防止过拟合
-from tensorflow.keras.callbacks import EarlyStopping
+# 早停
 early_stop = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+history = model.fit(X_train, y_train, 
+                    validation_split=0.2, 
+                    epochs=100, 
+                    batch_size=32, 
+                    callbacks=[early_stop])
 
-history = model.fit(X_train, y_train,
-                    validation_data=(X_test, y_test),
-                    epochs=100, batch_size=32,
-                    callbacks=[early_stop],
-                    verbose=1)
-
-# 反缩放预测
-pred_scaled = model.predict(X_test)
-pred = scaler.inverse_transform(pred_scaled)
-true = scaler.inverse_transform(y_test.reshape(-1,1))
+# 逆归一化预测
+y_pred = model.predict(X_test)
+y_pred_actual = scaler.inverse_transform(y_pred)
+y_test_actual = scaler.inverse_transform(y_test)
 ```
 
-**预期输出**：第20~30轮早停，loss收敛。预测结果接近真实电价。
+#### **原因**
+- LSTM 能捕获时间依赖，适合能源日/周/年周期。
+- 早停避免无效训练，节省时间。
 
-**常见踩坑**：  
-- LSTM训练慢 → 使用 `CuDNNLSTM`（如果GPU+TensorFlow>=2.6自动优化）。  
-- 长期依赖丢失 → 增加 `lookback` 或使用 `Bidirectional LSTM`。  
-- 预测值震荡剧烈 → 降低学习率或增加Dropout。
+#### **常见踩坑**
+- **`Input 0 of layer lstm is incompatible with the layer: expected ndim=3, found ndim=2`**：确认输入形状 `(batch, timesteps, features)`，数据 X 应为三维。
+- **`ValueError: Cannot feed value of shape (32,) for Tensor ...`**：检查 y shape，标签需 `(batch, 1)` 而非 `(batch,)`，可用 `y.reshape(-1,1)`。
+- **训练损失不下降**：调整学习率（`Adam(learning_rate=0.001)`），或增加序列长度。
 
----
+### 2. 特征工程技巧
 
-### 2.2 特征工程技巧（能源场景）
-
-**1. 技术指标**（类似股票）：  
-- `relative_price` = 当日价格 / 7日移动平均。  
-- `volatility` = 过去10天价格标准差。  
-- `momentum` = 价格一阶差分。  
-
-**2. 滞后特征与滚动窗口**：  
-- 多步滞后：`shift(1), shift(2), ..., shift(7)`。  
-- 统计特征：`rolling(7).mean()`, `rolling(7).std()`, `rolling(7).skew()`。  
-
-**3. 外部变量**（能源经济学特有）：  
-- **天气**：温度、风速（影响风电/光伏出力）、采暖度日（HDD）/制冷度日（CDD）。  
-- **日历**：小时、星期几、节假日、是否工作日、季节性虚拟变量。  
-- **市场变量**：其他能源价格（天然气 vs 煤炭）、碳排放配额价格、库存数据。  
-
-**代码示例**（整合外部变量）：
+#### **技术指标**
+能源数据中引入气象特征（温度、湿度）可大幅提升预测精度。  
+示例：添加移动平均、指数加权移动平均：
 ```python
-def create_energy_features(df, weather_df, carbon_df):
-    df = df.copy()
-    # 价格技术指标
-    df['ma7'] = df['price'].rolling(7).mean()
-    df['volatility'] = df['price'].rolling(10).std()
-    df['momentum'] = df['price'].diff()
-    # 滞后
-    for lag in [1,2,3,7,14]:
-        df[f'lag_{lag}'] = df['price'].shift(lag)
-    # 合并天气
-    df = df.merge(weather_df, left_index=True, right_index=True, how='left')
-    # 合并碳价
-    df = df.merge(carbon_df, left_index=True, right_index=True, how='left')
-    # 日历特征
-    df['hour'] = df.index.hour
-    df['weekday'] = df.index.weekday
-    df['month'] = df.index.month
-    df['is_holiday'] = df.index.isin(holidays).astype(int)
-    return df.dropna()
+df['MA_7'] = df['PJECOWV'].rolling(window=7).mean()
+df['EWMA_14'] = df['PJECOWV'].ewm(span=14, adjust=False).mean()
 ```
 
----
+#### **滞后特征**
+不仅滞后目标变量，也可滞后外部变量。例如气温滞后 1~3 天影响负荷：
+```python
+for lag in [1,2,3]:
+    df[f'lag_temp_{lag}'] = df['temperature'].shift(lag)
+```
 
-### 2.3 超参数调优（GridSearch, Optuna）
+#### **外部变量**
+使用 API 获取日内天气、节假日指示（周末、公共假期）：
+```python
+from pandas.tseries.holiday import USFederalHolidayCalendar
+cal = USFederalHolidayCalendar()
+holidays = cal.holidays(start='2015-01-01', end='2022-12-31')
+df['is_holiday'] = df.index.isin(holidays).astype(int)
+df['day_of_week'] = df.index.dayofweek  # 0=周一
+df['month'] = df.index.month
+```
 
-**使用Optuna进行贝叶斯优化**（比GridSearch高效）：
+#### **原因**
+- 技术指标平滑噪声，揭示趋势。
+- 滞后特征反映延迟影响。
+- 外部变量消除季节性假相关。
+
+#### **常见踩坑**
+- **数据泄露**：使用未来信息（如 `shift(-1)`）构造特征。验证特征时间顺序。
+- **缺失值过多**：`rolling().mean()` 会引入 NaN，务必 `dropna()` 或填充。
+
+### 3. 超参数调优（GridSearch, Optuna）
+
+#### **GridSearch（适合小规模）**
+```python
+from sklearn.model_selection import GridSearchCV
+from xgboost import XGBRegressor
+
+param_grid = {
+    'n_estimators': [50, 100, 200],
+    'max_depth': [3, 5, 7],
+    'learning_rate': [0.01, 0.1, 0.2]
+}
+model = XGBRegressor(random_state=42)
+gs = GridSearchCV(model, param_grid, cv=3, scoring='neg_mean_absolute_error', n_jobs=-1)
+gs.fit(X_train, y_train)
+print("最佳参数:", gs.best_params_)
+```
+
+#### **Optuna（高效采样）**
 ```python
 import optuna
-from xgboost import XGBRegressor
-from sklearn.model_selection import TimeSeriesSplit
 
 def objective(trial):
     params = {
+        'n_estimators': trial.suggest_int('n_estimators', 50, 300),
         'max_depth': trial.suggest_int('max_depth', 3, 10),
-        'n_estimators': trial.suggest_int('n_estimators', 100, 1000),
-        'learning_rate': trial.suggest_loguniform('learning_rate', 0.01, 0.3),
-        'subsample': trial.suggest_uniform('subsample', 0.6, 1.0),
-        'colsample_bytree': trial.suggest_uniform('colsample_bytree', 0.6, 1.0),
-        'gamma': trial.suggest_loguniform('gamma', 1e-8, 1.0),
-        'reg_alpha': trial.suggest_loguniform('reg_alpha', 1e-8, 10),
-        'reg_lambda': trial.suggest_loguniform('reg_lambda', 1e-8, 10),
+        'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.3, log=True),
+        'subsample': trial.suggest_float('subsample', 0.5, 1.0)
     }
-
-    # TimeSeriesSplit确保时序顺序
-    tscv = TimeSeriesSplit(n_splits=3)
-    mae_scores = []
-    for train_idx, val_idx in tscv.split(X):
-        X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
-        y_train, y_val = y.iloc[train_idx], y.iloc[val_idx]
-        model = XGBRegressor(**params, random_state=42, n_jobs=-1)
-        model.fit(X_train, y_train, eval_set=[(X_val, y_val)], early_stopping_rounds=20, verbose=False)
-        pred = model.predict(X_val)
-        mae = mean_absolute_error(y_val, pred)
-        mae_scores.append(mae)
-    return np.mean(mae_scores)
+    model = XGBRegressor(**params, random_state=42)
+    model.fit(X_train, y_train)
+    pred = model.predict(X_test)
+    return mean_absolute_error(y_test, pred)
 
 study = optuna.create_study(direction='minimize')
 study.optimize(objective, n_trials=50)
-print("Best params:", study.best_params)
-print("Best MAE:", study.best_value)
+print("最佳参数:", study.best_params)
 ```
 
-**预期输出**：Optuna自动打印每次试验，最终输出最优参数和MAE。
+#### **原因**
+- GridSearch 暴力枚举，适合参数少。
+- Optuna 基于贝叶斯优化，调参更高效，适用于深度学习（如 LSTM 神经元数、学习率、Dropout 率）。
 
----
+#### **常见踩坑**
+- **GridSearch 耗时过长**：先粗粒度搜索，或减少交叉验证折数（cv=2）。
+- **Optuna 报错 `TrialPruned`**：使用 `optuna.integration.TFkerasPruningCallback` 实现早期剪枝。
 
-### 2.4 部署踩坑指南
+### 4. 部署踩坑指南
 
-**1. 模型序列化**（避免 `pickle` 跨版本问题）：
+#### **模型序列化与版本控制**
 ```python
 import joblib
-joblib.dump(model, 'model.pkl')   # 推荐
-# 或使用专用格式：model.save_model('xgb_model.json')
+# 保存模型
+joblib.dump(model, "energy_model.pkl")
+# 加载模型运行预测时，必须使用相同版本库
+loaded_model = joblib.load("energy_model.pkl")
 ```
+**坑点**：scikit-learn、XGBoost 版本不一致导致反序列化失败。解决方案：固定环境版本，使用 Docker 容器部署。
 
-**2. API服务**（Flask + Docker最小示例）：  
+#### **预测延迟与吞吐量**
+- 在线预测场景：预计算特征，将模型加载到内存一次，避免每请求重新加载。
+- 批量预测：使用 `batch_size` 参数加速推理。
+- **常见坑**：深度学习模型加载后首次推理慢（TensorFlow 图优化）。解决方法：在服务器启动时做一次 warm-up 推理。
+
+#### **输入数据预处理一致性**
+训练时对特征做了 `MinMaxScaler`，部署时必须使用训练时保存的 scaler 对象，重新定义会得到错误缩放。  
 ```python
-# app.py
-from flask import Flask, request, jsonify
-import joblib
-import numpy as np
-
-app = Flask(__name__)
-model = joblib.load('model.pkl')
-
-@app.route('/predict', methods=['POST'])
-def predict():
-    data = request.json['features']
-    features = np.array(data).reshape(1, -1)
-    pred = model.predict(features)[0]
-    return jsonify({'prediction': float(pred)})
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+# 保存 scaler
+joblib.dump(scaler, "scaler.pkl")
+# 预测时加载
+scaler = joblib.load("scaler.pkl")
+scaled_new = scaler.transform(new_data)
 ```
 
-```dockerfile
-# Dockerfile
-FROM python:3.9-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-COPY . .
-CMD ["python", "app.py"]
-```
-
-**3. 踩坑常见问题**：  
-- **特征对齐错误**：训练时的列顺序必须与推理请求一致。建议序列化保存 `feature_names`。  
-- **时间特征实时计算**：确保服务端系统时区统一（UTC+0），用 `pytz` 处理。  
-- **内存泄漏**：每个请求重新加载模型 → 改为全局加载一次。  
-- **并发问题**：Flask默认单线程，部署用 `gunicorn -w 4 app:app` 或多worker。
+#### **API 安全与监控**
+- 使用 Flask/FastAPI 封装预测接口。
+- 添加输入校验，防止格式错误或注入。
+- 记录每次请求的延迟和预测结果，异常时告警。
 
 ---
 
-## 教程3：最佳实践清单  
-**目标**：建立可重现、易维护的能源ML项目规范。
+## 教程3：最佳实践清单
 
----
+### 1. 代码规范（PEP8, 类型注解）
 
-### 3.1 代码规范（PEP8, 类型注解）
+- **命名**：变量 `energy_demand`、函数 `train_model()`、类 `DataLoader`（蛇形/驼峰）。
+- **行长度**：≤ 79 字符（文档/注释）或 88（black 格式化工具容忍）。
+- **导入顺序**：标准库 → 第三方库 → 本地模块，用空行隔开。
+- **类型注解**：提高可读性和静态分析能力。
+```python
+import pandas as pd
+from typing import Tuple, Optional
 
-**PEP8关键点**：  
-- 缩进4空格，行长≤79字符（文档/注释≤72）。  
-- 函数、变量用小写+下划线；类用CapWords。  
-- 常量全大写（如 `API_KEY`）。
-
-**
+def create_lagged_features(df: pd.DataFrame, column: str, lags: int = 7) -> pd

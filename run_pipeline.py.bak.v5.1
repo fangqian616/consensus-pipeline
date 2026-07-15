@@ -230,14 +230,7 @@ def phase4_search():
     save_json({"papers": papers_data, "preprints": preprints_data, "level_counts": level_counts},
               "phase4_search_results.json")
 
-    # v5.1: 记录相关性过滤日志（用于报告生成）
-    relevance_log = {
-        "total_before": len(all_papers),  # 去重后的数量（已在engine内部过滤了不相关论文）
-        "total_after": len(all_papers),
-        "filtered_out": [],
-    }
-
-    return all_papers, all_preprints, relevance_log
+    return all_papers, all_preprints
 
 
 # ============ Phase 5: 部门辩论（简化版） ============
@@ -447,101 +440,150 @@ def phase6_cross_debate(config, dept_outputs):
     return cross_results
 
 
-# ============ Phase 7: 最终报告 + PDF（v5.1: 双模板 ReportGenerator） ============
-def phase7_final_report(papers, preprints, dept_outputs, cross_results,
-                        prog_output="", tut_output="", relevance_log=None):
+# ============ Phase 7: 最终报告 + PDF ============
+def phase7_final_report(papers, preprints, dept_outputs, cross_results, prog_output="", tut_output=""):
     """
-    生成最终报告（v5.1: 调用 ReportGenerator 双模板）
+    生成最终报告（v5.1重构：学术调研标准结构）
 
-    产出两份文档：
-    - final_report.md：最终交付报告（≤2000字）
-    - internal_doc.md：内部工作文档（完整记录）
+    报告结构：
+    1. 摘要
+    2. 主题聚类（从topic_clustering组提取）
+    3. 方法论对比（从methodology_review组提取）
+    4. 核心发现与反面证据（从counter_evidence组提取）
+    5. 程序与教程产出
+    6. 局限性与研究建议
+    7. 参考文献
     """
-    log("Phase7", "生成最终报告（v5.1 双模板 ReportGenerator）")
+    log("Phase7", "生成最终报告（v5.1结构）")
 
-    from academic.report_generator import ReportGenerator
+    now = datetime.now().strftime("%Y年%m月%d日")
 
-    rg = ReportGenerator(output_dir=OUTPUT_DIR)
+    # 统计
+    level_counts = {}
+    for p in papers:
+        level_counts[p.quality_level] = level_counts.get(p.quality_level, 0) + 1
 
-    # 提取共识结论
-    consensus_points = []
-    for dept_key, output in dept_outputs.items():
-        if isinstance(output, dict):
-            c = output.get("consensus", "")
-            if c:
-                consensus_points.append(f"[{dept_key}] {c}")
+    sections = []
 
-    # 提取事实校验摘要
-    fact_check_output = dept_outputs.get("fact_check", {})
-    fact_check_summary = ""
-    if isinstance(fact_check_output, dict):
-        fact_check_summary = fact_check_output.get("consensus", "")
+    # ===== 一、标题页+摘要 =====
+    sections.append(f"""# {TOPIC}
 
-    # 构建 debate_outputs（部门名→辩论内容）
-    debate_outputs = {}
-    for dept_key, output in dept_outputs.items():
-        if isinstance(output, dict):
-            dept_name = output.get("dept_name", dept_key)
-            # 提取该部门所有辩手发言
-            parts = []
-            for role, content in output.items():
-                if role not in ("dept_name", "consensus") and isinstance(content, str):
-                    parts.append(f"**{role}**: {content}")
-            debate_outputs[dept_name] = "\n\n".join(parts) if parts else output.get("consensus", "")
+> 学术动向调研报告 | Consensus Pipeline v5.1
+> 生成日期：{now}
 
-    # 方法论审查数据
+---
+
+## 一、摘要
+
+本报告对「{TOPIC}」领域进行了系统性学术调研。
+共筛选 **{len(papers)}** 篇期刊论文（S级{level_counts.get('S',0)}篇、A级{level_counts.get('A',0)}篇、B级{level_counts.get('B',0)}篇），
+另有预印本 {len(preprints)} 篇作为补充参考。检索源覆盖 arXiv、Semantic Scholar、OpenAlex，
+经四道筛子过滤（期刊分级→引用加权→作者声望→内容相关性）确保论文质量与主题相关性。
+
+报告按「主题聚类→方法论对比→核心发现→反面证据→实践工具→局限性」结构组织，
+通过多部门交叉辩论确保结论的全面性和批判性。""")
+
+    # ===== 二、主题聚类 =====
+    clustering_output = dept_outputs.get("topic_clustering", {})
+    sections.append(f"""## 二、主题聚类
+
+*基于{len(papers)}篇论文的9维度聚类分析（研究领域、方法论、数据类型、地理范围、时间特征、研究设计、核心发现、政策含义、技术路线）*
+
+{(clustering_output.get("consensus") or "（聚类分析待补充）")}""")
+
+    # ===== 三、方法论对比 =====
     method_output = dept_outputs.get("methodology_review", {})
-    methodology_reviews = None
-    if isinstance(method_output, dict) and method_output.get("consensus"):
-        methodology_reviews = {"distribution": {}, "review_text": method_output.get("consensus", "")}
+    sections.append(f"""## 三、方法论对比
 
-    # 调用 ReportGenerator
-    result = rg.generate(
-        topic=TOPIC,
-        papers=papers,
-        clusters=[],       # v5.1暂无ClusterResult对象
-        validations=[],    # v5.1暂无ValidationResult对象
-        charts=[],         # v5.1暂无ChartConfig对象
-        consensus_points=consensus_points or None,
-        fact_check_summary=fact_check_summary,
-        debate_outputs=debate_outputs or None,
-        cross_debate_results=cross_results if cross_results else None,
-        methodology_reviews=methodology_reviews,
-        programming_output=prog_output,
-        tutorial_output=tut_output,
-        relevance_filter_log=relevance_log,
-    )
+*从方法论严格性角度审视该领域主流方法的优势、局限与适用边界*
 
-    log("Phase7", f"报告生成完成:")
-    log("Phase7", f"  交付报告: {result['final_report']}")
-    log("Phase7", f"  内部文档: {result['internal_doc']}")
-    log("Phase7", f"  CSV: {result['csv']}")
+{(method_output.get("consensus") or "（方法论对比待补充）")}""")
 
-    # 交付报告生成PDF
+    # ===== 四、核心发现与反面证据 =====
+    counter_output = dept_outputs.get("counter_evidence", {})
+    report_output = dept_outputs.get("report_integration", {})
+    sections.append(f"""## 四、核心发现与反面证据
+
+### 4.1 核心发现
+
+{(report_output.get("consensus") or "（核心发现待补充）")}
+
+### 4.2 反面证据与争议
+
+*批判性审视：以下为反方质疑组识别的争议点和适用边界*
+
+{(counter_output.get("consensus") or "（反面证据待补充）")}""")
+
+    # ===== 五、程序与教程 =====
+    sections.append(f"""## 五、实践工具
+
+### 5.1 程序部产出：技术选型与可运行代码
+
+{prog_output or "（程序部产出待补充）"}
+
+### 5.2 教程部产出：入门与进阶教程
+
+{tut_output or "（教程部产出待补充）"}""")
+
+    # ===== 六、局限性与研究建议 =====
+    sections.append(f"""## 六、局限性与研究建议
+
+### 6.1 本报告局限性
+- 检索词为英文，未覆盖中文文献（如CSSCI中文期刊）
+- Semantic Scholar存在API限流，部分高引论文可能遗漏
+- 相关性筛选基于关键词匹配，可能误滤跨学科论文
+- 预印本未经同行评审，结论需谨慎引用
+
+### 6.2 研究建议
+- 建议补充中文关键词检索（如"机器学习 碳价预测"、"深度学习 电力负荷"）
+- 重点关注Energy Economics、Applied Energy等核心期刊的最新特刊
+- 建议采用计量经济学与ML混合方法，弥补纯数据驱动的理论不足
+- 建议关注可解释AI（XAI）在能源政策评估中的应用""")
+
+    # ===== 七、交叉辩论摘要 =====
+    if cross_results:
+        cross_summary_parts = []
+        for cr in cross_results:
+            side_a = cr.get("side_a", "?")
+            side_b = cr.get("side_b", "?")
+            topic = cr.get("topic", "")
+            result_text = cr.get("result", "")
+            cross_summary_parts.append(f"**{side_a} vs {side_b}**（{topic}）\n\n{result_text}")
+        sections.append(f"""## 七、交叉辩论摘要
+
+{chr(10).join(cross_summary_parts)}""")
+
+    # ===== 八、参考文献 =====
+    sections.append("## 八、参考文献\n")
+    level_order = {"S": 0, "A": 1, "B": 2, "C": 3}
+    sorted_papers = sorted(papers, key=lambda p: (level_order.get(p.quality_level, 5), -p.citation_count))
+
+    for i, p in enumerate(sorted_papers, 1):
+        authors_str = ", ".join(p.authors[:3])
+        if len(p.authors) > 3:
+            authors_str += " et al."
+        doi_str = f" DOI: {p.doi}" if p.doi else ""
+        sections.append(f"[{i}] [{p.quality_level}级] {authors_str}. {p.title}. *{p.journal}*, {p.year}.{doi_str}")
+
+    # 预印本附录
+    if preprints:
+        sections.append(f"\n## 附录：预印本（{len(preprints)}篇，未经同行评审）\n")
+        for i, p in enumerate(preprints[:20], 1):
+            sections.append(f"[P{i}] {p.title} ({p.year}), 被引{p.citation_count}次")
+
+    full_report = "\n\n".join(sections)
+    save_text(full_report, "final_report.md")
+
+    # 生成PDF
     try:
-        with open(result["final_report"], "r", encoding="utf-8") as f:
-            final_md = f.read()
         from pdf_exporter import markdown_to_pdf
         pdf_path = os.path.join(OUTPUT_DIR, "final_report.pdf")
-        markdown_to_pdf(final_md, pdf_path, title=TOPIC)
-        log("Phase7", f"交付报告PDF已生成: {pdf_path}")
+        markdown_to_pdf(full_report, pdf_path, title=TOPIC)
+        log("Phase7", f"PDF已生成: {pdf_path}")
     except Exception as e:
         log("Phase7", f"PDF生成失败: {e}")
 
-    # 内部文档也生成PDF
-    try:
-        with open(result["internal_doc"], "r", encoding="utf-8") as f:
-            internal_md = f.read()
-        from pdf_exporter import markdown_to_pdf
-        internal_pdf_path = os.path.join(OUTPUT_DIR, "internal_doc.pdf")
-        markdown_to_pdf(internal_md, internal_pdf_path, title=f"{TOPIC} - 内部工作文档")
-        log("Phase7", f"内部文档PDF已生成: {internal_pdf_path}")
-    except Exception as e:
-        log("Phase7", f"内部文档PDF生成失败: {e}")
-
-    # 读取交付报告返回（兼容旧逻辑）
-    with open(result["final_report"], "r", encoding="utf-8") as f:
-        return f.read()
+    return full_report
 
 
 # ============ 程序部独立输出 ============
@@ -677,7 +719,7 @@ def main():
         config = phase3_config(structured, discussion)
 
         # Phase 4: 学术检索
-        papers, preprints, relevance_log = phase4_search()
+        papers, preprints = phase4_search()
 
         if not papers:
             log("MAIN", "⚠️ 未检索到论文，使用回退数据")
@@ -695,10 +737,9 @@ def main():
         # 教程部独立输出
         tut_output = generate_tutorial_output(papers)
 
-        # Phase 7: 最终报告（v5.1: 双模板 + 程序教程接入 + 相关性日志）
+        # Phase 7: 最终报告（v5.1: 程序+教程产出直接接入报告正文）
         report = phase7_final_report(papers, preprints, dept_outputs, cross_results,
-                                     prog_output=prog_output, tut_output=tut_output,
-                                     relevance_log=relevance_log)
+                                     prog_output=prog_output, tut_output=tut_output)
 
         # 自我评估
         evaluation = self_evaluation(report, papers, dept_outputs)
