@@ -15,6 +15,7 @@ import time
 from datetime import datetime
 
 from pdf_exporter import markdown_to_pdf, generate_department_pdf
+from requirement.fact_checker import FactChecker
 
 from debate_engine import (
     DEPARTMENTS, P2_CROSS_DEBATES, P5_CROSS_DEBATES, CROSS_DEBATES,
@@ -2151,6 +2152,106 @@ def render_output_tab():
 
 def render_proofread_tab():
     is_zh = st.session_state.lang == "zh"
+    # ===== 事实校验 =====
+    with st.expander("🔬 " + ("事实校验（Phase 7.5）" if is_zh else "Fact Check (Phase 7.5)"), expanded=False):
+        st.caption("对共识结论进行交叉验证，锚定文献DOI" if is_zh else "Cross-validate consensus points and anchor DOIs")
+        
+        dept_results = st.session_state.get("dept_results", {})
+        all_consensus = []
+        for dept_key, dept_data in dept_results.items():
+            consensus = dept_data.get("consensus", "")
+            if consensus:
+                # Split consensus into individual points
+                points = [p.strip() for p in consensus.split("\n") if p.strip() and not p.strip().startswith("#")]
+                all_consensus.extend(points[:3])  # 每个部门取前3条
+        
+        if all_consensus:
+            st.info(f"共提取 {len(all_consensus)} 条待校验结论")
+            
+            if st.button("🚀 " + ("开始事实校验" if is_zh else "Start Fact Check"), key="fact_check_btn"):
+                # Build search function from AcademicSearchEngine
+                def _search_fn(query, max_results=5):
+                    try:
+                        from academic.search_engine import AcademicSearchEngine
+                        engine = AcademicSearchEngine(quality_levels=["S", "A", "B"])
+                        results = engine.search(query, max_results_per_source=max_results)
+                        return [{"title": p.title, "doi": p.doi, "abstract": p.abstract} for p in results[:max_results]]
+                    except Exception:
+                        return []
+                
+                # Build LLM function from session config
+                api_url = st.session_state.get("api_url", "")
+                api_key = st.session_state.get("api_key", "")
+                model = st.session_state.get("model_name", "")
+                
+                def _llm_fn(system_prompt, user_prompt):
+                    import requests as _req
+                    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+                    payload = {"model": model, "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}], "temperature": 0.3}
+                    try:
+                        resp = _req.post(api_url, headers=headers, json=payload, timeout=120)
+                        return resp.json()["choices"][0]["message"]["content"]
+                    except Exception as e:
+                        return f"[ERROR] {e}"
+                
+                checker = FactChecker(search_fn=_search_fn, llm_call_fn=_llm_fn if api_key else None)
+                
+                with st.spinner("🔬 " + ("正在校验共识结论..." if is_zh else "Fact-checking consensus...")):
+                    report = checker.check(all_consensus)
+                
+                st.session_state.fact_check_report = report
+            
+            report = st.session_state.get("fact_check_report")
+            if report:
+                st.success(f"校验完成 | 整体置信度：{report.overall_confidence:.0%}")
+                st.write(report.summary)
+                
+                # Show each result
+                for i, r in enumerate(report.results):
+                    status_emoji = {"verified": "✅", "partially_verified": "⚠️", "contradicted": "❌", "unverified": "❓"}
+                    emoji = status_emoji.get(r.status, "❓")
+                    with st.expander(f"{emoji} 结论{i+1}: {r.claim[:50]}... ({r.status})", expanded=r.status != "verified"):
+                        st.write(f"**状态**: {r.status} | **置信度**: {r.confidence:.0%}")
+                        if r.supporting_dois:
+                            st.write("**支持文献DOI**:")
+                            for doi in r.supporting_dois:
+                                st.write(f"- {doi}")
+                        if r.contradicting_dois:
+                            st.write("**反对文献DOI**:")
+                            for doi in r.contradicting_dois:
+                                st.write(f"- {doi}")
+                        if r.notes:
+                            st.write(f"**备注**: {r.notes}")
+                
+                # PDF导出
+                import tempfile as _tf
+                _pdf_dir = _tf.mkdtemp()
+                _pdf_path = os.path.join(_pdf_dir, "fact_check_report.pdf")
+                try:
+                    fc_md = f"# 事实校验报告\n\n{report.summary}\n\n"
+                    for i, r in enumerate(report.results):
+                        fc_md += f"## 结论{i+1}\n\n{r.claim}\n\n- 状态: {r.status}\n- 置信度: {r.confidence:.0%}\n"
+                        if r.supporting_dois:
+                            fc_md += f"- 支持DOI: {', '.join(r.supporting_dois)}\n"
+                        if r.contradicting_dois:
+                            fc_md += f"- 反对DOI: {', '.join(r.contradicting_dois)}\n"
+                        fc_md += "\n"
+                    markdown_to_pdf(fc_md, _pdf_path, title="事实校验报告")
+                    with open(_pdf_path, "rb") as _pf:
+                        _pdf_bytes = _pf.read()
+                    st.download_button(
+                        "📥 " + ("下载校验报告PDF" if is_zh else "Download Fact Check PDF"),
+                        data=_pdf_bytes,
+                        file_name="fact_check_report.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="dl_fact_check_pdf",
+                    )
+                except Exception as _e:
+                    st.warning(f"PDF生成失败: {_e}")
+        else:
+            st.info("需要先完成部门辩论才能进行事实校验" if is_zh else "Complete department debates first")
+    
     final = st.session_state.get("final_output", {})
     
     if not final:
