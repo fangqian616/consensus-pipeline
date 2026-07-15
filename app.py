@@ -3338,7 +3338,7 @@ def render_requirement_tab():
                 with st.spinner("🤔 " + ("调研AI正在分析..." if is_zh else "Research AI analyzing...")):
                     # 初始化或继续访谈
                     if "req_interviewer" not in st.session_state or st.session_state.get("req_interviewer") is None:
-                        st.session_state.req_interviewer = RequirementInterviewer(llm_call_fn=_llm_call)
+                        st.session_state.req_interviewer = RequirementInterviewer(llm_call_fn=_llm_call, domain_hint=selected_domain)
                         result = st.session_state.req_interviewer.start(user_input=follow_up)
                     else:
                         result = st.session_state.req_interviewer.chat(user_message=follow_up)
