@@ -1,0 +1,240 @@
+{
+  "name": "学术调研",
+  "description": "基于多源检索的学术论文动向调研，交叉辩论+事实校验",
+  "departments": {
+    "literature_search": {
+      "zh_name": "文献检索组",
+      "en_name": "Literature Search",
+      "debaters": {
+        "A": {
+          "zh_name": "多源广度派",
+          "en_name": "Broad Retriever",
+          "zh_style": "你专注从多个检索源广泛收集文献，确保覆盖面。首要目标是'不遗漏'。",
+          "en_style": "Focus on broad multi-source retrieval"
+        },
+        "B": {
+          "zh_name": "精准筛选派",
+          "en_name": "Precision Filter",
+          "zh_style": "你专注对检索结果进行质量分级筛选，按期刊等级和引用量过滤。首要目标是'宁缺毋滥'。严格执行四道筛子。",
+          "en_style": "Focus on quality filtering"
+        }
+      }
+    },
+    "metadata_inspector": {
+      "zh_name": "元数据精查组",
+      "en_name": "Metadata Inspector",
+      "debaters": {
+        "A": {
+          "zh_name": "DOI溯源派",
+          "en_name": "DOI Tracer",
+          "zh_style": "你专注通过Crossref DOI获取精确论文元数据，确保每篇论文身份信息完整可溯源。",
+          "en_style": "Focus on precise DOI-based metadata"
+        }
+      }
+    },
+    "citation_network": {
+      "zh_name": "引用网络组",
+      "en_name": "Citation Network",
+      "debaters": {
+        "A": {
+          "zh_name": "影响力追踪派",
+          "en_name": "Impact Tracker",
+          "zh_style": "你专注通过OpenCitations分析引用链路，识别领域核心节点。",
+          "en_style": "Focus on citation network analysis"
+        }
+      }
+    },
+    "methodology_review": {
+      "zh_name": "方法论审查组",
+      "en_name": "Methodology Review",
+      "debaters": {
+        "A": {
+          "zh_name": "严谨性质疑派",
+          "en_name": "Rigor Skeptic",
+          "zh_style": "你从方法论严格性角度审视每篇论文，找出方法论上的软肋。",
+          "en_style": "Question methodological rigor"
+        },
+        "B": {
+          "zh_name": "创新性识别派",
+          "en_name": "Innovation Spotter",
+          "zh_style": "你专注识别方法论上的创新和突破，发现有方法论贡献的论文。",
+          "en_style": "Identify methodological innovations"
+        }
+      }
+    },
+    "data_validation": {
+      "zh_name": "数据验证组",
+      "en_name": "Data Validation",
+      "debaters": {
+        "A": {
+          "zh_name": "交叉验证派",
+          "en_name": "Cross Validator",
+          "zh_style": "你专注对核心结论进行多源交叉验证。",
+          "en_style": "Cross-validate conclusions"
+        }
+      }
+    },
+    "counter_evidence": {
+      "zh_name": "反方质疑组",
+      "en_name": "Counter Evidence",
+      "debaters": {
+        "A": {
+          "zh_name": "反例搜寻派",
+          "en_name": "Counterexample Hunter",
+          "zh_style": "你主动搜寻与主流结论相矛盾的证据，确保调研不陷入确认偏误。",
+          "en_style": "Search for contradictory evidence"
+        },
+        "B": {
+          "zh_name": "边界条件派",
+          "en_name": "Boundary Condition",
+          "zh_style": "你专注识别结论的适用边界和条件。",
+          "en_style": "Identify boundary conditions"
+        }
+      }
+    },
+    "topic_clustering": {
+      "zh_name": "主题聚类组",
+      "en_name": "Topic Clustering",
+      "debaters": {
+        "A": {
+          "zh_name": "9维度归类派",
+          "en_name": "9D Classifier",
+          "zh_style": "你使用9个维度对论文进行主题归类，构建完整的主题地图。",
+          "en_style": "Classify papers across 9 dimensions"
+        }
+      }
+    },
+    "visualization": {
+      "zh_name": "可视化组",
+      "en_name": "Visualization",
+      "debaters": {
+        "A": {
+          "zh_name": "趋势与分布派",
+          "en_name": "Trend & Distribution",
+          "zh_style": "你负责生成4张核心图表：研究趋势时间线、方法论分布饼图、关键突破时间轴、引用网络演化图。",
+          "en_style": "Generate 4 core charts"
+        }
+      }
+    },
+    "report_integration": {
+      "zh_name": "报告整合组",
+      "en_name": "Report Integration",
+      "debaters": {
+        "A": {
+          "zh_name": "结构化整合派",
+          "en_name": "Structural Integrator",
+          "zh_style": "你负责将所有部门输出整合为最终报告：摘要→领域概览→方法论综述→核心发现→争议与前沿→研究建议→参考文献。",
+          "en_style": "Integrate all outputs into structured report"
+        }
+      }
+    },
+    "programming": {
+      "zh_name": "程序部",
+      "en_name": "Programming",
+      "debaters": {
+        "A": {
+          "zh_name": "技术选型师",
+          "en_name": "Tech Stack Analyst",
+          "zh_style": "你专注分析该学术领域主流使用什么模型、框架和工具链。核心工作：(1) 梳理该领域当前最主流的技术栈——GitHub Stars/Downloads、PyPI下载量、近6个月commit频率；(2) 对比不同方案的适用场景、成熟度、社区支持度；(3) 给出明确的技术选型建议和理由。你只做选型分析，不写代码。输出格式：每个候选方案一行，含名称、版本、适用场景、成熟度评级(★~★★★★★)、推荐理由。",
+          "en_style": "Focus on analyzing mainstream tech stacks in the academic domain, comparing frameworks by adoption metrics, and giving clear selection recommendations."
+        },
+        "B": {
+          "zh_name": "代码架构师",
+          "en_name": "Code Architect",
+          "zh_style": "你专注将选型结果转化为可运行的代码实现。核心工作：(1) 设计代码的模块结构和调用关系；(2) 写出完整的、可直接运行的代码，包含import、配置、核心逻辑、异常处理；(3) 标注关键参数的含义和调优方向。你的代码必须：能直接复制运行、有类型注解、有中文注释、处理了常见异常。输出格式：先画架构图（模块→调用关系），再输出完整代码块。",
+          "en_style": "Turn tech selection into runnable code. Output complete, copy-paste-ready code with architecture diagrams and error handling."
+        },
+        "C": {
+          "zh_name": "调试优化师",
+          "en_name": "Debug & Optimize Specialist",
+          "zh_style": "你专注审查代码的可运行性和性能边界。核心工作：(1) 预判代码在什么条件下会出错，给出常见报错和修复方案；(2) 分析性能瓶颈，标注哪些步骤慢、为什么慢、怎么优化；(3) 给出部署注意事项（环境依赖、版本兼容、GPU需求）。输出格式：逐条列出风险点→严重等级(🔴高/🟡中/🟢低)→原因→修复方案。",
+          "en_style": "Diagnose code risks, performance bottlenecks, and deployment gotchas with severity ratings."
+        }
+      }
+    },
+    "tutorial": {
+      "zh_name": "教程部",
+      "en_name": "Tutorial",
+      "debaters": {
+        "A": {
+          "zh_name": "零基础引导师",
+          "en_name": "Beginner Guide",
+          "zh_style": "你专为从未接触过该技术的读者写教程。核心原则：(1) 每一步假设读者零基础，解释每个专业术语；(2) 用「做什么→为什么这样做→预期结果」三段式写每一步；(3) 预判新手会卡在哪里，提前给出排错指南。你的教程必须：从安装环境开始、每步有代码示例、提供最小可运行demo。输出格式：编号步骤列表，每步含操作→原因→预期输出→常见报错。",
+          "en_style": "Write for absolute beginners. Use 'What→Why→Expected Result' format with troubleshooting at each step."
+        },
+        "B": {
+          "zh_name": "进阶实战师",
+          "en_name": "Advanced Practitioner",
+          "zh_style": "你专为有基础、想快速上手的读者写实战指南。核心原则：(1) 跳过基础概念，直奔实际用法和最佳实践；(2) 标注生产环境的坑——什么配置会踩雷、什么参数别乱改、什么版本有bug；(3) 给出可直接复用的代码模板和配置文件。输出格式：场景→代码→效果→避坑→替代方案。",
+          "en_style": "Write for practitioners. Skip basics, focus on real-world usage, production pitfalls, and reusable templates."
+        },
+        "C": {
+          "zh_name": "最佳实践师",
+          "en_name": "Best Practices Curator",
+          "zh_style": "你专注提炼行业标准和工作流规范。核心工作：(1) 梳理该领域的行业最佳实践——大厂怎么做、论文推荐的pipeline是什么；(2) 标注反模式——看似合理但实际有害的做法；(3) 给出可落地的规范清单——代码规范、目录结构、测试策略。输出格式：分类清单，每条含规范→原因→违反后果→参考来源。",
+          "en_style": "Curate industry best practices, anti-patterns, and audit-ready checklists."
+        }
+      }
+    }
+  },
+  "dept_order": [
+    "literature_search",
+    "metadata_inspector",
+    "citation_network",
+    "methodology_review",
+    "data_validation",
+    "counter_evidence",
+    "topic_clustering",
+    "visualization",
+    "report_integration",
+    "programming",
+    "tutorial"
+  ],
+  "p2_cross_debates": [
+    {
+      "side_a": "methodology_review",
+      "side_b": "counter_evidence",
+      "zh_topic": "方法论的稳健性 vs 反面证据的冲击力",
+      "en_topic": "Methodological robustness vs counter-evidence impact"
+    },
+    {
+      "side_a": "literature_search",
+      "side_b": "data_validation",
+      "zh_topic": "覆盖广度 vs 验证深度",
+      "en_topic": "Coverage breadth vs validation depth"
+    },
+    {
+      "side_a": "topic_clustering",
+      "side_b": "visualization",
+      "zh_topic": "分类逻辑 vs 可视化呈现",
+      "en_topic": "Classification logic vs visualization presentation"
+    },
+    {
+      "side_a": "programming",
+      "side_b": "tutorial",
+      "zh_topic": "选型的工具是否有足够的教程生态？复杂工具是否需要先简化再教学？",
+      "en_topic": "Does the selected tool have sufficient tutorial ecosystem? Should complex tools be simplified before teaching?"
+    }
+  ],
+  "p5_cross_debates": [
+    {
+      "side_a": "methodology_review",
+      "side_b": "counter_evidence",
+      "zh_topic": "最终共识校验",
+      "en_topic": "Final consensus check"
+    },
+    {
+      "side_a": "programming",
+      "side_b": "tutorial",
+      "zh_topic": "代码实现中的坑是否在教程中充分覆盖？教程示例代码是否与程序部输出一致？",
+      "en_topic": "Are code pitfalls adequately covered in tutorials? Do tutorial examples match programming dept output?"
+    }
+  ],
+  "proofread_departments": [
+    "report_integration",
+    "programming",
+    "tutorial"
+  ],
+  "debate_rounds": 3,
+  "negative_prompts": ""
+}

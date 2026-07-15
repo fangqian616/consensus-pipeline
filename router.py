@@ -1,5 +1,7 @@
 """
-AI Router模块 — Consensus Pipeline v3.0
+AI Router模块 — Consensus Pipeline v4.0
+分析用户输入，自动生成工作组配置（PresetConfig格式）。
+v4.0: 新增需求调研路由(Phase 0-4) + 程序部/教程部
 分析用户输入，自动生成工作组配置（PresetConfig格式）。
 """
 import json
@@ -23,6 +25,9 @@ AVAILABLE_DEPARTMENTS = {
     "content_structure": {"zh_name": "内容结构部", "en_name": "Content Structure"},
     "audience": {"zh_name": "受众分析部", "en_name": "Audience Analysis"},
     "quality": {"zh_name": "质控部", "en_name": "Quality Control"},
+    # v4.0 程序与教程部门
+    "programming": {"zh_name": "程序部", "en_name": "Programming"},
+    "tutorial": {"zh_name": "教程部", "en_name": "Tutorial"},
 }
 
 # ============ 内容类型模板 ============
@@ -52,6 +57,17 @@ CONTENT_TYPE_TEMPLATES = {
         "default_departments": ["screenwriter", "spatial", "storyboard", "dp", "lighting", "sound", "editing"],
         "debate_rounds": 3,
     },
+    # v4.0 学术调研 + 程序教程
+    "academic_research": {
+        "zh_name": "学术调研",
+        "default_departments": ["literature_search", "metadata_inspector", "methodology_review", "cross_validation", "theme_clustering", "visualization", "report_writing", "programming", "tutorial"],
+        "debate_rounds": 2,
+    },
+    "programming_tutorial": {
+        "zh_name": "程序与教程",
+        "default_departments": ["programming", "tutorial"],
+        "debate_rounds": 2,
+    },
 }
 
 # ============ Router系统提示词 ============
@@ -67,7 +83,7 @@ ROUTER_SYSTEM_PROMPT_ZH = """你是Consensus Pipeline的AI Router。你的任务
 6. 返回完整的JSON配置
 
 ## 可用部门列表
-screenwriter(编剧部), spatial(空间板块), storyboard(分镜部), dp(摄影指导部), lighting(灯光部), vfx(视效部), sound(音效部), editing(剪辑部), narrative(叙事部), visual_style(视觉风格部), content_structure(内容结构部), audience(受众分析部), quality(质控部)
+screenwriter(编剧部), spatial(空间板块), storyboard(分镜部), dp(摄影指导部), lighting(灯光部), vfx(视效部), sound(音效部), editing(剪辑部), narrative(叙事部), visual_style(视觉风格部), content_structure(内容结构部), audience(受众分析部), quality(质控部), programming(程序部), tutorial(教程部)
 
 ## 输出格式（严格JSON，不要任何其他文字）
 {
@@ -117,7 +133,7 @@ ROUTER_SYSTEM_PROMPT_EN = """You are the AI Router for Consensus Pipeline. Your 
 6. Return complete JSON configuration
 
 ## Available Departments
-screenwriter, spatial, storyboard, dp, lighting, vfx, sound, editing, narrative, visual_style, content_structure, audience, quality
+screenwriter, spatial, storyboard, dp, lighting, vfx, sound, editing, narrative, visual_style, content_structure, audience, quality, programming, tutorial
 
 ## Output Format (strict JSON, no other text)
 {
