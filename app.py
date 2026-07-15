@@ -1251,45 +1251,79 @@ def step_run_summary():
 # ============ 输入Tab ============
 
 def render_input_tab():
-    st.subheader(t("script_label"))
-    st.session_state.script = st.text_area(
-        t("script_label"),
-        value=st.session_state.script,
-        height=150,
-        placeholder=t("script_hint"),
-        label_visibility="collapsed",
-    )
+    is_zh = st.session_state.get("lang", "zh") == "zh"
+    current_config = get_current_config()
+    # 判断当前配置是否为学术/程序类（非动画）
+    dept_keys = list(current_config.get("departments", {}).keys())
+    is_academic = any(k in dept_keys for k in ["literature_search", "methodology_review", "report_integration", "programming", "tutorial"])
     
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader(t("positive_prompt_label"))
-        st.session_state.positive_prompt = st.text_area(
-            t("positive_prompt_label"),
-            value=st.session_state.positive_prompt,
-            height=120,
-            placeholder=t("positive_prompt_hint"),
+    if is_academic:
+        st.subheader("📋 " + ("研究需求输入" if is_zh else "Research Requirements"))
+        st.session_state.script = st.text_area(
+            "📋 " + ("研究主题与需求" if is_zh else "Research Topic & Requirements"),
+            value=st.session_state.script,
+            height=200,
+            placeholder="例如：\n研究主题：碳价预测\n方法论：机器学习\n时间范围：近5年\n质量标准：CSSCI及以上" if is_zh else "e.g.:\nTopic: Carbon price prediction\nMethodology: Machine Learning\nTime: Last 5 years\nQuality: CSSCI+",
             label_visibility="collapsed",
         )
-    with col2:
-        st.subheader(t("negative_prompt_label"))
-        st.session_state.negative_prompt = st.text_area(
-            t("negative_prompt_label"),
-            value=st.session_state.negative_prompt,
-            height=120,
-            placeholder=t("negative_prompt_hint"),
+        # 学术模式隐藏正向/负向提示词和角色引用，改为研究约束
+        with st.expander("🔬 " + ("研究约束与补充" if is_zh else "Research Constraints"), expanded=False):
+            st.session_state.positive_prompt = st.text_area(
+                "🔍 " + ("检索关键词/重点方向" if is_zh else "Search Keywords / Focus"),
+                value=st.session_state.positive_prompt,
+                height=80,
+                placeholder="补充检索关键词、重点关注方向..." if is_zh else "Additional search keywords, focus areas...",
+                label_visibility="collapsed",
+            )
+            st.session_state.negative_prompt = st.text_area(
+                "🚫 " + ("排除范围" if is_zh else "Exclusions"),
+                value=st.session_state.negative_prompt,
+                height=60,
+                placeholder="排除的方向、不感兴趣的主题..." if is_zh else "Topics to exclude...",
+                label_visibility="collapsed",
+            )
+            st.session_state.character_refs = ""  # 学术模式不需要角色引用
+        st.info("💡 " + ("学术调研模式：输入研究主题和需求，各部门将围绕学术辩论展开" if is_zh else "Academic mode: Enter research topic, departments will debate academically"))
+    else:
+        st.subheader(t("script_label"))
+        st.session_state.script = st.text_area(
+            t("script_label"),
+            value=st.session_state.script,
+            height=150,
+            placeholder=t("script_hint"),
             label_visibility="collapsed",
         )
-    
-    st.subheader(t("character_refs_label"))
-    st.session_state.character_refs = st.text_area(
-        t("character_refs_label"),
-        value=st.session_state.character_refs,
-        height=100,
-        placeholder=t("character_refs_hint"),
-        label_visibility="collapsed",
-    )
-    
-    st.info(t("segment_note"))
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader(t("positive_prompt_label"))
+            st.session_state.positive_prompt = st.text_area(
+                t("positive_prompt_label"),
+                value=st.session_state.positive_prompt,
+                height=120,
+                placeholder=t("positive_prompt_hint"),
+                label_visibility="collapsed",
+            )
+        with col2:
+            st.subheader(t("negative_prompt_label"))
+            st.session_state.negative_prompt = st.text_area(
+                t("negative_prompt_label"),
+                value=st.session_state.negative_prompt,
+                height=120,
+                placeholder=t("negative_prompt_hint"),
+                label_visibility="collapsed",
+            )
+        
+        st.subheader(t("character_refs_label"))
+        st.session_state.character_refs = st.text_area(
+            t("character_refs_label"),
+            value=st.session_state.character_refs,
+            height=100,
+            placeholder=t("character_refs_hint"),
+            label_visibility="collapsed",
+        )
+        
+        st.info(t("segment_note"))
     
     # 承上文档输入
     st.divider()
@@ -3574,6 +3608,32 @@ def render_requirement_tab():
                     
                     # 写入当前配置
                     apply_config(final_config)
+                    
+                    # 自动将需求文档填入script字段，让辩论Tab能直接启动
+                    req_doc = st.session_state.get("req_document")
+                    req_structured = st.session_state.get("req_structured")
+                    script_parts = []
+                    if req_doc:
+                        if hasattr(req_doc, "topic") and req_doc.topic:
+                            script_parts.append(f"研究主题：{req_doc.topic}")
+                        if hasattr(req_doc, "objectives") and req_doc.objectives:
+                            script_parts.append(f"研究目标：{'；'.join(req_doc.objectives)}")
+                        if hasattr(req_doc, "constraints") and req_doc.constraints:
+                            for k, v in req_doc.constraints.items():
+                                script_parts.append(f"{k}：{v}")
+                        if hasattr(req_doc, "key_questions") and req_doc.key_questions:
+                            script_parts.append(f"关键问题：{'；'.join(req_doc.key_questions)}")
+                        if hasattr(req_doc, "domain_specific") and req_doc.domain_specific:
+                            for k, v in req_doc.domain_specific.items():
+                                script_parts.append(f"{k}：{v}")
+                    if req_structured and hasattr(req_structured, "department_hints"):
+                        hints = [h["description"] for h in req_structured.department_hints if isinstance(h, dict)]
+                        if hints:
+                            script_parts.append(f"部门方向：{'；'.join(hints)}")
+                    
+                    if script_parts:
+                        st.session_state.script = "\n".join(script_parts)
+                    
                     st.session_state.req_phase = 0  # 重置
                     st.session_state.req_interview_history = []
                     st.session_state.req_document = None
@@ -3581,7 +3641,7 @@ def render_requirement_tab():
                     st.session_state.req_discussion = None
                     st.session_state.req_config = None
                     
-                    st.success("✅ " + ("配置已确认并加载！请切换到「部门辩论」Tab开始辩论" if is_zh else "Config confirmed! Switch to Debate tab to start"))
+                    st.success("✅ " + ("配置已确认！请切换到「输入」Tab检查内容，再进入「部门辩论」开始辩论" if is_zh else "Config confirmed! Check Input tab, then go to Debate tab"))
                     st.balloons()
             
             with col2:
