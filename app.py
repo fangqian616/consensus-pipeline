@@ -735,11 +735,13 @@ def render_sidebar():
                 t("custom_api_url"),
                 value=st.session_state.custom_api_url,
             )
-            st.session_state.custom_api_key = st.text_input(
+            _custom_key_input = st.text_input(
                 t("custom_api_key"),
                 value=st.session_state.custom_api_key,
                 type="password",
             )
+            if _custom_key_input:
+                st.session_state.custom_api_key = _custom_key_input
             st.session_state.custom_model_name = st.text_input(
                 t("custom_model_name"),
                 value=st.session_state.custom_model_name,
@@ -751,12 +753,14 @@ def render_sidebar():
             profile = MODEL_PROFILES[selected_profile]
             st.session_state.api_url = profile["api_url"]
             st.session_state.model_name = profile["model"]
-            # API Key仍手动输入
-            st.session_state.api_key = st.text_input(
+            # API Key仍手动输入（密码框rerun时返回空值，仅在用户实际输入时更新）
+            _api_key_input = st.text_input(
                 t("api_key"),
                 value=st.session_state.api_key,
                 type="password",
             )
+            if _api_key_input:
+                st.session_state.api_key = _api_key_input
         
         st.divider()
         
