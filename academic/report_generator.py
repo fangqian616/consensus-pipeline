@@ -80,6 +80,7 @@ class ReportGenerator:
         final_content = self._build_final_report(
             topic, papers, clusters, consensus_points,
             fact_check_summary, methodology_reviews,
+            debate_outputs,
         )
 
         # AI精炼去废话（仅模板模式需要，综述模式由AI直接写）
@@ -136,6 +137,7 @@ class ReportGenerator:
         consensus_points: Optional[List[str]],
         fact_check_summary: str,
         methodology_reviews: Optional[Dict[str, Any]],
+        debate_outputs: Optional[Dict[str, str]] = None,
     ) -> str:
         """构建最终交付报告。如果有llm_call_fn，用AI写综述；否则回退模板。"""
         now = datetime.now().strftime("%Y年%m月%d日")
@@ -145,7 +147,7 @@ class ReportGenerator:
         b_papers = [p for p in papers if p.quality_level == "B"]
 
         if self.llm_call_fn and s_papers:
-            return self._build_review_by_ai(topic, papers, s_papers, a_papers, b_papers, consensus_points, now, fact_check_summary)
+            return self._build_review_by_ai(topic, papers, s_papers, a_papers, b_papers, consensus_points, now, fact_check_summary, debate_outputs)
 
         # 回退：模板模式（无LLM时）
         sections = []
@@ -170,6 +172,7 @@ class ReportGenerator:
         consensus_points: Optional[List[str]],
         now: str,
         fact_check_summary: str,
+        debate_outputs: Optional[Dict[str, str]] = None,
     ) -> str:
         """用LLM基于论文元数据直接撰写学术综述报告"""
         # 构建论文清单供AI参考——只传S/A/B级，C级不传
@@ -193,7 +196,10 @@ class ReportGenerator:
 9. 清单中标注⚠️的论文与本主题不相关，请不要引用
 10. 清单中可能包含与主题不太相关的论文（如化学、材料学等），请仅引用与主题直接相关的论文
 11. 【相关性硬规则】被正式引用[编号]的论文，其标题或摘要中必须同时出现以下两类关键词之一：(a)能源/碳/电力/气候/排放/负荷/价格预测 AND (b)机器学习/深度学习/神经网络/因果推断/强化学习/预测模型/时序预测。仅作为领域背景的论文使用脚注"参见[编号]"而非正文正式引用
-12. 【反面证据】核心发现章节中，每个主流结论必须至少配1条反对或质疑证据，标注置信度🟢高🟡中🔴低"""
+12. 【反面证据】核心发现章节中，每个主流结论必须至少配1条反对或质疑证据，标注置信度🟢高🟡中🔴低
+13. 【引用忠实性】引用[N]时，只能描述论文清单中该论文的标题和摘要已知信息。严禁编造该论文中不存在的具体实验、方法细节、数据结果或案例。如果你对该论文内容不确定，使用"参见[N]"代替具体描述
+14. 【续写规则】如果你需要续写未完成的内容，续写部分的引用[N]同样必须严格遵循规则13，只描述清单中的已知信息
+15. 【部门辩论整合】如果提供了部门辩论产出，优先采用各部门已验证的分析结论和论文描述，这些结论已经过交叉验证，可信度高于你自己推断的内容。在此基础上进行综述性整合，而非从零重新描述论文"""
 
         user_prompt = f"""请撰写「{topic}」领域的学术动向综述报告。
 
@@ -210,6 +216,8 @@ class ReportGenerator:
 
 ### 部门辩论共识
 {consensus_text if consensus_text else "无辩论数据"}
+
+{self._format_debate_outputs(debate_outputs)}
 
 ---
 
@@ -246,6 +254,9 @@ class ReportGenerator:
             if report and len(report) > 500:
                 # 用论文元数据重建参考文献，保证引用序号一一对应
                 report = self._rebuild_references(report, qualified)
+
+                # 校验引用描述是否与论文实际内容匹配
+                report = self._verify_citation_content(report, qualified)
 
                 # 生成可视化图表并嵌入报告
                 chart_section = self._embed_charts(qualified, topic)
@@ -397,6 +408,96 @@ class ReportGenerator:
         new_ref = "\n".join(cleaned_lines)
         return ref_split[0] + "## 参考文献" + new_ref
 
+    def _verify_citation_content(self, report: str, papers: List[PaperCandidate]) -> str:
+        """
+        校验正文[N]附近的描述是否与论文实际内容一致。
+        对于描述与论文标题/摘要明显不匹配的引用，替换为"参见[N]"。
+        
+        策略：提取每个[N]上下文（前后100字），检查是否包含该论文标题中的
+        关键术语。如果上下文中的方法/领域描述与论文标题完全不匹配，
+        则将描述性引用替换为安全的"参见[N]"。
+        """
+        import re
+        
+        # 找到参考文献section的分界线，只处理正文部分
+        ref_split = report.split("## 参考文献")
+        body = ref_split[0] if len(ref_split) >= 2 else report
+        
+        # 对每个引用序号，提取其上下文并校验
+        verified_body = body
+        citation_contexts = {}  # idx -> list of context snippets
+        
+        for m in re.finditer(r'\[(\d+)\]', body):
+            idx = int(m.group(1))
+            if idx < 1 or idx > len(papers):
+                continue
+            
+            # 提取[N]前后100字的上下文
+            start = max(0, m.start() - 100)
+            end = min(len(body), m.end() + 100)
+            context = body[start:end]
+            
+            if idx not in citation_contexts:
+                citation_contexts[idx] = []
+            citation_contexts[idx].append(context)
+        
+        # 对每个引用检查描述是否与论文匹配
+        mismatches = []
+        for idx, contexts in citation_contexts.items():
+            paper = papers[idx - 1]
+            title = paper.title.lower()
+            
+            # 从论文标题提取关键术语（去掉停用词后的核心名词/动词）
+            title_words = set()
+            stop_words = {"a", "an", "the", "of", "in", "on", "for", "and", "with", "to", 
+                         "from", "by", "at", "is", "are", "was", "were", "using", "based",
+                         "its", "their", "this", "that", "which", "between", "through",
+                         "under", "over", "into", "within", "during", "after", "before"}
+            for word in title.split():
+                w = word.strip(".,:;-()[]{}").lower()
+                if len(w) >= 3 and w not in stop_words:
+                    title_words.add(w)
+            
+            # 对每个出现位置，检查上下文是否与论文相关
+            all_mismatched = True
+            for ctx in contexts:
+                ctx_lower = ctx.lower()
+                # 检查上下文中是否出现论文标题的关键词
+                keyword_hits = sum(1 for w in title_words if w in ctx_lower)
+                keyword_ratio = keyword_hits / max(len(title_words), 1)
+                
+                if keyword_ratio >= 0.2:
+                    # 至少20%标题关键词出现在上下文中，认为匹配
+                    all_mismatched = False
+                    break
+            
+            if all_mismatched and len(title_words) >= 3:
+                mismatches.append(idx)
+        
+        # 对不匹配的引用，将描述性引用替换为安全的"参见[N]"
+        if mismatches:
+            for idx in mismatches:
+                paper = papers[idx - 1]
+                # 找到描述[N]的模式并替换：如"Veers[8]提出了..." → "参见[8]"
+                # 只替换[N]前面紧跟的方法/描述性内容
+                pattern = re.compile(
+                    r'([^\n。；]{0,30})\[' + str(idx) + r'\]([^\n。；]{0,60})',
+                )
+                matches = list(pattern.finditer(verified_body))
+                for m in reversed(matches):  # 从后往前替换避免位移
+                    prefix = m.group(1).strip()
+                    suffix = m.group(2).strip()
+                    # 如果前缀或后缀包含具体的论文描述（方法名、结果等）
+                    # 替换为更安全的表述
+                    full_match = m.group(0)
+                    replacement = f"参见[{idx}]"
+                    verified_body = verified_body[:m.start()] + replacement + verified_body[m.end():]
+        
+        # 重新组合
+        if len(ref_split) >= 2:
+            return verified_body + "## 参考文献" + ref_split[-1]
+        return verified_body
+
     def _embed_charts(self, papers: List[PaperCandidate], topic: str) -> str:
         """生成可视化图表并返回Markdown嵌入文本"""
         try:
@@ -405,23 +506,23 @@ class ReportGenerator:
 
             lines = []
             if chart_paths.get("year_trend"):
-                # 使用绝对路径便于PDF渲染
-                abs_path = os.path.abspath(chart_paths["year_trend"])
-                lines.append(f"![年度发文量趋势]({abs_path})")
+                # 使用相对于output_dir的路径，避免硬编码本地绝对路径
+                rel_path = os.path.relpath(chart_paths["year_trend"], self.output_dir)
+                lines.append(f"![年度发文量趋势]({rel_path})")
                 lines.append("")
                 lines.append("*图1：年度发文量趋势（红色柱体为高活跃年份）*")
                 lines.append("")
 
             if chart_paths.get("method_dist"):
-                abs_path = os.path.abspath(chart_paths["method_dist"])
-                lines.append(f"![方法论分布]({abs_path})")
+                rel_path = os.path.relpath(chart_paths["method_dist"], self.output_dir)
+                lines.append(f"![方法论分布]({rel_path})")
                 lines.append("")
                 lines.append("*图2：方法论占比分布*")
                 lines.append("")
 
             if chart_paths.get("grade_dist"):
-                abs_path = os.path.abspath(chart_paths["grade_dist"])
-                lines.append(f"![期刊等级分布]({abs_path})")
+                rel_path = os.path.relpath(chart_paths["grade_dist"], self.output_dir)
+                lines.append(f"![期刊等级分布]({rel_path})")
                 lines.append("")
                 lines.append("*图3：期刊等级分布（S级=顶刊，A级=优秀，B级=良好）*")
                 lines.append("")
@@ -463,6 +564,65 @@ class ReportGenerator:
 
         # 实在找不到，追加到末尾
         return report + "\n\n" + chart_section
+
+    @staticmethod
+    def _format_debate_outputs(debate_outputs: Optional[Dict[str, str]], max_dept: int = 5, max_chars: int = 1500) -> str:
+        """将部门辩论产出格式化为综述AI可用的参考文本"""
+        if not debate_outputs:
+            return ""
+        
+        lines = ["### 各部门辩论产出（已验证的论文分析结论，优先采用）", ""]
+        count = 0
+        for dept_key, content in debate_outputs.items():
+            if count >= max_dept:
+                break
+            if not content:
+                continue
+            
+            dept_name_map = {
+                "literature_search": "文献检索部",
+                "methodology_review": "方法论审查部",
+                "counter_evidence": "反方质疑部",
+                "citation_network": "引用网络部",
+                "data_validation": "数据验证部",
+                "topic_clustering": "主题聚类部",
+                "metadata_inspector": "元数据审查部",
+            }
+            dept_name = dept_name_map.get(dept_key, dept_key)
+            
+            # 提取consensus部分
+            consensus_text = ""
+            if isinstance(content, dict):
+                consensus_text = content.get("consensus", "")
+                if not consensus_text:
+                    # 尝试从debater_arguments中提取
+                    args = content.get("debater_arguments", [])
+                    if isinstance(args, list):
+                        parts = []
+                        for a in args[:3]:
+                            if isinstance(a, dict):
+                                arg_text = a.get("argument", "")
+                                if arg_text:
+                                    parts.append(arg_text[:500])
+                            elif isinstance(a, str):
+                                parts.append(a[:500])
+                        consensus_text = "\n".join(parts)
+            elif isinstance(content, str):
+                consensus_text = content
+            
+            if not consensus_text:
+                continue
+            
+            # 截断避免token爆炸
+            if len(consensus_text) > max_chars:
+                consensus_text = consensus_text[:max_chars] + "\n...(已截断)"
+            
+            lines.append(f"**{dept_name}**：")
+            lines.append(consensus_text)
+            lines.append("")
+            count += 1
+        
+        return "\n".join(lines) if count > 0 else ""
 
     @staticmethod
     def _format_paper_list(papers: List[PaperCandidate], max_papers: int = 80) -> str:
@@ -634,7 +794,9 @@ class ReportGenerator:
 {result[-200:]}
 
 ---
-请从上面截断处继续，完成剩余章节（核心发现与争议、研究空白与前沿方向、参考文献）。"""
+请从上面截断处继续，完成剩余章节（核心发现与争议、研究空白与前沿方向、参考文献）。
+
+【关键规则】续写部分的引用[N]必须严格对应论文清单中的论文。只能描述清单中该论文的标题和摘要已知信息，严禁编造该论文中不存在的实验、方法、数据或案例。如果你对该论文内容不确定，写"参见[N]"即可，不要凭空编造描述。"""
 
             continuation = self.llm_call_fn(system_prompt, continue_prompt, temperature=temperature)
             if continuation and len(continuation) > 100:
