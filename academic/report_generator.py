@@ -82,9 +82,9 @@ class ReportGenerator:
             fact_check_summary, methodology_reviews,
         )
 
-        # AI精炼去废话
-        if self.llm_call_fn:
-            final_content = self._ai_refine(final_content, topic)
+        # AI精炼去废话（仅模板模式需要，综述模式由AI直接写）
+        # if self.llm_call_fn:
+        #     final_content = self._ai_refine(final_content, topic)
 
         final_path = os.path.join(self.output_dir, "final_report.md")
         with open(final_path, "w", encoding="utf-8") as f:
@@ -137,41 +137,188 @@ class ReportGenerator:
         fact_check_summary: str,
         methodology_reviews: Optional[Dict[str, Any]],
     ) -> str:
-        """构建最终交付报告。信息密度优先，分层呈现。"""
+        """构建最终交付报告。如果有llm_call_fn，用AI写综述；否则回退模板。"""
         now = datetime.now().strftime("%Y年%m月%d日")
 
         s_papers = [p for p in papers if p.quality_level == "S"]
         a_papers = [p for p in papers if p.quality_level == "A"]
         b_papers = [p for p in papers if p.quality_level == "B"]
 
-        sections = []
+        if self.llm_call_fn and s_papers:
+            return self._build_review_by_ai(topic, papers, s_papers, a_papers, b_papers, consensus_points, now, fact_check_summary)
 
-        # 标题 + 摘要
+        # 回退：模板模式（无LLM时）
+        sections = []
         sections.append(self._build_final_title(topic, now))
         sections.append(self._build_final_summary(topic, papers, s_papers, a_papers))
-
-        # 一、核心发现
         sections.append(self._build_final_findings(s_papers, consensus_points))
-
-        # 二、方法论分布
         sections.append(self._build_final_methodology(clusters, methodology_reviews))
-
-        # 三、热点趋势
         sections.append(self._build_final_trends(papers))
-
-        # 四、代表性论文 Top 5
         sections.append(self._build_final_top_papers(s_papers, a_papers))
-
-        # 五、研究空白与机会
         sections.append(self._build_final_gaps(papers, consensus_points))
-
-        # 六、参考文献（≤10篇）
         sections.append(self._build_final_references(s_papers, a_papers))
-
-        # 页脚
         sections.append(self._build_final_footer(now, fact_check_summary))
-
         return "\n\n".join(sections)
+
+    def _build_review_by_ai(
+        self,
+        topic: str,
+        papers: List[PaperCandidate],
+        s_papers: List[PaperCandidate],
+        a_papers: List[PaperCandidate],
+        b_papers: List[PaperCandidate],
+        consensus_points: Optional[List[str]],
+        now: str,
+        fact_check_summary: str,
+    ) -> str:
+        """用LLM基于论文元数据直接撰写学术综述报告"""
+        # 构建论文清单供AI参考
+        paper_list = self._format_paper_list(papers)
+        year_dist = self._compute_year_distribution(papers)
+        method_dist = self._compute_method_distribution(papers)
+        consensus_text = "\n".join([f"- {c}" for c in (consensus_points or [])])
+
+        system_prompt = """你是一位资深学术综述撰写专家。你的任务是基于给定的论文数据撰写一篇结构完整的学术动向综述报告。
+
+写作规范：
+1. 每个章节要有实质内容段落，不是干巴巴的要点列表
+2. 引用具体论文支撑论点，用[序号]标注
+3. 方法论对比要有深度：不同方法的优劣、适用场景、计算开销、数据需求
+4. 趋势分析基于年份分布数据，说明演进脉络
+5. 反面证据必须包含：对主流方法的有效批评、失败案例、适用边界
+6. 研究空白要从"为什么没人做"和"做了有什么价值"两个角度分析
+7. 语言学术化但不晦涩，避免空话套话"""
+
+        user_prompt = f"""请撰写「{topic}」领域的学术动向综述报告。
+
+## 可用论文数据
+
+### 年份分布
+{year_dist}
+
+### 方法分布（从标题/摘要提取）
+{method_dist}
+
+### 论文清单（{len(papers)}篇：S级{len(s_papers)}、A级{len(a_papers)}、B级{len(b_papers)}）
+{paper_list}
+
+### 部门辩论共识
+{consensus_text if consensus_text else "无辩论数据"}
+
+---
+
+请按以下结构撰写，每个章节都要有实质段落而非要点列表：
+
+# {topic}
+
+> 学术动向综述 | Consensus Pipeline v5 | {now}
+
+## 摘要
+（200字以内，概述调研范围、核心发现、方法论格局）
+
+## 一、研究概况与发展脉络
+（基于年份分布，描述该领域从何时兴起、关键转折点、当前热度。引用具体论文说明里程碑工作）
+
+## 二、方法论格局与对比
+（分类别阐述主流方法，每类说明：核心思路、代表论文、优势、局限、适用场景。用表格做横向对比）
+
+| 方法类别 | 代表论文 | 预测精度 | 可解释性 | 数据需求 | 计算开销 | 趋势 |
+|---------|---------|---------|---------|---------|---------|------|
+
+## 三、核心发现与争议
+（3-5条实质性发现，每条必须有支撑论文和反面证据。标注置信度🟢高🟡中🔴低）
+
+## 四、研究空白与前沿方向
+（5个空白，每个说明：现状→为什么重要→可行路径→预期突破）
+
+## 五、参考文献
+（列出所有S级和A级论文，GB/T 7714格式）"""
+
+        try:
+            # 综述需要长输出，用专用调用
+            report = self._llm_call_long(system_prompt, user_prompt, temperature=0.25)
+            if report and len(report) > 500:
+                # 补充页脚
+                if fact_check_summary:
+                    report += f"\n\n---\n\n> 📋 事实校验：{fact_check_summary}"
+                return report
+        except Exception:
+            pass
+
+        # LLM失败时回退模板
+        sections = []
+        sections.append(self._build_final_title(topic, now))
+        sections.append(self._build_final_summary(topic, papers, s_papers, a_papers))
+        sections.append(self._build_final_findings(s_papers, consensus_points))
+        sections.append(self._build_final_trends(papers))
+        sections.append(self._build_final_references(s_papers, a_papers))
+        return "\n\n".join(sections)
+
+    @staticmethod
+    def _format_paper_list(papers: List[PaperCandidate], max_papers: int = 80) -> str:
+        """格式化论文清单供AI参考"""
+        lines = []
+        for i, p in enumerate(papers[:max_papers], 1):
+            authors = ", ".join(p.authors[:2])
+            if len(p.authors) > 2:
+                authors += " 等"
+            title = p.title[:70]
+            journal = p.journal or "预印本"
+            year = p.year or "n/a"
+            level = p.quality_level
+            cite = p.citation_count
+            lines.append(f"[{i}] [{level}] {authors}. {title}. {journal}, {year}. (引用:{cite})")
+        if len(papers) > max_papers:
+            lines.append(f"... 共{len(papers)}篇，此处省略{len(papers)-max_papers}篇")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _compute_year_distribution(papers: List[PaperCandidate]) -> str:
+        """计算年份分布"""
+        year_counts = {}
+        for p in papers:
+            if p.year and p.year > 1990:
+                year_counts[p.year] = year_counts.get(p.year, 0) + 1
+        if not year_counts:
+            return "无年份数据"
+        lines = []
+        for y in sorted(year_counts.keys()):
+            bar = "█" * min(year_counts[y], 30)
+            lines.append(f"{y}: {bar} {year_counts[y]}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _compute_method_distribution(papers: List[PaperCandidate]) -> str:
+        """从标题/摘要提取方法关键词分布"""
+        method_keywords = {
+            "LSTM/GRU": ["lstm", "gru", "rnn", "recurrent"],
+            "Transformer": ["transformer", "attention", "bert", "gpt"],
+            "CNN": ["cnn", "convolutional", "convnet"],
+            "XGBoost/GBDT": ["xgboost", "gbdt", "gradient boosting", "lightgbm"],
+            "GNN/Graph": ["gnn", "graph neural", "graph convolution"],
+            "因果推断": ["causal", "did", "difference-in-diff", "instrumental"],
+            "强化学习": ["reinforcement", "rl ", "deep q", "policy gradient"],
+            "贝叶斯": ["bayesian", "mcmc", "variational inference"],
+            "集成学习": ["ensemble", "stacking", "bagging", "random forest"],
+            "优化算法": ["optimization", "pso", "genetic algorithm", "evolutionary"],
+            "NLP/文本": ["nlp", "text mining", "sentiment", "word2vec"],
+            "联邦学习": ["federated", "federated learning"],
+        }
+        counts = {}
+        for cat, kws in method_keywords.items():
+            c = 0
+            for p in papers:
+                text = (p.title + " " + (p.abstract or "")).lower()
+                if any(k in text for k in kws):
+                    c += 1
+            if c > 0:
+                counts[cat] = c
+        if not counts:
+            return "无法提取方法分布"
+        lines = []
+        for cat, c in sorted(counts.items(), key=lambda x: -x[1]):
+            lines.append(f"- {cat}: {c}篇")
+        return "\n".join(lines)
 
     def _build_final_title(self, topic: str, now: str) -> str:
         return f"""# {topic}
@@ -237,6 +384,44 @@ class ReportGenerator:
                     return result[:idx + 1].strip()
             return result[:max_chars - 1] + "…"
         return result
+
+    def _llm_call_long(self, system_prompt: str, user_prompt: str, temperature: float = 0.25) -> str:
+        """长输出LLM调用（综述报告需要8K+ tokens），支持分段续写"""
+        import requests
+        # 从llm_call_fn的环境获取API配置
+        # 尝试直接调用，但把max_tokens调大
+        try:
+            # 如果llm_call_fn是run_pipeline.llm_call，我们无法直接改max_tokens
+            # 改为：分段请求——先写前半部分，再续写后半部分
+            result = self.llm_call_fn(system_prompt, user_prompt, temperature=temperature)
+            if not result or len(result) < 500:
+                return result or ""
+            
+            # 检查是否被截断（末尾不完整）
+            last_line = result.strip().split("\n")[-1] if result.strip() else ""
+            incomplete_markers = [
+                not result.rstrip().endswith(("。", ".", "】", ")", "\"", "》", "```")),
+                result.rstrip().endswith(("，", "、", "因为", "但是", "而且", "其", "在")),
+            ]
+            # 如果输出看起来完整（有参考文献段），直接返回
+            if "参考文献" in result or "五、" in result or "## 五" in result:
+                return result
+            
+            # 否则续写
+            continue_prompt = f"""前文到此被截断了。请从截断处继续撰写，不要重复已有内容，直接接着写：
+
+{result[-200:]}
+
+---
+请从上面截断处继续，完成剩余章节（核心发现与争议、研究空白与前沿方向、参考文献）。"""
+
+            continuation = self.llm_call_fn(system_prompt, continue_prompt, temperature=temperature)
+            if continuation and len(continuation) > 100:
+                # 拼接：去掉重叠部分
+                return result + "\n\n" + continuation
+            return result
+        except Exception:
+            return ""
 
     def _ai_refine(self, draft: str, topic: str) -> str:
         """用LLM精炼报告：去废话、提信息密度、保留所有section"""
