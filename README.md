@@ -1,89 +1,73 @@
-# 🎬 Consensus Pipeline
+# 🔬 Consensus Pipeline
 
-> **Stop AI from talking to itself. Start a real creative team that debates, collides, and reaches consensus.**
->
-> A multi-agent debate-driven content creation framework — not "one AI writes for you," but "an AI team argues out the best solution."
+> **A multi-agent debate-driven research & creation framework.**  
+> Not one AI writes for you — an AI team debates, collides, and reaches consensus.
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit" alt="Streamlit">
-  <img src="https://img.shields.io/badge/Tests-25/25_passed-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/Latest-v5.1.1-brightgreen" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
-  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs">
 </p>
 
 > 📖 [中文文档](README_CN.md)
 
 ---
 
-## 🤔 Why This Exists
+## 🆕 What's New in v5.x
 
-**The single-LLM problem:** Whether you ask GPT or Claude, it's always one "person" answering. Self-reflection seems helpful, but researchers have found it leads to "Degeneration of Thoughts" — biases can't self-correct, rigid thinking can't self-breakthrough, and blind spots without external feedback are forever invisible.
+| Version | Highlight |
+|---------|-----------|
+| **v5.1.1** | 📝 Report compression — final report ≤3000 chars, LLM fluff skipping, hard truncate |
+| **v5.1** | 📊 Dual-template report (deliverable + internal doc), 4th relevance filter, 209-journal registry |
+| **v5.0** | 🔍 easyScholar API integration — S-level papers 3→47, C-level 80→9 |
+| **v4.5** | 🔗 Full pipeline: requirement research → debate → report |
+| **v4.0** | 🧪 Requirement research Tab, academic mode, programming & tutorial departments |
 
-**The existing multi-agent debate problem:** Most frameworks focus on "reasoning enhancement" — having AIs debate math problems, translations, and common-sense QA. Almost no one applies multi-agent debate to **creative content production** — having an AI team, like Pixar's Braintrust, where every specialized department debates internally and cross-pollinates externally, ultimately producing a complete, usable creative plan.
-
-**Consensus Pipeline is that missing piece.**
-
-```
-Traditional:   You → One AI → One answer (maybe good, but you have no choice)
-Debate-driven: You → An AI team → 8 departments debate internally → cross-department collisions → The best plan
-```
+Full changelog: [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases)
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Consensus Pipeline                       │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  User Input                                                     │
-│     │                                                           │
-│     ▼                                                           │
-│  ┌──────────┐    AI Router auto-analyzes requirements           │
-│  │ Tab0     │    Matches content type → selects departments     │
-│  │ Smart    │    → configures debaters → generates presets       │
-│  │ Config   │    All prompts editable, Skill injection supported │
-│  └────┬─────┘                                                   │
-│       │                                                         │
-│       ▼                                                         │
-│  ┌──────────┐                                                   │
-│  │ Tab1     │   Script / Characters / Prompts / Visual direction │
-│  │ Input    │                                                   │
-│  └────┬─────┘                                                   │
-│       │                                                         │
-│       ▼                                                         │
-│  ┌──────────────────────────────────────────────────────┐       │
-│  │ Tab2 Department Debates (8 departments, serial)       │       │
-│  │                                                      │       │
-│  │  Screenwriting → Spatial Design → Storyboard         │       │
-│  │        ↓            ↓               ↓                │       │
-│  │  Cinematography → Lighting → VFX → Sound → Editing   │       │
-│  │                                                      │       │
-│  │  Per department: 3-4 debaters × N rounds → Director  │       │
-│  │  synthesis → Department consensus                     │       │
-│  └──────────────────────────────────────────────────────┘       │
-│       │                                                         │
-│       ▼                                                         │
-│  ┌──────────────────────────────────────────────────────┐       │
-│  │ Tab3 Cross-Department Debate                          │       │
-│  │                                                      │       │
-│  │  Screenwriting ↔ Storyboard (narrative beats vs cuts) │       │
-│  │  Cinematography ↔ Lighting (composition vs mood)      │       │
-│  │  VFX ↔ Sound (visual impact vs audio rhythm)          │       │
-│  │  Spatial ↔ Editing (scene blocking vs pacing)         │       │
-│  └──────────────────────────────────────────────────────┘       │
-│       │                                                         │
-│       ▼                                                         │
-│  ┌──────────────────────────────────────────────────────┐       │
-│  │ Tab4 Review → Tab5 Final Output                       │       │
-│  │                                                      │       │
-│  │  Four-department review → 9-grid storyboard +        │       │
-│  │  shot-by-shot video prompts                           │       │
-│  └──────────────────────────────────────────────────────┘       │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                     Consensus Pipeline v5                         │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Phase 0-4: Requirement Research (NEW)                           │
+│     AI interview → scope definition → user confirmation           │
+│     ──────────────────────────────────────────                    │
+│                                                                  │
+│  Two Modes:                                                      │
+│  ┌─────────────────────┐    ┌──────────────────────────┐         │
+│  │ 🎬 Animation Mode   │    │ 🔬 Academic Mode         │         │
+│  │                     │    │                          │         │
+│  │ 8 creative depts    │    │ 11 research depts        │         │
+│  │ + video prompts     │    │ + programming + tutorial │         │
+│  │ + 9-grid storyboard │    │ + paper quality filter   │         │
+│  └─────────────────────┘    └──────────────────────────┘         │
+│     │                              │                              │
+│     ▼                              ▼                              │
+│  ┌────────────────────────────────────────────────────┐          │
+│  │ Department Debate (serial, 3-4 debaters each)       │          │
+│  │  → Director synthesis → Department consensus        │          │
+│  └────────────────────────────────────────────────────┘          │
+│     │                                                            │
+│     ▼                                                            │
+│  ┌────────────────────────────────────────────────────┐          │
+│  │ Cross-Department Debate                              │          │
+│  │  Resolve contradictions, strengthen evidence         │          │
+│  └────────────────────────────────────────────────────┘          │
+│     │                                                            │
+│     ▼                                                            │
+│  ┌────────────────────────────────────────────────────┐          │
+│  │ Final Output                                         │          │
+│  │  Deliverable report (≤3000 chars) + Internal doc    │          │
+│  │  + PDF export + CSV metadata + Fact-checking        │          │
+│  └────────────────────────────────────────────────────┘          │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -97,131 +81,93 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Open your browser, configure your API key in the sidebar (supports DeepSeek / OpenAI / any compatible API), then:
+Open your browser, configure API key in sidebar, then:
 
-1. **Tab0** → Describe your needs, AI auto-configures (or load a built-in preset)
-2. **Tab1** → Fill in script, character references, visual direction
-3. **Tab2** → 8 departments debate in sequence, watch each department's debaters clash in real-time
-4. **Tab3** → Cross-department debate, resolve contradictions
-5. **Tab4-5** → Review → Final output
+1. **Tab 0** → Describe your needs (AI interviews you or you fill in directly)
+2. **Tab 1** → AI auto-configures departments & debaters
+3. **Tab 2** → Fill in research topic / script
+4. **Tab 3** → Watch departments debate in real-time
+5. **Tab 4** → Cross-department debate
+6. **Tab 5** → Final deliverable report + PDF export
+
+---
+
+## 🔬 Academic Mode
+
+The headline feature of v4.0+. A complete academic research pipeline:
+
+### 11 Research Departments
+
+| Department | Role |
+|-----------|------|
+| Literature Search | Multi-source retrieval, deduplication |
+| Metadata Inspector | DOI verification, metadata completeness |
+| Citation Network | Citation analysis, impact metrics |
+| Methodology Review | 7-dimension evaluation (accuracy, efficiency, interpretability...) |
+| Data Validation | Data source quality, reproducibility |
+| Counter-Evidence | Anti-mainstream findings, controversy mapping |
+| Topic Clustering | Thematic grouping, trend identification |
+| Visualization | Chart & distribution analysis |
+| Report Integration | Cross-validation, consensus building |
+| **Programming** | Analyze mainstream models/tools, output runnable code |
+| **Tutorial** | Teach how to use research tools & methods |
+
+### Paper Quality Filtering (4-Layer Sieve)
+
+```
+Layer 1: easyScholar API → journal rank (S/A/B/C)
+Layer 2: Citation count + h-index filter
+Layer 3: Local 209-journal registry (9 disciplines + 6 AI conferences + 3 CN CSSCI)
+Layer 4: Relevance scoring (_compute_relevance) — domain must-have + ML must-have
+```
+
+**Results (ML in Energy Economics experiment):**
+
+| Metric | v4.5 (no easyScholar) | v5.0 (easyScholar) | v5.1 (full pipeline) |
+|--------|:---:|:---:|:---:|
+| S-level papers | 3 | 47 | 41 |
+| C-level papers | 80 | 9 | 9 |
+| Total papers | 84 | 71 | 76 |
+| Self-evaluation | 4/10 | 4/10 | 5.5/10 |
+
+### Dual-Template Report
+
+- **Deliverable report** (≤3000 chars): Core findings with confidence levels, methodology distribution, top papers, research gaps
+- **Internal document** (full detail): Complete debate transcripts, all papers with metadata, programming & tutorial output
+
+Both exportable as PDF with Chinese font support (LXGW WenKai).
 
 ---
 
 ## ✨ Core Features
 
 ### 🧠 AI Router — Smart Configuration
+AI analyzes your needs → selects departments → configures debaters → generates presets. All editable.
 
-Not rigid template matching. The AI analyzes your needs and automatically decides:
-- Which departments are needed (all 8? or just 3?)
-- How many debaters per department (2-4)
-- What style for each debater (role boundaries, points of dissent with others)
-
-```python
-# You say "just Screenwriting, Storyboard, and Lighting — 3 departments"
-→ Router returns exactly 3 departments, 6 debaters, nothing extra
-
-# You say "warm tones throughout, minimalist line art style"
-→ Router auto-creates a Visual Style department, each debater with a distinct role
-```
-
-### ✏️ Fully Editable
-
-Not happy with the AI-generated prompts? Every department's debater styles and parameters can be manually edited. Edit and run — **your edits take priority.**
-
-### 💾 Local Persistence
-
-Your configurations auto-save to `user_profiles/`. Next launch, your last-used config loads automatically. Built-in presets + user profiles, two systems that don't interfere.
-
-### 📦 Skill Injection
-
-Upload your proprietary knowledge (Markdown format), auto-injected at the end of every debater prompt in the target department. For example:
-- Character design docs → inject into Screenwriting
-- Visual style guide → inject into Lighting / VFX
-- Brand guidelines → inject into all departments
-
-### 🎯 Built-in Preset: Animation Debate
-
-Ready-to-use 8-department × 24-debater complete animation production pipeline:
-- Anime visual gene injection
-- Spatial positioning system (object reference + screen position + vertical state)
-- Complete review workflow
-- From a script to a 9-grid storyboard + shot-by-shot video prompts
+### 💬 Requirement Research (v4.0+)
+AI-conducted interview (Phase 0-4) before entering the main pipeline. Define scope, constraints, and priorities through dialogue.
 
 ### 🏪 Market Simulation Mode
-
-Instead of debaters persuading each other, creative ideas compete like products in a market:
-
-```
-Candidate campaigns → Quality interrogation → Voting → Patch refinement
-```
-
-3 AI-generated candidate proposals compete on the same stage, evaluated through sharp quality-assessment questions, with the winner receiving patches for optimization. Perfect for "I'm not sure what style I want" exploration scenarios.
+Creative ideas compete like products: Candidates → Quality interrogation → Voting → Patch refinement
 
 ### 🔄 Four Architecture Modes
 
-| Mode | Mechanism | Quality | Speed | Token | Best For |
-|------|-----------|:-------:|:-----:|:-----:|---------|
-| **Consensus Pipeline** | 8 dept serial debate | ★★★★★ | ★★ | ★★★★ | Maximum quality |
-| **Market Simulation** | Candidate competition + voting | ★★★★ | ★★ | ★★★★★ | Exploring directions |
-| **Expert Pool** | Curated 2/dept | ★★★ | ★★★ | ★★ | Fast iteration |
-| **Single Agent** | No debate, direct generation | ★★ | ★★★★★ | ★ | Baseline comparison |
+| Mode | Mechanism | Quality | Speed | Best For |
+|------|-----------|:-------:|:-----:|----------|
+| **Consensus Pipeline** | Serial dept debate | ★★★★★ | ★★ | Maximum quality |
+| **Market Simulation** | Competition + voting | ★★★★ | ★★ | Exploring directions |
+| **Expert Pool** | 2/dept curated | ★★★ | ★★★ | Fast iteration |
+| **Single Agent** | No debate | ★★ | ★★★★★ | Baseline |
 
-One input, four modes — quantify the quality boost from "debate" and "competition."
+### 📦 Skill Injection
+Upload proprietary knowledge (Markdown) → auto-injected into target department prompts.
 
----
-
-## 🆚 Comparison
-
-| Feature | Consensus Pipeline | MAD (Liang et al.) | MADJURY | ARGUS | AgentScope |
-|---------|:---:|:---:|:---:|:---:|:---:|
-| Multi-Agent Debate | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Creative Content Production | ✅ | ❌ | ❌ | ❌ | ❌ |
-| AI Smart Configuration | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Department × Debater Structure | ✅ | ❌ | ❌ | ❌ | ❌ |
-| User-Editable Prompts | ✅ | ❌ | ❌ | ✅ | ❌ |
-| Local Persistence | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Market Simulation Model | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Four Architecture Modes | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Cross-Domain General | ✅ | ❌ | ❌ | ❌ | ✅ |
-| Streamlit UI | ✅ | ❌ | ❌ | ✅ | ✅ |
-| Info Bottleneck (anti-bias) | ❌ | ❌ | ✅ | ❌ | ❌ |
-| Real-Time Visualization | ❌ | ❌ | ❌ | ✅ | ❌ |
-
-**Consensus Pipeline's unique position:** Not chasing reasoning-benchmark scores, not chasing generic agent-framework breadth — focused on **using debate mechanisms to elevate creative content quality** — making an AI team collaborate like a real professional team.
-
----
-
-## 📖 Examples
-
-### Animated Short Film
-
-```
-Input: 3D animated short, desert chase scene, two characters, magic elements
-AI Router → auto-config: 8 departments, 24 debaters
-Run → 15 minutes later: 9-grid storyboard + 11 groups, 30 shots of video prompts
-```
-
-### Product Design
-
-```
-Input: AI note-taking app for Gen Z, need user research, feature architecture, interaction design
-AI Router → auto-config: Audience Analysis / Content Structure / Visual Style / Narrative, 4 depts, 8 debaters
-Run → output: user needs doc + feature architecture + interaction plan + visual guide
-```
-
-### Academic Paper
-
-```
-Input: Literature review on LLM multi-agent collaboration
-AI Router → auto-config: Narrative / Content Structure / Audience / QA, 4 depts, 9 debaters
-Run → output: literature review + methodology comparison + citation standards + rigor review
-```
+### 🔍 Fact-Checking (Phase 7.5)
+Automated factual verification of report claims with source tracing.
 
 ---
 
 ## 🔧 Configuration
-
-Supports any OpenAI-compatible API:
 
 | Provider | API URL | Recommended Model |
 |----------|--------|-------------------|
@@ -229,35 +175,76 @@ Supports any OpenAI-compatible API:
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o` |
 | Custom | Any compatible endpoint | Any model |
 
-Fill in API Key, API URL, and model name in the sidebar.
+### Optional: easyScholar API
+
+For enhanced journal ranking, get a key at [easyScholar](https://www.easyscholar.cc/):
+
+```bash
+# Set in Streamlit sidebar or environment variable
+export EASYSCHOLAR_SECRET_KEY=your_key_here
+```
+
+Without easyScholar, the pipeline uses a local 209-journal registry as fallback.
 
 ---
 
-## 🗺️ Roadmap
+## 📁 Project Structure
 
-- [x] v3.0: AI Router smart config + user-editable prompts + local persistence + Skill injection
-- [x] Built-in preset: Animation Debate (8 depts × 24 debaters)
-- [x] Four architecture modes
-- [x] Market Simulation model
-- [ ] v3.1: Skill file upload (currently text paste)
-- [ ] v3.2: More built-in presets (product design, novel writing, game design, academic papers)
-- [ ] v3.3: Historical debate replay & comparison
-- [ ] v3.4: Batch mode (one input, all four modes, compare outputs)
-- [ ] v4.0: Debate process visualization (real-time DAG, debater opinion flow)
+```
+consensus-pipeline/
+├── app.py                    # Streamlit main app (9 tabs)
+├── router.py                 # AI Router — smart department config
+├── debate_engine.py          # Core debate engine
+├── config_manager.py         # Config persistence & presets
+├── pdf_exporter.py           # PDF export with Chinese fonts
+├── requirement/              # Requirement research module (v4.0+)
+│   ├── interviewer.py        # AI interview agent
+│   ├── structurer.py         # Scope & constraint extraction
+│   ├── generator.py          # Requirement document generation
+│   ├── validator.py          # Completeness check
+│   └── __init__.py
+├── academic/                 # Academic research module (v4.0+)
+│   ├── search_engine.py      # Multi-source search (OpenAlex, Semantic Scholar, arXiv)
+│   ├── journal_classifier.py # 4-layer journal quality sieve + easyScholar
+│   ├── journal_registry.py   # 209-journal local registry
+│   ├── report_generator.py   # Dual-template report generation
+│   ├── fact_checker.py       # Automated fact verification
+│   └── __init__.py
+├── templates/                # Debate prompt templates
+├── presets/                  # Built-in presets (animation, academic)
+├── fonts/                    # Chinese fonts (LXGW WenKai)
+└── run_pipeline.py           # CLI runner for headless execution
+```
+
+---
+
+## 🗺️ Version History
+
+| Version | Date | Changes |
+|---------|------|---------|
+| v5.1.1 | 2026-07-15 | Report compression, LLM fluff skipping, 3000-char hard limit |
+| v5.1 | 2026-07-15 | Dual-template report, 4th relevance filter, 209-journal registry, methodology 7-dim framework |
+| v5.0 | 2026-07-15 | easyScholar API integration, journal rank bug fixes |
+| v4.5 | 2026-07-15 | Full requirement→debate pipeline, academic mode UI fix |
+| v4.4 | 2026-07-15 | 20+ paper guarantee, preprint appendix, URL encoding fix |
+| v4.3 | 2026-07-15 | 11 review issues fixed, Chinese tokenization, fuzzy match constraint |
+| v4.2 | 2026-07-15 | easyScholar integration, FactChecker, journal quality enhancement |
+| v4.1 | 2026-07-15 | PDF export with Chinese font support |
+| v4.0 | 2026-07-15 | Requirement research, academic mode, programming & tutorial depts |
+| v3.0 | 2026-07-14 | AI Router, user-editable prompts, local persistence, Skill injection |
+
+All versions available as [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases).
 
 ---
 
 ## 🤝 Contributing
 
 PRs welcome! Especially:
-
-- 🎨 **New preset templates** — product design, novel writing, game levels, business proposals…
-- 🎭 **New debater styles** — contribute diverse debater perspectives for existing departments
-- 🛠️ **New departments** — what's missing? Music department? Color department?
+- 🎨 **New preset templates** — product design, novel writing, game levels…
+- 🎭 **New debater styles** — diverse perspectives for existing departments
+- 🛠️ **New departments** — what's missing?
 - 🐛 **Bug fixes**
 - 📝 **Documentation improvements**
-
-See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
 
