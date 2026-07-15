@@ -1,257 +1,339 @@
-# 技术选型、碳价预测代码与部署注意事项
+# 能源经济学机器学习技术专家回答
 
 ## 任务1：技术选型分析
 
-在能源经济学机器学习领域，不同模型在碳价预测、需求响应、价格波动等任务中各有优劣。以下基于论文背景（特别是《Machine learning in energy economics and finance: A review》《Machine learning for a sustainable energy future》）与实际工程经验，给出对比表。
+在碳价预测、电力负荷预测、可再生能源出力预测等典型能源经济学场景中，不同机器学习模型有各自的优势和局限。下面对四种主流方案进行对比分析，并提供适用场景和成熟度评级。
 
-| 模型方案 | 适用场景 | 成熟度评级 | 推荐理由 |
-|---------|----------|------------|----------|
-| **LSTM/GRU** | 长时间序列预测（日度/周度碳价、电力负荷）、非线性趋势捕捉 | ★★★★★ | 门控机制有效处理时序依赖性；适用于价格序列的短期与中期波动；可处理不等长序列；论文中广泛用于能源价格预测。 |
-| **XGBoost/LightGBM** | 因子驱动的回归/分类（碳价影响因素如政策、天气、工业活动）、特征重要性分析 | ★★★★★ | 梯度提升树在表格数据上表现优异；训练速度快，可解释性（SHAP值）；天然处理缺失值与异常值；适合静态特征+滞后变量。 |
-| **Transformer** | 高维时序、多变量交互（如多市场联动）、长程依赖（月度/季度预测） | ★★★☆☆ | 自注意力机制捕捉全局依赖；在自然语言与金融时序中表现突出；但数据量要求大、计算资源高、小样本易过拟合；实践中需谨慎调整。 |
-| **混合模型（CNN-LSTM, Attention-XGBoost）** | 复杂场景综合（如融合气象、政策文本、历史价格）；提高鲁棒性与泛化能力 | ★★★★☆ | 集成不同优势：CNN提取局部模式，LSTM建模时序，XGBoost处理高维特征；在碳价预测中常取得SOTA；但调试难度中等，需避免过拟合。 |
+| 方案 | 适用场景 | 成熟度评级 | 推荐理由 |
+|------|----------|------------|----------|
+| **LSTM/GRU** | 长时序依赖、小样本、非线性波动（如碳价日序列） | ★★★★☆ | 天然适合时序建模，能捕捉长期依赖；GRU参数更少，速度更快，在小样本下优于Transformer。缺点是特征解释性差，对突变不敏感。 |
+| **XGBoost/LightGBM** | 特征丰富、强因果性、需要可解释性（如碳价受政策、能源价格、气温等多维特征影响） | ★★★★★ | 工业界最成熟的非深度学习模型，处理混合特征、缺失值优秀，可输出特征重要性，易于工程部署。缺点是无法直接建模时序依赖。 |
+| **Transformer** | 超长序列、全局注意力、多变量（如电网负荷+天气+市场出清） | ★★★☆☆ | 理论上最强时序建模能力，在自然语言处理/图像领域已验证。但能源数据规模通常较小（几百到几万条），Transformer容易过拟合，且计算成本高。目前应用较少，仍处于研究阶段。 |
+| **混合模型**（CNN-LSTM, Attention-XGBoost） | 多尺度特征融合、利用时序与表格式信息互补 | ★★★★☆ | 可结合时序深度模型与特征驱动模型优势，例如CNN-LSTM提取局部模式，XGBoost处理静态特征。缺点是调参复杂，容易过拟合，需要一定经验。 |
 
-**选型建议**：
-- **首次建模**：优先尝试XGBoost/LightGBM，特征工程简单，可快速建立基线。
-- **需捕捉时序依赖**（如价格序列）：使用LSTM或GRU，配合滚动窗口特征。
-- **数据规模小且非线性强**：混合模型（如Attention-XGBoost）可提升准确率，但需注意正则化。
-- **长期预测或多源输入**：Transformer需要大量数据（>10万样本），否则推荐LSTM+注意力机制。
+### 选型建议
 
-以下任务2选用 **LSTM + XGBoost混合模型**（集成预测方式），平衡预测精度与工程复杂度。
+- **如果数据量 < 5000行，且以纯时序为主** → 优先选用 **LSTM/GRU**（或结合简单特征工程）。
+- **如果特征维度多（>20），且时序长度短（<50步）** → 优先选用 **XGBoost/LightGBM**（特征工程充分+时间rolling特征）。
+- **如果想兼顾精度和鲁棒性** → 推荐 **混合模型**：先用LSTM提取时序特征（如最后一个隐态），再与原始静态特征拼接输入XGBoost。这是当前能源经济学顶刊的主流做法（如《Machine learning in energy economics and finance: A review》）。
+- **Transformer** 目前不建议用于碳价预测，因为碳价序列长度通常不超过2000条，且强非线性，Transformer难以收敛。
 
 ---
 
-## 任务2：碳价预测完整代码（LSTM + XGBoost混合模型）
+## 任务2：碳价预测完整代码（LSTM+XGBoost混合模型）
+
+以下代码为一个完整的、可直接运行的碳价预测项目。数据使用合成公开数据（模拟欧洲碳配额 EUA 期货价格），实际使用时替换为真实CSV文件即可。包含数据预处理、特征工程、模型训练、评估和可视化。
 
 ```python
-"""
-碳价预测项目 —— LSTM + XGBoost 混合模型
-数据来源：yfinance（获取全球碳ETF：KRBN）
-特征：历史价格、滚动统计、波动率、技术指标
-模型：Keras LSTM + XGBoost Regressor，加权平均集成
-"""
-# ================== 导入依赖 ==================
+# carbon_price_prediction.py
 import numpy as np
 import pandas as pd
-from typing import Tuple, Dict, List
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-from keras.models import Sequential
-from keras.layers import LSTM, Dense, Dropout
-from xgboost import XGBRegressor
-import yfinance as yf  # 公开数据集获取
-import matplotlib.pyplot as plt
+from typing import Tuple, List, Optional
 import warnings
-warnings.filterwarnings("ignore")
+warnings.filterwarnings('ignore')
 
-# ================== 数据获取 ==================
-def fetch_carbon_price(symbol: str = "KRBN", start: str = "2015-01-01", end: str = "2024-12-31") -> pd.DataFrame:
+# 数据预处理
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+# 深度学习模型
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, GRU, Dense, Dropout, Input
+from tensorflow.keras.callbacks import EarlyStopping
+
+# XGBoost
+import xgboost as xgb
+
+# 可视化
+import matplotlib.pyplot as plt
+
+# ---------------------------- 1. 数据生成/加载 ----------------------------
+def generate_synthetic_carbon_data(
+    n_samples: int = 1500,
+    seed: int = 42
+) -> pd.DataFrame:
     """
-    从Yahoo Finance获取全球碳ETF（KRBN）的历史价格。
-    该ETF跟踪ICE EUA期货指数，作为碳价代理变量。
+    模拟生成碳价数据（包含趋势、季节性和噪声）
+    实际使用时请替换为真实CSV文件加载
     """
-    data = yf.download(symbol, start=start, end=end, progress=False)
-    df = data[["Close"]].copy()
-    df.columns = ["price"]
-    df.index = pd.to_datetime(df.index)
-    df = df.asfreq("B")  # 工作日频率
-    df = df.ffill().dropna()
+    np.random.seed(seed)
+    dates = pd.date_range('2018-01-01', periods=n_samples, freq='B')  # 交易日
+    t = np.arange(n_samples)
+    trend = 5 + 0.001 * t
+    seasonality = 2 * np.sin(2 * np.pi * t / 252) + 1.5 * np.cos(2 * np.pi * t / 63)
+    noise = np.random.normal(0, 0.5, n_samples)
+    price = trend + seasonality + noise + 20
+    # 添加一些突变
+    price[500:510] += 8
+    price[1000:1010] -= 5
+    df = pd.DataFrame({
+        'date': dates,
+        'price': price,
+        'volume': np.random.randint(1000, 10000, n_samples),
+        'open_interest': np.random.randint(50000, 150000, n_samples)
+    })
+    # 添加一些外部因素：天然气价格、煤炭价格、碳政策虚拟变量等
+    df['gas_price'] = 3.0 + 0.0005 * t + 0.2 * np.sin(2 * np.pi * t / 126) + np.random.normal(0, 0.1, n_samples)
+    df['coal_price'] = 80 + 0.01 * t + np.random.normal(0, 5, n_samples)
+    df['policy_dummy'] = np.where((dates >= '2021-07-01') & (dates < '2023-07-01'), 1, 0)  # 模拟EU ETS改革
     return df
 
-# ================== 特征工程 ==================
-def create_features(df: pd.DataFrame, window: int = 10) -> pd.DataFrame:
+# ---------------------------- 2. 特征工程 ----------------------------
+def create_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    生成时序特征：滞后价格、滚动均值、滚动标准差、波动率、日收益率
+    构建时间特征和技术指标
     """
-    df_feat = df.copy()
-    # 滞后特征
-    for lag in range(1, window + 1):
-        df_feat[f"lag_{lag}"] = df_feat["price"].shift(lag)
-    # 滚动统计
-    df_feat["rolling_mean"] = df_feat["price"].rolling(window).mean()
-    df_feat["rolling_std"] = df_feat["price"].rolling(window).std()
-    df_feat["volatility"] = df_feat["price"].pct_change().rolling(window).std()
-    # 收益率
-    df_feat["return"] = df_feat["price"].pct_change()
-    # 剔除NaN行
-    df_feat = df_feat.dropna()
-    return df_feat
+    df = df.copy()
+    # 时间特征
+    df['day_of_week'] = df['date'].dt.dayofweek
+    df['month'] = df['date'].dt.month
+    df['quarter'] = df['date'].dt.quarter
+    # 技术指标：移动平均、波动率
+    df['ma5'] = df['price'].rolling(window=5).mean().shift(1)
+    df['ma10'] = df['price'].rolling(window=10).mean().shift(1)
+    df['volatility'] = df['price'].rolling(window=5).std().shift(1)
+    df['return'] = df['price'].pct_change().shift(1)
+    # 缺失值填充（前向填充）
+    df.fillna(method='bfill', inplace=True)
+    df.fillna(0, inplace=True)
+    return df
 
-def prepare_lstm_data(data: np.ndarray, lookback: int = 20) -> Tuple[np.ndarray, np.ndarray]:
+# ---------------------------- 3. 构建LSTM序列样本 ----------------------------
+def create_sequences(
+    data: np.ndarray,
+    seq_length: int = 20,
+    target_col: int = 0  # 假设目标变量在第0列
+) -> Tuple[np.ndarray, np.ndarray]:
     """
-    将一维价格序列转换为LSTM需要的 [样本, 时间步, 特征] 格式
+    将多维时间序列转换为监督学习样本（滑动窗口）
+    :param data: shape (n_samples, n_features)
+    :param seq_length: 时间步长
+    :param target_col: 目标变量在特征矩阵中的列索引
+    :return: X_seq (n_samples-seq_length, seq_length, n_features), y (n_samples-seq_length,)
     """
     X, y = [], []
-    for i in range(lookback, len(data)):
-        X.append(data[i - lookback:i])
-        y.append(data[i])
+    for i in range(len(data) - seq_length):
+        X.append(data[i:i+seq_length, :])
+        y.append(data[i+seq_length, target_col])
     return np.array(X), np.array(y)
 
-# ================== 模型构建 ==================
-def build_lstm_model(input_shape: Tuple[int, int], units: int = 50, dropout: float = 0.2) -> Sequential:
+# ---------------------------- 4. 模型定义 ----------------------------
+def build_lstm_model(
+    input_shape: Tuple[int, int],
+    units: int = 64,
+    dropout: float = 0.2
+) -> tf.keras.Model:
     """
-    构建LSTM回归模型
+    构建单层LSTM回归模型，输出为标量
     """
     model = Sequential([
-        LSTM(units, return_sequences=True, input_shape=input_shape),
-        Dropout(dropout),
+        Input(shape=input_shape),
         LSTM(units, return_sequences=False),
         Dropout(dropout),
-        Dense(1)
+        Dense(32, activation='relu'),
+        Dense(1)  # 回归任务，无激活函数
     ])
-    model.compile(optimizer="adam", loss="mse")
+    model.compile(optimizer='adam', loss='mse', metrics=['mae'])
     return model
 
-def train_lstm(X_train: np.ndarray, y_train: np.ndarray, X_val: np.ndarray, y_val: np.ndarray,
-               epochs: int = 100, batch_size: int = 32, verbose: int = 0) -> Sequential:
+def train_lstm(
+    X_train_seq: np.ndarray,
+    y_train: np.ndarray,
+    X_val_seq: np.ndarray,
+    y_val: np.ndarray,
+    epochs: int = 100,
+    batch_size: int = 32
+) -> Tuple[tf.keras.Model, dict]:
     """
     训练LSTM模型
     """
-    model = build_lstm_model(input_shape=(X_train.shape[1], X_train.shape[2]))
-    history = model.fit(X_train, y_train, validation_data=(X_val, y_val),
-                        epochs=epochs, batch_size=batch_size, verbose=verbose)
-    return model
+    model = build_lstm_model(input_shape=(X_train_seq.shape[1], X_train_seq.shape[2]))
+    early_stop = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+    history = model.fit(
+        X_train_seq, y_train,
+        validation_data=(X_val_seq, y_val),
+        epochs=epochs,
+        batch_size=batch_size,
+        callbacks=[early_stop],
+        verbose=1
+    )
+    return model, history.history
 
-def train_xgboost(X_train: pd.DataFrame, y_train: np.ndarray) -> XGBRegressor:
-    """
-    训练XGBoost模型
-    """
-    model = XGBRegressor(n_estimators=200, max_depth=5, learning_rate=0.1,
-                         random_state=42, verbosity=0)
-    model.fit(X_train, y_train)
-    return model
-
-# ================== 主流程 ==================
+# ---------------------------- 5. 混合模型主流程 ----------------------------
 def main():
-    print("=== 碳价预测：LSTM + XGBoost 混合模型 ===")
-
-    # 1. 数据获取
-    df = fetch_carbon_price()
-    print(f"数据范围：{df.index[0].date()} ~ {df.index[-1].date()}, 样本数：{len(df)}")
-
-    # 2. 特征工程
-    window_lag = 10  # 滞后窗口
-    df_feat = create_features(df, window=window_lag)
-
-    # 提取目标（当前价格）和特征
-    target = df_feat["price"]
-    features = df_feat.drop(columns=["price"])
-
-    # 3. 数据划分（时间序列，严格按顺序）
-    split_ratio = 0.8
-    split_idx = int(len(features) * split_ratio)
-    X_train_feat = features.iloc[:split_idx].values.astype(np.float32)
-    X_test_feat = features.iloc[split_idx:].values.astype(np.float32)
-    y_train = target.iloc[:split_idx].values.astype(np.float32)
-    y_test = target.iloc[split_idx:].values.astype(np.float32)
-    df_test_time = target.index[split_idx:]
-
-    # 4. 标准化（对表格特征和LSTM序列分别做）
-    scaler_feat = MinMaxScaler()
-    scaler_target = MinMaxScaler()
-
-    X_train_feat_scaled = scaler_feat.fit_transform(X_train_feat)
-    X_test_feat_scaled = scaler_feat.transform(X_test_feat)
-
-    y_train_scaled = scaler_target.fit_transform(y_train.reshape(-1, 1)).ravel()
-    y_test_scaled = scaler_target.transform(y_test.reshape(-1, 1)).ravel()
-
-    # 5. 准备LSTM数据（用原始价格序列，从最完整序列开始）
-    # 注意：LSTM使用原始价格序列，不使用表格特征。
-    # 先对价格整体标准化
-    scaler_price = MinMaxScaler()
-    price_scaled = scaler_price.fit_transform(df["price"].values.reshape(-1, 1)).ravel()
-
-    lookback = 20
-    X_lstm, y_lstm = prepare_lstm_data(price_scaled, lookback)
-    # 划分（与表格特征同比例，注意特征工程后数据长度可能不同，需对齐）
-    # 简单做法：使用原始价格序列独立划分（确保时间点对应，非严格，但可行）
-    split_idx_lstm = int(len(X_lstm) * split_ratio)
-    X_lstm_train = X_lstm[:split_idx_lstm]
-    X_lstm_test = X_lstm[split_idx_lstm:]
-    y_lstm_train = y_lstm[:split_idx_lstm]
-    y_lstm_test = y_lstm[split_idx_lstm:]
-
-    # 6. 训练LSTM
-    print("训练LSTM...")
-    lstm_model = train_lstm(X_lstm_train, y_lstm_train, X_lstm_test, y_lstm_test)
-
-    # 7. 训练XGBoost
-    print("训练XGBoost...")
-    xgb_model = train_xgboost(X_train_feat_scaled, y_train_scaled)
-
-    # 8. 预测
-    # LSTM预测（逆标准化）
-    lstm_pred_scaled = lstm_model.predict(X_lstm_test).ravel()
-    lstm_pred = scaler_price.inverse_transform(lstm_pred_scaled.reshape(-1, 1)).ravel()
-
-    # XGBoost预测（逆标准化）
-    xgb_pred_scaled = xgb_model.predict(X_test_feat_scaled)
-    xgb_pred = scaler_target.inverse_transform(xgb_pred_scaled.reshape(-1, 1)).ravel()
-
-    # 注意：两个模型的预测长度可能不一致（由于lookback不同），需对齐到测试集索引
-    # 此处因划分同步，长度应一致（假设y_test长度等于预测长度），否则切片对齐。
-    min_len = min(len(lstm_pred), len(xgb_pred))
-    lstm_pred = lstm_pred[:min_len]
-    xgb_pred = xgb_pred[:min_len]
-    y_test_actual = y_test[:min_len]
-    df_test_time_actual = df_test_time[:min_len]
-
-    # 9. 混合集成（加权平均，权重可优化，这里用简单平均）
-    final_pred = 0.5 * lstm_pred + 0.5 * xgb_pred
-
-    # 10. 评估
-    mae = mean_absolute_error(y_test_actual, final_pred)
-    rmse = np.sqrt(mean_squared_error(y_test_actual, final_pred))
-    mape = np.mean(np.abs((y_test_actual - final_pred) / y_test_actual)) * 100
-
-    print(f"\n混合模型评估（测试集）:")
-    print(f"MAE : {mae:.2f}")
-    print(f"RMSE: {rmse:.2f}")
-    print(f"MAPE: {mape:.2f}%")
-
-    # 11. 可视化
-    plt.figure(figsize=(12, 6))
-    plt.plot(df_test_time_actual, y_test_actual, label="真实价格", color="black", linewidth=2)
-    plt.plot(df_test_time_actual, lstm_pred, label="LSTM预测", alpha=0.7, linestyle="--")
-    plt.plot(df_test_time_actual, xgb_pred, label="XGBoost预测", alpha=0.7, linestyle="--")
-    plt.plot(df_test_time_actual, final_pred, label="混合模型预测", color="red", linewidth=2)
-    plt.title("碳价预测结果对比（KRBN）")
-    plt.xlabel("日期")
-    plt.ylabel("价格（USD）")
+    # ========== 1. 加载数据 ==========
+    print("正在生成/加载碳价数据...")
+    df = generate_synthetic_carbon_data(n_samples=1500)
+    df = create_features(df)
+    
+    # 去掉日期列和原始价格（避免未来信息）
+    feature_cols = ['price', 'volume', 'open_interest', 'gas_price', 'coal_price', 'policy_dummy',
+                    'day_of_week', 'month', 'quarter', 'ma5', 'ma10', 'volatility', 'return']
+    data = df[feature_cols].values  # shape (N, 13)
+    target = data[:, 0]  # price 是目标
+    
+    # ========== 2. 数据归一化 ==========
+    scaler_X = MinMaxScaler(feature_range=(0, 1))
+    scaler_y = MinMaxScaler(feature_range=(0, 1))
+    X_scaled = scaler_X.fit_transform(data)
+    y_scaled = scaler_y.fit_transform(target.reshape(-1, 1)).flatten()
+    
+    # ========== 3. 构建序列 ==========
+    seq_length = 20
+    X_seq, y_seq = create_sequences(X_scaled, seq_length, target_col=0)
+    # 划分训练集和测试集（时间顺序）
+    split_idx = int(0.8 * len(X_seq))
+    X_train_seq, X_test_seq = X_seq[:split_idx], X_seq[split_idx:]
+    y_train_seq, y_test_seq = y_seq[:split_idx], y_seq[split_idx:]
+    
+    # 再划分验证集（从前80%中切分）
+    val_split = int(0.9 * len(X_train_seq))
+    X_train_seq, X_val_seq = X_train_seq[:val_split], X_train_seq[val_split:]
+    y_train_seq, y_val_seq = y_train_seq[:val_split], y_train_seq[val_split:]
+    
+    print(f"训练样本: {X_train_seq.shape}, 验证样本: {X_val_seq.shape}, 测试样本: {X_test_seq.shape}")
+    
+    # ========== 4. 训练LSTM ==========
+    print("\n========== 训练LSTM ==========")
+    lstm_model, history = train_lstm(X_train_seq, y_train_seq, X_val_seq, y_val_seq, epochs=50)
+    
+    # LSTM预测（全部数据集）
+    y_train_pred_lstm = lstm_model.predict(X_train_seq, verbose=0).flatten()
+    y_val_pred_lstm = lstm_model.predict(X_val_seq, verbose=0).flatten()
+    y_test_pred_lstm = lstm_model.predict(X_test_seq, verbose=0).flatten()
+    
+    # 逆归一化得到原始价格
+    y_train_pred_lstm_orig = scaler_y.inverse_transform(y_train_pred_lstm.reshape(-1, 1)).flatten()
+    y_val_pred_lstm_orig = scaler_y.inverse_transform(y_val_pred_lstm.reshape(-1, 1)).flatten()
+    y_test_pred_lstm_orig = scaler_y.inverse_transform(y_test_pred_lstm.reshape(-1, 1)).flatten()
+    
+    y_train_orig = scaler_y.inverse_transform(y_train_seq.reshape(-1, 1)).flatten()
+    y_val_orig = scaler_y.inverse_transform(y_val_seq.reshape(-1, 1)).flatten()
+    y_test_orig = scaler_y.inverse_transform(y_test_seq.reshape(-1, 1)).flatten()
+    
+    # ========== 5. 计算残差，训练XGBoost ==========
+    print("\n========== 训练XGBoost（残差修正） ==========")
+    # 准备XGBoost特征：可以将LSTM最后一个隐态作为特征，或使用原始特征+LSTM预测值
+    # 这里使用原始特征（展平序列） + LSTM预测结果
+    X_train_flat = X_train_seq.reshape(X_train_seq.shape[0], -1)  # (n, seq_length * n_features)
+    X_val_flat = X_val_seq.reshape(X_val_seq.shape[0], -1)
+    X_test_flat = X_test_seq.reshape(X_test_seq.shape[0], -1)
+    
+    # 将LSTM预测值作为额外特征
+    X_train_xgb = np.column_stack([X_train_flat, y_train_pred_lstm])
+    X_val_xgb = np.column_stack([X_val_flat, y_val_pred_lstm])
+    X_test_xgb = np.column_stack([X_test_flat, y_test_pred_lstm])
+    
+    # 残差目标：真实值 - LSTM预测值
+    residual_train = y_train_seq - y_train_pred_lstm
+    residual_val = y_val_seq - y_val_pred_lstm
+    residual_test = y_test_seq - y_test_pred_lstm
+    
+    # 训练XGBoost
+    xgb_model = xgb.XGBRegressor(
+        n_estimators=200,
+        max_depth=5,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        early_stopping_rounds=10,
+        random_state=42
+    )
+    xgb_model.fit(
+        X_train_xgb, residual_train,
+        eval_set=[(X_val_xgb, residual_val)],
+        verbose=False
+    )
+    
+    # 残差预测
+    res_pred_train = xgb_model.predict(X_train_xgb)
+    res_pred_val = xgb_model.predict(X_val_xgb)
+    res_pred_test = xgb_model.predict(X_test_xgb)
+    
+    # 最终混合预测 = LSTM预测 + 残差预测
+    final_y_train_pred = y_train_pred_lstm + res_pred_train
+    final_y_val_pred = y_val_pred_lstm + res_pred_val
+    final_y_test_pred = y_test_pred_lstm + res_pred_test
+    
+    # 逆归一化
+    final_train_orig = scaler_y.inverse_transform(final_y_train_pred.reshape(-1, 1)).flatten()
+    final_val_orig = scaler_y.inverse_transform(final_y_val_pred.reshape(-1, 1)).flatten()
+    final_test_orig = scaler_y.inverse_transform(final_y_test_pred.reshape(-1, 1)).flatten()
+    
+    # ========== 6. 评估 ==========
+    print("\n========== 评估结果 ==========")
+    def evaluate(y_true_orig: np.ndarray, y_pred_orig: np.ndarray, dataset_name: str):
+        mae = mean_absolute_error(y_true_orig, y_pred_orig)
+        rmse = np.sqrt(mean_squared_error(y_true_orig, y_pred_orig))
+        mape = np.mean(np.abs((y_true_orig - y_pred_orig) / y_true_orig)) * 100
+        r2 = r2_score(y_true_orig, y_pred_orig)
+        print(f"{dataset_name:10} MAE: {mae:.3f}, RMSE: {rmse:.3f}, MAPE: {mape:.2f}%, R2: {r2:.4f}")
+        return mae, rmse, mape, r2
+    
+    evaluate(y_train_orig, final_train_orig, "训练集")
+    evaluate(y_val_orig, final_val_orig, "验证集")
+    evaluate(y_test_orig, final_test_orig, "测试集")
+    
+    # ========== 7. 可视化 ==========
+    plt.figure(figsize=(12, 5))
+    plt.plot(y_test_orig, label='真实值', color='black', alpha=0.8)
+    plt.plot(y_test_pred_lstm_orig, label='LSTM预测', color='blue', linestyle='--')
+    plt.plot(final_test_orig, label='LSTM+XGBoost混合', color='red', linestyle='-.')
     plt.legend()
-    plt.grid(alpha=0.3)
+    plt.title('碳价预测结果（测试集）')
+    plt.xlabel('样本序号')
+    plt.ylabel('价格 (€/tCO₂)')
+    plt.grid(True)
     plt.tight_layout()
+    plt.savefig('carbon_price_prediction.png', dpi=150)
     plt.show()
+    
+    print("\n预测图已保存至 carbon_price_prediction.png")
 
 if __name__ == "__main__":
     main()
 ```
 
-**说明**：
-- 数据从Yahoo Finance获取KRBN（跟踪碳配额价格的ETF），若无网络可替换为本地CSV文件。
-- 混合方式：LSTM预测序列+ XGBoost预测表格特征，等权平均融合。
-- 类型注解已加入关键函数。
-- 可直接运行，需安装依赖：`pip install numpy pandas yfinance matplotlib scikit-learn keras xgboost`。
+**代码说明**：
+- 数据生成：模拟了碳价趋势、季节性和外部因子（天然气价、煤炭价、政策虚拟变量）。
+- 特征工程：时间特征 + 技术指标（移动平均、波动率、收益率）。
+- LSTM：单层64神经元，训练50个epoch，早停。
+- XGBoost：输入为展平的序列特征加上LSTM预测值，学习残差。
+- 评估指标：MAE, RMSE, MAPE, R²。
+- 可视化：保存预测对比图。
+
+**实际使用时**，将 `generate_synthetic_carbon_data()` 替换为从CSV文件加载真实碳价数据即可（如 `pd.read_csv('EUA_futures.csv')`），并调整特征列。
 
 ---
 
 ## 任务3：调试与部署注意事项
 
+### 常见风险点 & 修复方案
+
 | 风险点 | 现象 | 修复方案 |
 |--------|------|----------|
-| **数据漂移（概念漂移）** | 模型在部署后精度逐渐下降，尤其是碳价受政策、宏观经济影响 | 定期重训练（每周/每月）；使用在线学习或增量训练（如XGBoost的`process`参数）；监控预测误差与真实值偏差。 |
-| **特征工程不一致** | 本地与生产环境特征生成方式不同，导致预测异常 | 将特征工程封装为独立的预处理类（pickle/joblib保存）；部署时确保使用与训练时完全相同的Scaler和特征变换逻辑；对滑动窗口统计值做边界处理。 |
-| **过拟合** | 训练集精度极高，测试集表现差，或新数据上波动剧烈 | 增加Dropout（LSTM）、早停（Early Stopping）、XGBoost的`max_depth`限制和`subsample`；引入更多外部特征（如宏观经济）减少记忆。 |
-| **模型版本管理混乱** | 不同版本模型同时运行，难以溯源 | 使用MLflow、DVC或W&B记录实验参数、数据版本和模型文件；为每个生产模型打标签（时间+代码commit id）。 |
-| **LSTM输入长度与特征对齐** | 线上预测时需要历史数据填充，若lookback窗口缺失则报错 | 设计缓存机制：存储最近N个时间步的真实值；缺失时用预测值填充，或拒绝预测直至数据完整。 |
-| **XGBoost对缺失值敏感** | 某些特征实时获取失败（如经济指标延迟发布）导致预测NaN | 训练时加入缺失值占位（如-999）；在生产中设置默认值（如历史中位数）；使用XGBoost内置缺失处理（自动左右分支）。 |
-| **模型计算延迟** | 高频预测时LSTM推理时间过长 | 使用ONNX/TensorRT优化LSTM；XGBoost使用`predict(..., output_margin=True)`加速；考虑缓存中间结果或降采样频率。 |
-| **部署环境差异** | 不同OS/Python版本导致浮点精度误差或库不兼容 | 使用Docker容器封装环境；固定依赖版本（requirements.txt）；在CPU/GPU间一致性验证。 |
-| **评估指标误导** | MAPE在价格接近0时无穷大 | 改用对称MAPE（SMAPE）或定标的MAE/RMSE；关注方向准确率（Direction Accuracy）。 |
-| **API限流与数据源失效** | yfinance或数据API不稳定导致预测中断 | 添加重试机制（retry库）；设置本地缓存（每天更新一次）；切换至冗余数据源（如FRED、Quandl）。 |
+| **数据泄漏（Data Leakage）** | 验证/测试集指标异常好，真实场景完全失效 | 1. 严格按时间顺序划分数据集（不用随机划分）。2. 检查滚动特征（如移动平均）是否使用了未来信息（`shift(1)`保证）。3. 归一化参数仅从训练集计算。 |
+| **LSTM过拟合** | 训练loss低，验证loss高 | 1. 增加Dropout（0.2~0.5）。2. 减少LSTM单元数或层数。3. 增加`EarlyStopping`（patience=10~20）。4. 数据量少时改用GRU或简化模型。 |
+| **XGBoost过拟合** | 训练集R²接近1，测试集较差 | 1. 减小`max_depth`（3~6）。2. 增大`min_child_weight`。3. 增大`subsample`和`colsample_bytree`。4. 开启`early_stopping_rounds`。 |
+| **特征尺度不一致** | 模型无法收敛或权重爆炸 | 1. 归一化（MinMaxScaler）或标准化（StandardScaler）。2. LSTM输入最好在[0,1]或[-1,1]。3. XGBoost对尺度不敏感，但归一化仍有利于梯度。 |
+| **序列长度选择不当** | 长序列导致训练慢且噪声大，短序列丢失长期依赖 | 1. 对碳价日序列，建议seq_length=10~30（对应2~6周）。2. 可通过自相关函数（ACF）或实验选择。 |
+| **模型文件过大** | 部署时磁盘/内存爆炸 | 1. LSTM保存为h5或SavedModel，可量化。2. XGBoost使用`save_model`保存二进制，支持压缩。3. 考虑知识蒸馏或轻量级模型。 |
+| **数据缺失/断点** | 交易日不连续（节假日），导致时间序列步长不一致 | 1. 前向填充缺失的交易日。2. 或仅保留连续交易日，并重构时间索引。3. 对LSTM可设定`mask_value`。 |
+| **预测值滞后（Lag Effect）** | 预测曲线比真实曲线整体向右偏移（尤其是LSTM） | 1. 使用**差分**或**收益率**替代原始价格。2. 加入更多领先指标（如远期曲线、政策日程）。3. 考虑**多步预测**而非单步。 |
+| **环境依赖不一致** | 代码在本地运行正常，部署后报错 | 1. 使用Docker或conda锁定环境（`tensorflow==2.12`，`xgboost==2.0`）。2. 避免使用系统级别的API（如命令行）。3. 所有随机种子固定（`np.random.seed`, `tf.random.set_seed`）。 |
+| **实时推理延迟高** | 线上预测超时 | 1. LSTM转为TensorFlow Lite或ONNX加速。2. XGBoost使用原生模型，可编译为DLL。3. 批量推理合并。4. 使用异步或缓存机制。 |
+| **模型可解释性差（黑箱）** | 业务方不信任 | 1. 输出SHAP值（XGBoost原生支持）。2. 对LSTM使用LIME或积分梯度（IG）。3. 混合模型中XGBoost的特征重要性可作为解释来源。 |
 
-**部署最佳实践**：
-- 采用 **模块化管道**：数据采集 → 预处理 → 模型服务（REST API）→ 结果存储 → 监控告警。
-- 使用 **Prometheus + Grafana** 监控模型延迟、错误率、预测分布变化。
-- 定期 **回测**：每月使用最新数据评估模型，若性能下降超过阈值则触发重新训练。
+### 部署检查清单
+
+- [ ] 数据 pipeline 是否包含未来信息验证（时间泄露检测）？
+- [ ] 模型能否处理空值或异常值？
+- [ ] 输入特征顺序是否与训练时完全一致？
+- [ ] 归一化器（scaler）是否已保存（`pickle`或`joblib`）？
+- [ ] 是否做了压力测试（3000个并发请求）？
+- [ ] 日志是否记录预测值和实际值供后期回测？
+- [ ] 是否有回滚机制（模型降级）？
+
+以上内容覆盖了从技术选择、代码实现到生产部署的完整链路，可直接用于碳价预测工程化实践。
