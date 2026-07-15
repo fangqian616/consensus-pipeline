@@ -447,6 +447,35 @@ def phase6_cross_debate(config, dept_outputs):
     return cross_results
 
 
+# ============ Phase 4.5: 重新分级论文（v5.1.3） ============
+def reclassify_papers(papers):
+    """
+    用最新注册表+easyScholar重新分级论文。
+    解决phase4检索时等级写死到JSON的问题——注册表更新后无需重新检索。
+    """
+    log("Phase4.5", "用最新注册表重新分级论文...")
+
+    from academic.journal_classifier import classify_journal_enhanced
+
+    changed = 0
+    for p in papers:
+        old_level = p.quality_level
+        # 重新分类
+        result = classify_journal_enhanced(p.journal or "", use_easyscholar=True)
+        new_level = result.get("level", old_level)
+        if new_level != old_level:
+            log("Phase4.5", f"  等级变更: [{old_level}→{new_level}] {p.title[:50]}... ({p.journal})")
+            p.quality_level = new_level
+            changed += 1
+
+    # 统计
+    from collections import Counter
+    level_counts = Counter(p.quality_level for p in papers)
+    log("Phase4.5", f"重新分级完成: {changed}篇变更, 分级分布: {dict(level_counts)}")
+
+    return papers
+
+
 # ============ Phase 7: 最终报告 + PDF（v5.1: 双模板 ReportGenerator） ============
 def phase7_final_report(papers, preprints, dept_outputs, cross_results,
                         prog_output="", tut_output="", relevance_log=None):
@@ -682,6 +711,9 @@ def main():
         if not papers:
             log("MAIN", "⚠️ 未检索到论文，使用回退数据")
             papers = []
+
+        # Phase 4.5: 用最新注册表重新分级论文（v5.1.3）
+        papers = reclassify_papers(papers)
 
         # Phase 5: 部门辩论
         dept_outputs = phase5_debate(config, papers, preprints)
