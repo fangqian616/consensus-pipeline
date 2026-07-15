@@ -461,7 +461,7 @@ def phase7_final_report(papers, preprints, dept_outputs, cross_results,
 
     from academic.report_generator import ReportGenerator
 
-    rg = ReportGenerator(output_dir=OUTPUT_DIR)
+    rg = ReportGenerator(output_dir=OUTPUT_DIR, llm_call_fn=llm_call)
 
     # 提取共识结论
     consensus_points = []
