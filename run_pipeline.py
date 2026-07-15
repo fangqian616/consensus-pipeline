@@ -39,7 +39,7 @@ def llm_call(system_prompt: str, user_message: str, temperature: float = 0.3) ->
             {"role": "user", "content": user_message},
         ],
         "temperature": temperature,
-        "max_tokens": 4096,
+        "max_tokens": 8192,
     }
     try:
         resp = requests.post(API_URL, headers=headers, json=payload, timeout=120)
@@ -414,7 +414,7 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
 【引用忠实性规则——必须严格遵守】
 1. 引用论文[N]时，只能描述该论文标题和摘要中明确出现的信息
 2. 严禁编造论文中不存在的具体实验结果、方法细节、数据指标或案例
-3. 如果你对某论文的具体内容不确定，写"参见[N]"，不要凭空编造描述
+3. 严禁使用"参见[N]"占位。如果对某论文内容不确定，不要引用该论文，选择你确定内容的论文代替
 4. 你输出的每个[N]引用和对应描述，都将被后续环节自动校验
 
 请给出你的专业分析和观点。要求：

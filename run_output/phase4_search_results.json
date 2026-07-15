@@ -1294,7 +1294,7 @@
         "level": "S",
         "if_2026": 11.1,
         "jcr": "Q1",
-        "note": "美国科学院院刊",
+        "note": "美国科学院院刊（PNAS全称）",
         "source": "local"
       },
       "author_h_index": 0,
@@ -1339,10 +1339,10 @@
       "quality_level": "S",
       "quality_detail": {
         "level": "S",
-        "if_2026": 16.3,
-        "jcr": "JCR Q1 / SSCI Q1 / 中科院环境科学与生态学1区",
-        "note": "easyScholar查询",
-        "source": "api"
+        "if_2026": 14.5,
+        "jcr": "Q1",
+        "note": "环境与资源年度评论",
+        "source": "local"
       },
       "author_h_index": 0,
       "is_preprint": false
@@ -1361,10 +1361,10 @@
       "quality_level": "S",
       "quality_detail": {
         "level": "S",
-        "if_2026": 16.3,
-        "jcr": "JCR Q1 / SSCI Q1 / 中科院环境科学与生态学1区",
-        "note": "easyScholar查询",
-        "source": "api"
+        "if_2026": 14.5,
+        "jcr": "Q1",
+        "note": "环境与资源年度评论",
+        "source": "local"
       },
       "author_h_index": 0,
       "is_preprint": false
@@ -2290,6 +2290,546 @@
       "abstract": "",
       "citation_count": 1244,
       "source": "openalex",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Changing Data Sources in the Age of Machine Learning for Official Statistics",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2023,
+      "abstract": "Data science has become increasingly essential for the production of official statistics, as it enables the automated collection, processing, and analysis of large amounts of data. With such data science practices in place, it enables more timely, more insightful and more flexible reporting. However, the quality and integrity of data-science-driven statistics rely on the accuracy and reliability of the data sources and the machine learning techniques that support them. In particular, changes in ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "DOME: Recommendations for supervised machine learning validation in biology",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2020,
+      "abstract": "Modern biology frequently relies on machine learning to provide predictions and improve decision processes. There have been recent calls for more scrutiny on machine learning performance and possible limitations. Here we present a set of community-wide recommendations aiming to help establish standards of supervised machine learning validation in biology. Adopting a structured methods description for machine learning based on data, optimization, model, evaluation (DOME) will aim to help both rev",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Learning Curves for Decision Making in Supervised Machine Learning: A Survey",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2022,
+      "abstract": "Learning curves are a concept from social sciences that has been adopted in the context of machine learning to assess the performance of a learning algorithm with respect to a certain resource, e.g., the number of training examples or the number of training iterations. Learning curves have important applications in several machine learning contexts, most notably in data acquisition, early stopping of model training, and model selection. For instance, learning curves can be used to model the perf",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Physics-Inspired Interpretability Of Machine Learning Models",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2023,
+      "abstract": "The ability to explain decisions made by machine learning models remains one of the most significant hurdles towards widespread adoption of AI in highly sensitive areas such as medicine, cybersecurity or autonomous driving. Great interest exists in understanding which features of the input data prompt model decision making. In this contribution, we propose a novel approach to identify relevant features of the input data, inspired by methods from the energy landscapes field, developed in the phys",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Active learning for data streams: a survey",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2023,
+      "abstract": "Online active learning is a paradigm in machine learning that aims to select the most informative data points to label from a data stream. The problem of minimizing the cost associated with collecting labeled observations has gained a lot of attention in recent years, particularly in real-world applications where data is only available in an unlabeled form. Annotating each observation can be time-consuming and costly, making it difficult to obtain large amounts of labeled data. To overcome this ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Public Policymaking for International Agricultural Trade using Association Rules and Ensemble Machine Learning",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2021,
+      "abstract": "International economics has a long history of improving our understanding of factors causing trade, and the consequences of free flow of goods and services across countries. The recent shocks to the free trade regime, especially trade disputes among major economies, as well as black swan events, such as trade wars and pandemics, raise the need for improved predictions to inform policy decisions. AI methods are allowing economists to solve such prediction problems in new ways. In this manuscript,",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Privacy-preserving machine learning for healthcare: open challenges and future perspectives",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2023,
+      "abstract": "Machine Learning (ML) has recently shown tremendous success in modeling various healthcare prediction tasks, ranging from disease diagnosis and prognosis to patient treatment. Due to the sensitive nature of medical data, privacy must be considered along the entire ML pipeline, from model training to inference. In this paper, we conduct a review of recent literature concerning Privacy-Preserving Machine Learning (PPML) for healthcare. We primarily focus on privacy-preserving training and inferenc",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "A Benchmark Study of Machine Learning Models for Online Fake News Detection",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "The proliferation of fake news and its propagation on social media has become a major concern due to its ability to create devastating impacts. Different machine learning approaches have been suggested to detect fake news. However, most of those focused on a specific type of news (such as political) which leads us to the question of dataset-bias of the models used. In this research, we conducted a benchmark study to assess the performance of different applicable machine learning approaches on th",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "MerLin: A Discovery Engine for Photonic and Hybrid Quantum Machine Learning",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2026,
+      "abstract": "Identifying where quantum models may offer practical benefits in near term quantum machine learning (QML) requires moving beyond isolated algorithmic proposals toward systematic and empirical exploration across models, datasets, and hardware constraints. We introduce MerLin, an open-source framework designed as a discovery engine for photonic and hybrid quantum machine learning. MerLin integrates optimized strong simulation of linear optical circuits into standard PyTorch and scikit learn workfl",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Emotion in Reinforcement Learning Agents and Robots: A Survey",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2017,
+      "abstract": "This article provides the first survey of computational models of emotion in reinforcement learning (RL) agents. The survey focuses on agent/robot emotions, and mostly ignores human user emotions. Emotions are recognized as functional in decision-making by influencing motivation and action selection. Therefore, computational emotion models are usually grounded in the agent's decision making architecture, of which RL is an important subclass. Studying emotions in RL-based agents is useful for thr",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Fourier Learning Machines: Nonharmonic Fourier-Based Neural Networks for Scientific Machine Learning",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2025,
+      "abstract": "We introduce the Fourier Learning Machine (FLM), a neural network (NN) architecture designed to represent a multidimensional nonharmonic Fourier series. The FLM uses a simple feedforward structure with cosine activation functions to learn the frequencies, amplitudes, and phase shifts of the series as trainable parameters. This design allows the model to create a problem-specific spectral basis adaptable to both periodic and nonperiodic functions. Unlike previous Fourier-inspired NN models, the F",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "MEMe: An Accurate Maximum Entropy Method for Efficient Approximations in Large-Scale Machine Learning",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "Efficient approximation lies at the heart of large-scale machine learning problems. In this paper, we propose a novel, robust maximum entropy algorithm, which is capable of dealing with hundreds of moments and allows for computationally efficient approximations. We showcase the usefulness of the proposed method, its equivalence to constrained Bayesian variational inference and demonstrate its superiority over existing approaches in two applications, namely, fast log determinant estimation and in",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Generalizing Machine Learning Evaluation through the Integration of Shannon Entropy and Rough Set Theory",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2024,
+      "abstract": "This research paper delves into the innovative integration of Shannon entropy and rough set theory, presenting a novel approach to generalize the evaluation approach in machine learning. The conventional application of entropy, primarily focused on information uncertainty, is extended through its combination with rough set theory to offer a deeper insight into data's intrinsic structure and the interpretability of machine learning models. We introduce a comprehensive framework that synergizes th",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "ALERT-Transformer: Bridging Asynchronous and Synchronous Machine Learning for Real-Time Event-based Spatio-Temporal Data",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2024,
+      "abstract": "We seek to enable classic processing of continuous ultra-sparse spatiotemporal data generated by event-based sensors with dense machine learning models. We propose a novel hybrid pipeline composed of asynchronous sensing and synchronous processing that combines several ideas: (1) an embedding based on PointNet models -- the ALERT module -- that can continuously integrate new and dismiss old events thanks to a leakage mechanism, (2) a flexible readout of the embedded data that allows to feed any ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Learning Representations from Dendrograms",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2018,
+      "abstract": "We propose unsupervised representation learning and feature extraction from dendrograms. The commonly used Minimax distance measures correspond to building a dendrogram with single linkage criterion, with defining specific forms of a level function and a distance function over that. Therefore, we extend this method to arbitrary dendrograms. We develop a generalized framework wherein different distance measures and representations can be inferred from different types of dendrograms, level functio",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Unsupervised Representation Learning with Minimax Distance Measures",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "We investigate the use of Minimax distances to extract in a nonparametric way the features that capture the unknown underlying patterns and structures in the data. We develop a general-purpose and computationally efficient framework to employ Minimax distances with many machine learning methods that perform on numerical data. We study both computing the pairwise Minimax distances for all pairs of objects and as well as computing the Minimax distances of all the objects to/from a fixed (test) obj",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Automatic Machine Learning by Pipeline Synthesis using Model-Based Reinforcement Learning and a Grammar",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "Automatic machine learning is an important problem in the forefront of machine learning. The strongest AutoML systems are based on neural networks, evolutionary algorithms, and Bayesian optimization. Recently AlphaD3M reached state-of-the-art results with an order of magnitude speedup using reinforcement learning with self-play. In this work we extend AlphaD3M by using a pipeline grammar and a pre-trained model which generalizes from many different datasets and similar tasks. Our results demonst",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Beyond Volume: The Impact of Complex Healthcare Data on the Machine Learning Pipeline",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2017,
+      "abstract": "From medical charts to national census, healthcare has traditionally operated under a paper-based paradigm. However, the past decade has marked a long and arduous transformation bringing healthcare into the digital age. Ranging from electronic health records, to digitized imaging and laboratory reports, to public health datasets, today, healthcare now generates an incredible amount of digital information. Such a wealth of data presents an exciting opportunity for integrated machine learning solu",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Explanatory machine learning for sequential human teaching",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2022,
+      "abstract": "The topic of comprehensibility of machine-learned theories has recently drawn increasing attention. Inductive Logic Programming (ILP) uses logic programming to derive logic theories from small data based on abduction and induction techniques. Learned theories are represented in the form of rules as declarative descriptions of obtained knowledge. In earlier work, the authors provided the first evidence of a measurable increase in human comprehension based on machine-learned logic rules for simple",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Evaluating the Economic Implications of Using Machine Learning in Clinical Psychiatry",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2024,
+      "abstract": "With the growing interest in using AI and machine learning (ML) in medicine, there is an increasing number of literature covering the application and ethics of using AI and ML in areas of medicine such as clinical psychiatry. The problem is that there is little literature covering the economic aspects associated with using ML in clinical psychiatry. This study addresses this gap by specifically studying the economic implications of using ML in clinical psychiatry. In this paper, we evaluate the ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Reproducibility in Machine Learning for Health",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "Machine learning algorithms designed to characterize, monitor, and intervene on human health (ML4H) are expected to perform safely and reliably when operating at scale, potentially outside strict human supervision. This requirement warrants a stricter attention to issues of reproducibility than other fields of machine learning.\n  In this work, we conduct a systematic evaluation of over 100 recently published ML4H research papers along several dimensions related to reproducibility. We find that t",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Stop Explaining Black Box Machine Learning Models for High Stakes Decisions and Use Interpretable Models Instead",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2018,
+      "abstract": "Black box machine learning models are currently being used for high stakes decision-making throughout society, causing problems throughout healthcare, criminal justice, and in other domains. People have hoped that creating methods for explaining these black box models will alleviate some of these problems, but trying to \\textit{explain} black box models, rather than creating models that are \\textit{interpretable} in the first place, is likely to perpetuate bad practices and can potentially cause",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "ML-Schema: Exposing the Semantics of Machine Learning with Schemas and Ontologies",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2018,
+      "abstract": "The ML-Schema, proposed by the W3C Machine Learning Schema Community Group, is a top-level ontology that provides a set of classes, properties, and restrictions for representing and interchanging information on machine learning algorithms, datasets, and experiments. It can be easily extended and specialized and it is also mapped to other more domain-specific ontologies developed in the area of machine learning and data mining. In this paper we overview existing state-of-the-art machine learning ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "A Framework for Implementing Machine Learning on Omics Data",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2018,
+      "abstract": "The potential benefits of applying machine learning methods to -omics data are becoming increasingly apparent, especially in clinical settings. However, the unique characteristics of these data are not always well suited to machine learning techniques. These data are often generated across different technologies in different labs, and frequently with high dimensionality. In this paper we present a framework for combining -omics data sets, and for handling high dimensional data, making -omics res",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Evaluating the Economic Feasibility of Labor Replacement Through Robotics and Automation in Qatar",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2025,
+      "abstract": "This paper investigates the economic feasibility of replacing human labor with robotics and automation in Qatar's manufacturing and service sectors. By analyzing labor costs, productivity gains, and implementation expenses, the study assesses the potential financial impact and return on investment of robotic integration. Results indicate the sectors where automation is economically viable and identify challenges related to workforce adaptation, policy, and infrastructure. These insights provide ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "The Scientific Method in the Science of Machine Learning",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "In the quest to align deep learning with the sciences to address calls for rigor, safety, and interpretability in machine learning systems, this contribution identifies key missing pieces: the stages of hypothesis formulation and testing, as well as statistical and systematic uncertainty estimation -- core tenets of the scientific method. This position paper discusses the ways in which contemporary science is conducted in other domains and identifies potentially useful practices. We present a ca",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Teaching Uncertainty Quantification in Machine Learning through Use Cases",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2021,
+      "abstract": "Uncertainty in machine learning is not generally taught as general knowledge in Machine Learning course curricula. In this paper we propose a short curriculum for a course about uncertainty in machine learning, and complement the course with a selection of use cases, aimed to trigger discussion and let students play with the concepts of uncertainty in a programming setting. Our use cases cover the concept of output uncertainty, Bayesian neural networks and weight distributions, sources of uncert",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Multimodal Machine Learning for Automated ICD Coding",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2018,
+      "abstract": "This study presents a multimodal machine learning model to predict ICD-10 diagnostic codes. We developed separate machine learning models that can handle data from different modalities, including unstructured text, semi-structured text and structured tabular data. We further employed an ensemble method to integrate all modality-specific models to generate ICD-10 codes. Key evidence was also extracted to make our prediction more convincing and explainable. We used the Medical Information Mart for",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "TapNet: Neural Network Augmented with Task-Adaptive Projection for Few-Shot Learning",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "Handling previously unseen tasks after given only a few training examples continues to be a tough challenge in machine learning. We propose TapNets, neural networks augmented with task-adaptive projection for improved few-shot learning. Here, employing a meta-learning strategy with episode-based training, a network and a set of per-class reference vectors are learned across widely varying tasks. At the same time, for every episode, features in the embedding space are linearly projected into a ne",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "On-Device Machine Learning: An Algorithms and Learning Theory Perspective",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "The predominant paradigm for using machine learning models on a device is to train a model in the cloud and perform inference using the trained model on the device. However, with increasing number of smart devices and improved hardware, there is interest in performing model training on the device. Given this surge in interest, a comprehensive survey of the field from a device-agnostic perspective sets the stage for both understanding the state-of-the-art and for identifying open challenges and f",
+      "citation_count": 0,
+      "source": "arxiv",
       "quality_level": "D",
       "quality_detail": {
         "level": "D",
