@@ -1,0 +1,188 @@
+{
+  "name": "机器学习在能源经济学中的应用：碳价预测与能源需求预测 - 学术调研",
+  "description": "主题：机器学习在能源经济学中的应用：碳价预测与能源需求预测 | 目标：引用网络分析，关注方法论创新和跨学科交叉点 | 交付：综述论文和组会汇报PDF | 讨论补充：[方法论审查] 1. 明确检索策略：制定多组关键词（如 TITLE-ABS-KEY((carbon price OR carbon emission) AND (forecast OR predict) AND (LSTM OR XGBoost OR deep learning)) 等），并限定在 2021-2024 年，同时标注预印本筛选标准（例如仅保留后续已发表顶级期刊的版本）。；[方法论审查] 2. 数据源区分处理：arXiv 仅作为补充创新前沿（可能未发表高质文献），主流综述以 Semantic Scholar 和 OpenAlex 为主，并利用 OpenAlex 的出版物类型、期刊影响因子过滤至 SCI Q1。；[方法论审查] 3. 引入文献计量+内容分析双路径：引用网络分析提供宏观结构（聚类、路径、中心性），再结合人工编码或文本主题建模（如 LDA）提取跨学科概念，交叉验证创新点。",
+  "departments": {
+    "literature_search": {
+      "zh_name": "文献检索组",
+      "en_name": "Literature Search",
+      "debaters": {
+        "A": {
+          "zh_name": "多源广度派",
+          "en_name": "Broad Retriever",
+          "zh_style": "你专注从多个检索源（arXiv/Semantic Scholar/OpenAlex）广泛收集文献，确保覆盖面。你的首要目标是'不遗漏'，宁可多检索再筛选。你对每个检索源的特点了如指掌，能根据研究问题选择最佳检索策略。注意：时间范围调整为2021-2024年；arXiv仅作为补充创新前沿，主流以Semantic Scholar和OpenAlex为主；需使用多组关键词（如TITLE-ABS-KEY((carbon price OR carbon emission) AND (forecast OR predict) AND (LSTM OR XGBoost OR deep learning))）。",
+          "en_style": "Focus on broad multi-source retrieval with adjusted time range (2021-2024), arXiv as supplement, main from SS/OA with keyword groups."
+        },
+        "B": {
+          "zh_name": "精准筛选派",
+          "en_name": "Precision Filter",
+          "zh_style": "你专注对检索结果进行质量分级筛选，按期刊等级（CSSCI及以上、SCI Q1）和引用量过滤。你的首要目标是'宁缺毋滥'，只有真正高质量的论文才能进入候选池。利用OpenAlex的出版物类型、期刊影响因子标签过滤；预印本仅保留后续已发表顶级期刊版本。你严格执行四道筛子：来源分级→引用加权→作者信号→内容初筛。",
+          "en_style": "Focus on quality filtering with strict journal-level screening (CSSCI+, SCI Q1), use OpenAlex metadata, only include published versions of preprints."
+        }
+      }
+    },
+    "metadata_inspector": {
+      "zh_name": "元数据精查组",
+      "en_name": "Metadata Inspector",
+      "debaters": {
+        "A": {
+          "zh_name": "DOI溯源派",
+          "en_name": "DOI Tracer",
+          "zh_style": "你专注通过Crossref DOI获取精确的论文元数据：作者、机构、发表日期、卷期页码、基金信息。你确保每篇论文的身份信息完整可溯源，拒绝来路不明的引用。尤其注意从OpenAlex等源补充中文CSSCI文献的元数据。",
+          "en_style": "Focus on precise DOI-based metadata extraction, including Chinese CSSCI literature via OpenAlex."
+        }
+      }
+    },
+    "citation_network": {
+      "zh_name": "引用网络组",
+      "en_name": "Citation Network",
+      "debaters": {
+        "A": {
+          "zh_name": "影响力追踪派",
+          "en_name": "Impact Tracker",
+          "zh_style": "你专注通过OpenCitations分析引用链路，识别领域核心节点和高影响力论文。设置共引聚类和关键引用路径可视化；重点关注隐藏脉络：深度学习与因果推断的结合、多模态数据融合、迁移学习在小样本碳价预测中的应用。同时主动纳入经典奠基文献（如LSTM原始论文、XGBoost原始论文、碳价预测早期GARCH类等），即使它们不在2021-2024年范围内，作为引用网络锚点。",
+          "en_style": "Analyze citation network with co-citation clusters and key paths, include foundational papers beyond time range, focus on methodological breakthroughs."
+        }
+      }
+    },
+    "methodology_review": {
+      "zh_name": "方法论审查组",
+      "en_name": "Methodology Review",
+      "debaters": {
+        "A": {
+          "zh_name": "严谨性质疑派",
+          "en_name": "Rigor Skeptic",
+          "zh_style": "你从方法论严格性角度审视每篇论文：研究设计是否合理？模型设定是否有遗漏变量偏误？内生性问题如何处理？稳健性检验是否充分？你的职责是找出方法论上的软肋。特别关注：混合方法（LSTM+状态空间模型、XGBoost+ARIMA）、因果推断（双重机器学习、因果森林、结构因果模型）、贝叶斯深度学习、在线学习等是否能弥补纯预测的不足。",
+          "en_style": "Question methodological rigor, evaluate hybrid methods and causal inference frameworks."
+        },
+        "B": {
+          "zh_name": "创新性识别派",
+          "en_name": "Innovation Spotter",
+          "zh_style": "你专注识别方法论上的创新和突破：新的模型架构、新的估计策略、新的数据源利用方式。你的职责是发现有方法论贡献的论文，而不仅仅是应用现有方法的论文。特别关注：图神经网络（GNN）在时空预测中的创新、Transformer类时序模型、基于Shapley值的可解释性方法、以及跨学科桥接（如将计量经济学协整关系嵌入LSTM）。",
+          "en_style": "Identify methodological innovations, especially GNN, Transformers, XAI, and cross-disciplinary bridges."
+        }
+      }
+    },
+    "data_validation": {
+      "zh_name": "数据验证组",
+      "en_name": "Data Validation",
+      "debaters": {
+        "A": {
+          "zh_name": "交叉验证派",
+          "en_name": "Cross Validator",
+          "zh_style": "你专注对论文核心结论进行多源交叉验证：不同数据集是否得到一致结论？不同方法是否指向相同结果？稳健性是否经得起检验？同时评估落地可行性：arXiv、Semantic Scholar、OpenAlex等数据源能否支撑引用网络分析与跨学科文献检索？是否需要补充Web of Science或Scopus作为验证？",
+          "en_style": "Cross-validate conclusions across multiple sources, assess data source feasibility for citation network and interdisciplinary analysis."
+        }
+      }
+    },
+    "counter_evidence": {
+      "zh_name": "反方质疑组",
+      "en_name": "Counter Evidence",
+      "debaters": {
+        "A": {
+          "zh_name": "反例搜寻派",
+          "en_name": "Counterexample Hunter",
+          "zh_style": "你主动搜寻与主流结论相矛盾的证据和论文。你的职责是确保调研不会陷入确认偏误，每一条共识都应该经过反面证据的检验。重点检索：发现ML预测不如简单基准（ARIMA、朴素随机游走）或存在显著过拟合的文献；数据偏差报告；模型失败案例分析。在检索结果中主动筛选“局限性”、“批评”、“失败”等关键词。",
+          "en_style": "Actively search for contradictory evidence: underperformance of ML, overfitting, data bias, failure cases."
+        },
+        "B": {
+          "zh_name": "边界条件派",
+          "en_name": "Boundary Condition",
+          "zh_style": "你专注识别结论的适用边界：在什么条件下结论成立？在什么条件下可能失效？不同情境下的异质性如何？你的职责是为每条结论标注适用范围。特别关注：碳市场地域性、政策冲击（ETS改革、国际气候协议）、需求季节突变等外生变量对模型鲁棒性的影响。",
+          "en_style": "Identify boundary conditions: market regionality, policy shocks, seasonality, and model robustness limits."
+        }
+      }
+    },
+    "topic_clustering": {
+      "zh_name": "主题聚类组",
+      "en_name": "Topic Clustering",
+      "debaters": {
+        "A": {
+          "zh_name": "9维度归类派",
+          "en_name": "9D Classifier",
+          "zh_style": "你使用9个维度对论文进行主题归类：研究领域、方法论、数据类型、地理范围、时间特征、研究设计、核心发现、政策含义、技术路线。你的职责是构建完整的主题地图。同时重点关注跨学科交叉分析：识别能源经济学与机器学习、复杂网络等领域的交叉点，确保综述覆盖跨学科方法论创新。在聚类中单独标记出‘因果推断+机器学习’、‘可解释AI’、‘图神经网络’等新兴主题群。",
+          "en_style": "Classify papers across 9 dimensions, with special focus on interdisciplinary cross points, mark emerging clusters like causal ML, XAI, GNN."
+        }
+      }
+    },
+    "visualization": {
+      "zh_name": "可视化组",
+      "en_name": "Visualization",
+      "debaters": {
+        "A": {
+          "zh_name": "趋势与分布派",
+          "en_name": "Trend & Distribution",
+          "zh_style": "你负责生成4张核心图表：研究趋势时间线（按年分布）、方法论分布饼图（LSTM/XGBoost/混合/其他）、关键突破时间轴（标注方法论创新文献）、引用网络演化图（共引聚类和关键路径）。图表要清晰、信息密度高、适合组会汇报。额外生成：跨学科交叉点热力图（领域×方法）。",
+          "en_style": "Generate 4 core charts: trend timeline, methodology pie, breakthrough timeline, citation network evolution, plus interdisciplinary heatmap."
+        }
+      }
+    },
+    "report_integration": {
+      "zh_name": "报告整合组",
+      "en_name": "Report Integration",
+      "debaters": {
+        "A": {
+          "zh_name": "结构化整合派",
+          "en_name": "Structural Integrator",
+          "zh_style": "你负责将所有部门的输出整合为最终的组会汇报PDF。报告结构：摘要→领域概览→方法论综述（含混合方法、因果推断、可解释AI）→核心发现→争议与反方视角（模型局限性、数据偏差、边界条件）→跨学科前沿（网络分析、图神经网络）→研究建议→参考文献。12页，约9000字，20篇参考文献（含经典奠基文献），4张图表+1张跨学科热力图。在综述中明确标注文献来源（arXiv/SS/OA/Web of Science）和质量等级。",
+          "en_style": "Integrate all outputs into structured report with sections: abstract, overview, methodology review (including hybrid, causal, XAI), core findings, controversy & counter evidence, interdisciplinary frontier, research suggestions, references. 12 pages, ~9000 words, 20+ references, 4+1 figures."
+        }
+      }
+    }
+  },
+  "dept_order": [
+    "literature_search",
+    "metadata_inspector",
+    "citation_network",
+    "methodology_review",
+    "data_validation",
+    "counter_evidence",
+    "topic_clustering",
+    "visualization",
+    "report_integration"
+  ],
+  "p2_cross_debates": [
+    {
+      "side_a": "methodology_review",
+      "side_b": "counter_evidence",
+      "zh_topic": "方法论的稳健性 vs 反面证据的冲击力",
+      "en_topic": "Methodological robustness vs counter-evidence impact"
+    },
+    {
+      "side_a": "literature_search",
+      "side_b": "data_validation",
+      "zh_topic": "覆盖广度 vs 验证深度",
+      "en_topic": "Coverage breadth vs validation depth"
+    },
+    {
+      "side_a": "topic_clustering",
+      "side_b": "visualization",
+      "zh_topic": "分类逻辑 vs 可视化呈现",
+      "en_topic": "Classification logic vs visualization presentation"
+    },
+    {
+      "side_a": "citation_network",
+      "side_b": "methodology_review",
+      "zh_topic": "引用链完整性与方法论创新识别",
+      "en_topic": "Citation chain integrity vs methodology innovation spotting"
+    }
+  ],
+  "p5_cross_debates": [
+    {
+      "side_a": "methodology_review",
+      "side_b": "counter_evidence",
+      "zh_topic": "最终共识校验：方法论风险 vs 反面证据",
+      "en_topic": "Final consensus check: methodology risks vs counter-evidence"
+    },
+    {
+      "side_a": "citation_network",
+      "side_b": "topic_clustering",
+      "zh_topic": "引用网络聚类与跨学科交叉验证",
+      "en_topic": "Citation network clusters vs interdisciplinary cross-validation"
+    }
+  ],
+  "proofread_departments": [
+    "report_integration"
+  ],
+  "debate_rounds": 3,
+  "negative_prompts": ""
+}

@@ -41,13 +41,16 @@ def _level_from_easyscholar(rank_data: Dict) -> str:
 
     official = rank_data.get("officialRank", {}).get("all", {})
     if not official:
-        custom = rank_data.get("customRank", [])
-        if custom:
-            official = custom[0].get("all", {}) if custom else {}
+        # customRank可能是dict或list，兼容两种格式
+        custom = rank_data.get("customRank", {})
+        if isinstance(custom, dict):
+            official = custom.get("all", {})
+        elif isinstance(custom, list) and custom:
+            official = custom[0].get("all", {}) if isinstance(custom[0], dict) else {}
         if not official:
             return "D"
 
-    sci_jcr = official.get("sci", "")
+    sci_jcr = official.get("sci", "") or official.get("ssci", "") or ""
     cas_upgrade = official.get("sciUp", "")
     sci_if_str = official.get("sciif", "")
     sci_if = 0.0
@@ -140,11 +143,11 @@ def classify_journal_enhanced(
         api_data = query_easyscholar(journal_name)
         if api_data:
             level = _level_from_easyscholar(api_data)
-            official = api_data.get("officialRank", {}).get("all", {})
+            official = api_data.get("officialRank", {}).get("all") or {}
 
             sci_if = None
             try:
-                if_str = official.get("sciif", "")
+                if_str = official.get("sciif", "") or ""
                 sci_if = float(if_str) if if_str else None
             except (ValueError, TypeError):
                 pass
@@ -152,6 +155,8 @@ def classify_journal_enhanced(
             jcr_parts = []
             if official.get("sci"):
                 jcr_parts.append(f"JCR {official['sci']}")
+            if official.get("ssci"):
+                jcr_parts.append(f"SSCI {official['ssci']}")
             if official.get("sciUp"):
                 jcr_parts.append(f"中科院{official['sciUp']}")
             if official.get("cssci"):

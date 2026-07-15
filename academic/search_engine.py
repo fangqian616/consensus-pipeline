@@ -301,7 +301,7 @@ class AcademicSearchEngine:
             import xml.etree.ElementTree as ET
 
             import urllib.parse as _urlp
-            url = f"http://export.arxiv.org/api/query?search_query=all:{_urlp.quote_plus(query)}&max_results={max_results}"
+            url = f"https://export.arxiv.org/api/query?search_query=all:{_urlp.quote_plus(query)}&max_results={max_results}"
             req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
             with urllib.request.urlopen(req, timeout=15) as resp:
                 xml_data = resp.read()

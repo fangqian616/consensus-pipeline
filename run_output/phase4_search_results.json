@@ -1,0 +1,3788 @@
+{
+  "papers": [
+    {
+      "title": "Explainable Artificial Intelligence (XAI): Concepts, taxonomies, opportunities and challenges toward responsible AI",
+      "doi": "10.1016/j.inffus.2019.12.012",
+      "authors": [
+        "Alejandro Barredo Arrieta",
+        "Natalia Díaz-Rodríguez",
+        "Javier Del Ser",
+        "Adrien Bennetot",
+        "Siham Tabik",
+        "Alberto Barbado",
+        "Salvador García",
+        "Sergio Gil-López",
+        "Daniel Molina",
+        "Richard Benjamins",
+        "Raja Chatila",
+        "Francisco Herrera"
+      ],
+      "journal": "Information Fusion",
+      "year": 2019,
+      "abstract": "",
+      "citation_count": 9162,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 17.4,
+        "jcr": "JCR Q1 / 中科院计算机科学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Advances and Open Problems in Federated Learning",
+      "doi": "10.1561/2200000083",
+      "authors": [
+        "Peter Kairouz",
+        "H. Brendan McMahan",
+        "Brendan Avent",
+        "Aurélien Bellet",
+        "Mehdi Bennis",
+        "Arjun Nitin Bhagoji",
+        "Kallista Bonawitz",
+        "Zachary Charles",
+        "Graham Cormode",
+        "Rachel Cummings",
+        "Rafael G. L. D’Oliveira",
+        "Hubert Eichner",
+        "Salim El Rouayheb",
+        "David Evans",
+        "Joshua Gardner",
+        "Zachary Garrett",
+        "Adrià Gascón",
+        "Badih Ghazi",
+        "Phillip B. Gibbons",
+        "Marco Gruteser",
+        "Zaïd Harchaoui",
+        "Chaoyang He",
+        "Lingxiao He",
+        "Zhouyuan Huo",
+        "Ben Hutchinson",
+        "Justin Hsu",
+        "Martin Jaggi",
+        "Tara Javidi",
+        "Gauri Joshi",
+        "Mikhail Khodak",
+        "Jakub Konečný",
+        "Aleksandra Korolova",
+        "Farinaz Koushanfar",
+        "Sanmi Koyejo",
+        "Tancrède Lepoint",
+        "Yang Liu",
+        "Prateek Mittal",
+        "Mehryar Mohri",
+        "Richard Nock",
+        "Ayfer Özgür",
+        "Rasmus Pagh",
+        "Hang Qi",
+        "Daniel Ramage",
+        "Ramesh Raskar",
+        "Mariana Raykova",
+        "Dawn Song",
+        "Weikang Song",
+        "Sebastian U. Stich",
+        "Ziteng Sun",
+        "Ananda Theertha Suresh",
+        "Florian Tramèr",
+        "Praneeth Vepakomma",
+        "Jianyu Wang",
+        "Li Xiong",
+        "Zheng Xu",
+        "Qiang Yang",
+        "Felix X. Yu",
+        "Han Yu",
+        "Sen Zhao"
+      ],
+      "journal": "Foundations and Trends® in Machine Learning",
+      "year": 2020,
+      "abstract": "",
+      "citation_count": 4821,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 36.6,
+        "jcr": "中科院计算机科学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "The role of hydrogen and fuel cells in the global energy system",
+      "doi": "10.1039/c8ee01157e",
+      "authors": [
+        "Iain Staffell",
+        "Daniel Scamman",
+        "Anthony Velazquez Abad",
+        "Paul Balcombe",
+        "Paul E. Dodds",
+        "Paul Ekins",
+        "Nilay Shah",
+        "Kate R. Ward"
+      ],
+      "journal": "Energy & Environmental Science",
+      "year": 2018,
+      "abstract": "",
+      "citation_count": 3905,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 30.5,
+        "jcr": "JCR Q1 / 中科院材料科学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Blockchain technology in the energy sector: A systematic review of challenges and opportunities",
+      "doi": "10.1016/j.rser.2018.10.014",
+      "authors": [
+        "Merlinda Andoni",
+        "Valentin Robu",
+        "David Flynn",
+        "Simone Abram",
+        "Dale Geach",
+        "David Jenkins",
+        "Peter McCallum",
+        "Andrew Peacock"
+      ],
+      "journal": "Renewable and Sustainable Energy Reviews",
+      "year": 2018,
+      "abstract": "",
+      "citation_count": 2365,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 18.0,
+        "jcr": "JCR Q1 / 中科院工程技术1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "The Future of Energy Supply: Challenges and Opportunities",
+      "doi": "10.1002/anie.200602373",
+      "authors": [
+        "Nicola Armaroli",
+        "Vincenzo Balzani"
+      ],
+      "journal": "Angewandte Chemie International Edition",
+      "year": 2006,
+      "abstract": "",
+      "citation_count": 1909,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 17.6,
+        "jcr": "JCR Q1 / 中科院化学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "The Economics of Two-Sided Markets",
+      "doi": "10.1257/jep.23.3.125",
+      "authors": [
+        "Marc Rysman"
+      ],
+      "journal": "The Journal of Economic Perspectives",
+      "year": 2009,
+      "abstract": "",
+      "citation_count": 1262,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 10.1,
+        "jcr": "SSCI Q1 / 中科院经济学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "An Introduction to Deep Reinforcement Learning",
+      "doi": "10.1561/2200000071",
+      "authors": [
+        "Vincent François-Lavet",
+        "Peter Henderson",
+        "Riashat Islam",
+        "Marc G. Bellemare",
+        "Joëlle Pineau"
+      ],
+      "journal": "Foundations and Trends® in Machine Learning",
+      "year": 2018,
+      "abstract": "",
+      "citation_count": 1259,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 36.6,
+        "jcr": "中科院计算机科学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Grand challenges in the science of wind energy",
+      "doi": "10.1126/science.aau2027",
+      "authors": [
+        "Paul Veers",
+        "Katherine Dykes",
+        "Eric Lantz",
+        "Stephan Barth",
+        "Carlo L. Bottasso",
+        "Ola Carlson",
+        "Andrew Clifton",
+        "Johney B. Green",
+        "Peter F. Green",
+        "Hannele Holttinen",
+        "Daniel Laird",
+        "Ville Lehtomäki",
+        "Julie K. Lundquist",
+        "James F. Manwell",
+        "Melinda Marquis",
+        "Charles Meneveau",
+        "Patrick Moriarty",
+        "Xabier Munduate",
+        "Michael Muskulus",
+        "Jonathan Naughton",
+        "Lucy Y. Pao",
+        "Joshua Paquette",
+        "Joachim Peinke",
+        "Amy Robertson",
+        "Javier Sanz Rodrigo",
+        "Anna Maria Sempreviva",
+        "J. Charles Smith",
+        "Aidan Tuohy",
+        "Ryan Wiser"
+      ],
+      "journal": "Science",
+      "year": 2019,
+      "abstract": "",
+      "citation_count": 1224,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 47.3,
+        "jcr": "JCR Q1 / 中科院综合性期刊1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Toward Causal Representation Learning",
+      "doi": "10.1109/jproc.2021.3058954",
+      "authors": [
+        "Bernhard Schölkopf",
+        "Francesco Locatello",
+        "Stefan Bauer",
+        "Nan Rosemary Ke",
+        "Nal Kalchbrenner",
+        "Anirudh Goyal",
+        "Yoshua Bengio"
+      ],
+      "journal": "Proceedings of the IEEE",
+      "year": 2021,
+      "abstract": "",
+      "citation_count": 1036,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 30.9,
+        "jcr": "JCR Q1 / 中科院计算机科学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Selecting critical features for data classification based on machine learning methods",
+      "doi": "10.1186/s40537-020-00327-4",
+      "authors": [
+        "Rung-Ching Chen",
+        "Christine Dewi",
+        "Su-Wen Huang",
+        "Rezzy Eko Caraka"
+      ],
+      "journal": "Journal Of Big Data",
+      "year": 2020,
+      "abstract": "",
+      "citation_count": 982,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 10.8,
+        "jcr": "JCR Q1 / 中科院计算机科学2区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Artificial intelligence and smart vision for building and construction 4.0: Machine and deep learning methods and applications",
+      "doi": "10.1016/j.autcon.2022.104440",
+      "authors": [
+        "Shanaka Kristombu Baduge",
+        "Sadeep Thilakarathna",
+        "Jude Shalitha Perera",
+        "Mehrdad Arashpour",
+        "P. Sharafi",
+        "Bertrand Teodosio",
+        "Ankit Shringi",
+        "Priyan Mendis"
+      ],
+      "journal": "Automation in Construction",
+      "year": 2022,
+      "abstract": "",
+      "citation_count": 931,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 12.6,
+        "jcr": "JCR Q1 / 中科院工程技术1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Integrating Scientific Knowledge with Machine Learning for Engineering and Environmental Systems",
+      "doi": "10.1145/3514228",
+      "authors": [
+        "Jared Willard",
+        "Xiaowei Jia",
+        "Shaoming Xu",
+        "Michael Steinbach",
+        "Vipin Kumar"
+      ],
+      "journal": "ACM Computing Surveys",
+      "year": 2022,
+      "abstract": "",
+      "citation_count": 660,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 30.4,
+        "jcr": "JCR Q1 / 中科院计算机科学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Artificial intelligence and machine learning approaches to energy demand-side response: A systematic review",
+      "doi": "10.1016/j.rser.2020.109899",
+      "authors": [
+        "Ioannis Antonopoulos",
+        "Valentin Robu",
+        "Benoit Couraud",
+        "Desen Kırlı",
+        "Sonam Norbu",
+        "Aristides Kiprakis",
+        "David Flynn",
+        "Sergio Elizondo-Gonzalez",
+        "Steve Wattam"
+      ],
+      "journal": "Renewable and Sustainable Energy Reviews",
+      "year": 2020,
+      "abstract": "",
+      "citation_count": 618,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 18.0,
+        "jcr": "JCR Q1 / 中科院工程技术1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Machine learning for a sustainable energy future",
+      "doi": "10.1038/s41578-022-00490-5",
+      "authors": [
+        "Zhenpeng Yao",
+        "Yanwei Lum",
+        "Andrew Johnston",
+        "L.M. Mejía-Mendoza",
+        "Xin Zhou",
+        "Yonggang Wen",
+        "Alán Aspuru‐Guzik",
+        "Edward H. Sargent",
+        "Zhi Wei Seh"
+      ],
+      "journal": "Nature Reviews Materials",
+      "year": 2022,
+      "abstract": "",
+      "citation_count": 474,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 83.3,
+        "jcr": "JCR Q1 / 中科院材料科学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Machine learning in energy economics and finance: A review",
+      "doi": "10.1016/j.eneco.2019.05.006",
+      "authors": [
+        "Hamed Ghoddusi",
+        "Germán G. Creamer",
+        "Nima Rafizadeh"
+      ],
+      "journal": "Energy Economics",
+      "year": 2019,
+      "abstract": "",
+      "citation_count": 431,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 13.5,
+        "jcr": "SSCI Q1",
+        "note": "经济学第2/380",
+        "source": "local"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Machine learning in agricultural and applied economics",
+      "doi": "10.1093/erae/jbz033",
+      "authors": [
+        "Hugo Storm",
+        "Kathy Baylis",
+        "Thomas Heckelei"
+      ],
+      "journal": "European Review of Agricultural Economics",
+      "year": 2019,
+      "abstract": "",
+      "citation_count": 216,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 5.1,
+        "jcr": "JCR Q1 / SSCI Q1 / 中科院经济学2区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "What is assessment for learning?",
+      "doi": "10.1016/j.stueduc.2011.03.001",
+      "authors": [
+        "Dylan Wiliam"
+      ],
+      "journal": "Studies In Educational Evaluation",
+      "year": 2011,
+      "abstract": "",
+      "citation_count": 1246,
+      "source": "openalex",
+      "quality_level": "A",
+      "quality_detail": {
+        "level": "A",
+        "if_2026": 3.9,
+        "jcr": "SSCI Q1 / 中科院教育学2区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Statistical and Machine Learning forecasting methods: Concerns and ways forward",
+      "doi": "10.1371/journal.pone.0194889",
+      "authors": [
+        "Spyros Makridakis",
+        "Evangelos Spiliotis",
+        "Vassilios Assimakopoulos"
+      ],
+      "journal": "PLoS ONE",
+      "year": 2018,
+      "abstract": "",
+      "citation_count": 1407,
+      "source": "openalex",
+      "quality_level": "B",
+      "quality_detail": {
+        "level": "B",
+        "if_2026": 2.8,
+        "jcr": "JCR Q2 / 中科院综合性期刊3区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "A Survey on Machine Learning Techniques for Cyber Security in the Last Decade",
+      "doi": "10.1109/access.2020.3041951",
+      "authors": [
+        "Kamran Shaukat",
+        "Suhuai Luo",
+        "Vijay Varadharajan",
+        "Ibrahim A. Hameed",
+        "Min Xu"
+      ],
+      "journal": "IEEE Access",
+      "year": 2020,
+      "abstract": "",
+      "citation_count": 511,
+      "source": "openalex",
+      "quality_level": "B",
+      "quality_detail": {
+        "level": "B",
+        "if_2026": 4.2,
+        "jcr": "JCR Q2 / 中科院计算机科学4区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Dynamical Movement Primitives: Learning Attractor Models for Motor Behaviors",
+      "doi": "10.1162/neco_a_00393",
+      "authors": [
+        "Auke Jan Ijspeert",
+        "Jun Nakanishi",
+        "H. Hoffmann",
+        "Peter Pástor",
+        "Stefan Schaal"
+      ],
+      "journal": "Neural Computation",
+      "year": 2012,
+      "abstract": "",
+      "citation_count": 1578,
+      "source": "openalex",
+      "quality_level": "C",
+      "quality_detail": {
+        "level": "C",
+        "if_2026": 2.1,
+        "jcr": "JCR Q3 / 中科院计算机科学4区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Machine learning in manufacturing: advantages, challenges, and applications",
+      "doi": "10.1080/21693277.2016.1192517",
+      "authors": [
+        "Thorsten Wuest",
+        "D. R. Weimer",
+        "Christopher Irgens",
+        "Klaus‐Dieter Thoben"
+      ],
+      "journal": "Production & Manufacturing Research",
+      "year": 2016,
+      "abstract": "",
+      "citation_count": 1262,
+      "source": "openalex",
+      "quality_level": "C",
+      "quality_detail": {
+        "level": "C",
+        "if_2026": null,
+        "jcr": "中科院工程技术4区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "A comprehensive survey on machine learning for networking: evolution, applications and research opportunities",
+      "doi": "10.1186/s13174-018-0087-2",
+      "authors": [
+        "Raouf Boutaba",
+        "Mohammad A. Salahuddin",
+        "Noura Limam",
+        "Sara Ayoubi",
+        "Nashid Shahriar",
+        "Felipe Estrada‐Solano",
+        "Oscar Maurício Caicedo Rendón"
+      ],
+      "journal": "Journal of Internet Services and Applications",
+      "year": 2018,
+      "abstract": "",
+      "citation_count": 999,
+      "source": "openalex",
+      "quality_level": "C",
+      "quality_detail": {
+        "level": "C",
+        "if_2026": 1.1,
+        "jcr": "中科院计算机科学4区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Tackling Climate Change with Machine Learning",
+      "doi": "10.1145/3485128",
+      "authors": [
+        "Lynn H. Kaack",
+        "David Rolnick",
+        "Priya L. Donti",
+        "Kelly Kochanski",
+        "Alexandre Lacoste",
+        "Kris Sankaran",
+        "Andrew Slavin Ross",
+        "Nikola Milojevic-Dupont",
+        "Natasha Jaques",
+        "Anna Waldman‐Brown",
+        "Alexandra Sasha Luccioni",
+        "Tegan Maharaj",
+        "Evan David Sherwin",
+        "Mukkavilli, Karthik",
+        "Konrad P. Körding",
+        "Carla P. Gomes",
+        "Andrew Y. Ng",
+        "Demis Hassabis",
+        "John Platt",
+        "Felix Creutzig",
+        "Jennifer Chayes",
+        "Yoshua Bengio"
+      ],
+      "journal": "OPUS 4 (Zuse Institute Berlin)",
+      "year": 2022,
+      "abstract": "",
+      "citation_count": 883,
+      "source": "openalex",
+      "quality_level": "C",
+      "quality_detail": {
+        "level": "C",
+        "if_2026": 0.2,
+        "jcr": "中科院艺术学4区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Mechanisms of plant survival and mortality during drought: why do some plants survive while others succumb to drought?",
+      "doi": "10.1111/j.1469-8137.2008.02436.x",
+      "authors": [
+        "Nate G. McDowell",
+        "William T. Pockman",
+        "Craig D. Allen",
+        "David D. Breshears",
+        "Neil S. Cobb",
+        "Thomas E. Kolb",
+        "Jennifer A. Plaut",
+        "John S. Sperry",
+        "Adam G. West",
+        "David G. Williams",
+        "Enrico A. Yépez"
+      ],
+      "journal": "New Phytologist",
+      "year": 2008,
+      "abstract": "",
+      "citation_count": 4431,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 8.7,
+        "jcr": "JCR Q1 / 中科院生物学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Global Carbon Budget 2023",
+      "doi": "10.5194/essd-15-5301-2023",
+      "authors": [
+        "Pierre Friedlingstein",
+        "Michael O’Sullivan",
+        "Matthew W. Jones",
+        "Robbie M. Andrew",
+        "Dorothée C. E. Bakker",
+        "Judith Hauck",
+        "Peter Landschützer",
+        "Corinne Le Quéré",
+        "Ingrid T. Luijkx",
+        "Glen P. Peters",
+        "Wouter Peters",
+        "Julia Pongratz",
+        "Clemens Schwingshackl",
+        "Stephen Sitch",
+        "Josep G. Canadell",
+        "Philippe Ciais",
+        "Robert B. Jackson",
+        "Simone R. Alin",
+        "Peter Anthoni",
+        "Leticia Barbero",
+        "Nicholas R. Bates",
+        "Meike Becker",
+        "Nicolas Bellouin",
+        "Bertrand Decharme",
+        "Laurent Bopp",
+        "Ida Bagus Mandhara Brasika",
+        "Patricia Cadule",
+        "Matthew A. Chamberlain",
+        "Naveen Chandra",
+        "Thi Tuyet Trang Chau",
+        "Frédéric Chevallier",
+        "Louise Chini",
+        "Margot Cronin",
+        "Xinyu Dou",
+        "Kazutaka Enyo",
+        "Wiley Evans",
+        "Stefanie Falk",
+        "Richard A. Feely",
+        "Liang Feng",
+        "Daniel J. Ford",
+        "Thomas Gasser",
+        "Joséfine Ghattas",
+        "Thanos Gkritzalis",
+        "Giacomo Grassi",
+        "Luke Gregor",
+        "Nicolas Gruber",
+        "Özgür Gürses",
+        "Ian Harris",
+        "Matthew Hefner",
+        "Jens Heinke",
+        "R. A. Houghton",
+        "G. C. Hurtt",
+        "Yosuke Iida",
+        "Tatiana Ilyina",
+        "A. R. Jacobson",
+        "Atul K. Jain",
+        "Tereza Jarníková",
+        "Annika Jersild",
+        "Fei Jiang",
+        "Zhe Jin",
+        "Fortunat Joos",
+        "Etsushi Kato",
+        "Ralph F. Keeling",
+        "Daniel Kennedy",
+        "Kees Klein Goldewijk",
+        "Jürgen Knauer",
+        "Jan Ivar Korsbakken",
+        "Arne Körtzinger",
+        "Xin Lan",
+        "Nathalie Lefèvre",
+        "Hongmei Li",
+        "Junjie Liu",
+        "Zhiqiang Liu",
+        "Lei Ma",
+        "G. Marland",
+        "Nicolas Mayot",
+        "Patrick McGuire",
+        "Galen A. McKinley",
+        "Gesa Meyer",
+        "Eric J. Morgan",
+        "David R. Munro",
+        "Shin‐Ichiro Nakaoka",
+        "Yosuke Niwa",
+        "Kevin M. O'Brien",
+        "Are Olsen",
+        "Abdirahman M Omar",
+        "Tsuneo Ono",
+        "Melf Paulsen",
+        "Denis Pierrot",
+        "Katie Pocock",
+        "Benjamin Poulter",
+        "Carter M. Powis",
+        "Gregor Rehder",
+        "Laure Resplandy",
+        "Eddy Robertson",
+        "Christian Rödenbeck",
+        "Thais M. Rosan",
+        "Jörg Schwinger",
+        "Roland Séférian",
+        "T. Luke Smallman"
+      ],
+      "journal": "Earth system science data",
+      "year": 2023,
+      "abstract": "",
+      "citation_count": 1389,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 13.6,
+        "jcr": "JCR Q1 / 中科院地球科学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Effects of climate extremes on the terrestrial carbon cycle: concepts, processes and potential future impacts",
+      "doi": "10.1111/gcb.12916",
+      "authors": [
+        "D. Frank",
+        "Markus Reichstein",
+        "Michael Bahn",
+        "Kirsten Thonicke",
+        "David Frank",
+        "Miguel D. Mahecha",
+        "Pete Smith",
+        "Marijn van der Velde",
+        "Sara Vicca",
+        "Flurin Babst",
+        "Christian Beer",
+        "Nina Buchmann",
+        "Josep G. Canadell",
+        "Philippe Ciais",
+        "Wolfgang Crämer",
+        "Andreas Ibrom",
+        "F. Miglietta",
+        "Benjamin Poulter",
+        "Anja Rammig",
+        "Sonia I. Seneviratne",
+        "Ariane Walz",
+        "M. Wattenbach",
+        "Miguel Á. Zavala",
+        "Jakob Zscheischler"
+      ],
+      "journal": "Global Change Biology",
+      "year": 2015,
+      "abstract": "",
+      "citation_count": 1022,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 12.5,
+        "jcr": "JCR Q1 / 中科院环境科学与生态学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Graphitic carbon nitride “reloaded”: emerging applications beyond (photo)catalysis",
+      "doi": "10.1039/c5cs00767d",
+      "authors": [
+        "Jian Liu",
+        "Hongqiang Wang",
+        "Markus Antonietti"
+      ],
+      "journal": "Chemical Society Reviews",
+      "year": 2016,
+      "abstract": "",
+      "citation_count": 923,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 48.3,
+        "jcr": "JCR Q1 / 中科院化学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Multi-faceted particle pumps drive carbon sequestration in the ocean",
+      "doi": "10.1038/s41586-019-1098-2",
+      "authors": [
+        "Philip W. Boyd",
+        "Hervé Claustre",
+        "Marina Lévy",
+        "David A. Siegel",
+        "Thomas Weber"
+      ],
+      "journal": "Nature",
+      "year": 2019,
+      "abstract": "",
+      "citation_count": 891,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 56.1,
+        "jcr": "JCR Q1 / 中科院综合性期刊1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Environmental and physiological determinants of carbon isotope discrimination in terrestrial plants",
+      "doi": "10.1111/nph.12423",
+      "authors": [
+        "Lucas A. Cernusak",
+        "Nerea Ubierna",
+        "Klaus Winter",
+        "Joseph A. M. Holtum",
+        "John D. Marshall",
+        "Graham D. Farquhar"
+      ],
+      "journal": "New Phytologist",
+      "year": 2013,
+      "abstract": "",
+      "citation_count": 642,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 8.7,
+        "jcr": "JCR Q1 / 中科院生物学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Microbial soil respiration and its dependency on carbon inputs, soil temperature and moisture",
+      "doi": "10.1111/j.1365-2486.2007.01415.x",
+      "authors": [
+        "Jorge Curiel Yuste",
+        "Dennis Baldocchi",
+        "Alexander Gershenson",
+        "Allen H. Goldstein",
+        "Laurent Misson",
+        "Sherman Wong"
+      ],
+      "journal": "Global Change Biology",
+      "year": 2007,
+      "abstract": "",
+      "citation_count": 608,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 12.5,
+        "jcr": "JCR Q1 / 中科院环境科学与生态学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Carbon Nanotubes and Related Nanomaterials: Critical Advances and Challenges for Synthesis toward Mainstream Commercial Applications",
+      "doi": "10.1021/acsnano.8b06511",
+      "authors": [
+        "Rahul Rao",
+        "Cary L. Pint",
+        "Ahmad E. Islam",
+        "Robert S. Weatherup",
+        "Stephan Hofmann",
+        "Eric R. Meshot",
+        "Fanqi Wu",
+        "Chongwu Zhou",
+        "Nicholas T. Dee",
+        "Placidus B. Amama",
+        "Jennifer Carpena‐Núñez",
+        "Wenbo Shi",
+        "Desirée L. Plata",
+        "Evgeni S. Penev",
+        "Boris I. Yakobson",
+        "Perla B. Balbuena",
+        "Christophe Bichara",
+        "Don N. Futaba",
+        "Suguru Noda",
+        "Homin Shin",
+        "Keun Su Kim",
+        "Benoît Simard",
+        "Francesca Mirri",
+        "Matteo Pasquali",
+        "Francesco Fornasiero",
+        "Esko I. Kauppinen",
+        "Michael S. Arnold",
+        "Baratunde A. Cola",
+        "Pavel Nikolaev",
+        "Sivaram Arepalli",
+        "Hui–Ming Cheng",
+        "Dmitri N. Zakharov",
+        "Eric A. Stach",
+        "Jin Zhang",
+        "Fei Wei",
+        "Mauricio Terrones",
+        "David B. Geohegan",
+        "Benji Maruyama",
+        "Shigeo Maruyama",
+        "Yan Li",
+        "W. Wade Adams",
+        "A. John Hart"
+      ],
+      "journal": "ACS Nano",
+      "year": 2018,
+      "abstract": "",
+      "citation_count": 575,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 17.3,
+        "jcr": "JCR Q1 / 中科院材料科学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Managing Soils and Ecosystems for Mitigating Anthropogenic Carbon Emissions and Advancing Global Food Security",
+      "doi": "10.1525/bio.2010.60.9.8",
+      "authors": [
+        "Rattan Lal"
+      ],
+      "journal": "BioScience",
+      "year": 2010,
+      "abstract": "",
+      "citation_count": 554,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 9.5,
+        "jcr": "JCR Q1 / 中科院生物学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Carbon-negative production of acetone and isopropanol by gas fermentation at industrial pilot scale",
+      "doi": "10.1038/s41587-021-01195-w",
+      "authors": [
+        "Fungmin Liew",
+        "Robert Nogle",
+        "Tanus Abdalla",
+        "Blake J. Rasor",
+        "Christina Canter",
+        "Rasmus O. Jensen",
+        "Lan Wang",
+        "Jonathan Strutz",
+        "Payal Chirania",
+        "Sashini De Tissera",
+        "Alexander P. Mueller",
+        "Zhenhua Ruan",
+        "Allan Gao",
+        "Loan Tran",
+        "Nancy L. Engle",
+        "Jason C. Bromley",
+        "James Daniell",
+        "Robert Conrado",
+        "Timothy J. Tschaplinski",
+        "Richard J. Giannone",
+        "Robert L. Hettich",
+        "Ashty S. Karim",
+        "Séan D. Simpson",
+        "Steven D. Brown",
+        "Ching Leang",
+        "Michael C. Jewett",
+        "Michael Köpke"
+      ],
+      "journal": "Nature Biotechnology",
+      "year": 2022,
+      "abstract": "",
+      "citation_count": 479,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 44.5,
+        "jcr": "JCR Q1 / 中科院生物学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Fabrication, Functionalization, and Application of Carbon Nanotube-Reinforced Polymer Composite: An Overview",
+      "doi": "10.3390/polym13071047",
+      "authors": [
+        "Norizan Mohd Nurazzi",
+        "M. R. M. Asyraf",
+        "Khalina Abdan",
+        "Norli Abdullah",
+        "Fatimah Athiyah Sabaruddin",
+        "Siti Hasnah Kamarudin",
+        "So’bah Ahmad",
+        "Annie Maria Mahat",
+        "Chuan Li Lee",
+        "H. A. Aisyah",
+        "Mohd Nor Faiz Norrrahim",
+        "R.A. Ilyas",
+        "M.M. Harussani",
+        "Mohamad Ridzwan Ishak",
+        "S.M. Sapuan"
+      ],
+      "journal": "Polymers",
+      "year": 2021,
+      "abstract": "",
+      "citation_count": 461,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 5.8,
+        "jcr": "JCR Q1 / 中科院工程技术3区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Single-sequence protein structure prediction using a language model and deep learning",
+      "doi": "10.1038/s41587-022-01432-w",
+      "authors": [
+        "Ratul Chowdhury",
+        "Nazim Bouatta",
+        "Surojit Biswas",
+        "Christina Floristean",
+        "Anant Kharkar",
+        "Koushik Roy",
+        "Charlotte Rochereau",
+        "Gustaf Ahdritz",
+        "Joanna Zhang",
+        "George M. Church",
+        "Peter K. Sorger",
+        "Mohammed AlQuraishi"
+      ],
+      "journal": "Nature Biotechnology",
+      "year": 2022,
+      "abstract": "",
+      "citation_count": 427,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 44.5,
+        "jcr": "JCR Q1 / 中科院生物学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Functional Carbon from Nature: Biomass‐Derived Carbon Materials and the Recent Progress of Their Applications",
+      "doi": "10.1002/advs.202205557",
+      "authors": [
+        "Hongzhe He",
+        "Ruoqun Zhang",
+        "Pengcheng Zhang",
+        "Ping Wang",
+        "Ning Chen",
+        "Binbin Qian",
+        "Lian Zhang",
+        "Jianglong Yu",
+        "Baiqian Dai"
+      ],
+      "journal": "Advanced Science",
+      "year": 2023,
+      "abstract": "",
+      "citation_count": 387,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 14.1,
+        "jcr": "JCR Q1 / 中科院综合性期刊1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "gapseq: informed prediction of bacterial metabolic pathways and reconstruction of accurate metabolic models",
+      "doi": "10.1186/s13059-021-02295-1",
+      "authors": [
+        "Johannes Zimmermann",
+        "Christoph Kaleta",
+        "Silvio Waschina"
+      ],
+      "journal": "Genome biology",
+      "year": 2021,
+      "abstract": "",
+      "citation_count": 313,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 9.2,
+        "jcr": "JCR Q1 / 中科院生物学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Single‐atom catalysis for carbon neutrality",
+      "doi": "10.1002/cey2.194",
+      "authors": [
+        "Ligang Wang",
+        "Dingsheng Wang",
+        "Yadong Li"
+      ],
+      "journal": "Carbon Energy",
+      "year": 2022,
+      "abstract": "",
+      "citation_count": 281,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 21.4,
+        "jcr": "JCR Q1 / 中科院材料科学1区 / CSCD",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Carbon Dioxide Capture and Storage: Issues and Prospects",
+      "doi": "10.1146/annurev-environ-032112-095222",
+      "authors": [
+        "Heleen de Coninck",
+        "Sally M. Benson"
+      ],
+      "journal": "Annual Review of Environment and Resources",
+      "year": 2014,
+      "abstract": "",
+      "citation_count": 249,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 16.3,
+        "jcr": "JCR Q1 / SSCI Q1 / 中科院环境科学与生态学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Patterns and Mechanisms of the Forest Carbon Cycle",
+      "doi": "10.1146/annurev.energy.28.050302.105515",
+      "authors": [
+        "Stith T. Gower"
+      ],
+      "journal": "Annual Review of Environment and Resources",
+      "year": 2003,
+      "abstract": "",
+      "citation_count": 227,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 16.3,
+        "jcr": "JCR Q1 / SSCI Q1 / 中科院环境科学与生态学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Carbon price prediction using multiple hybrid machine learning models optimized by genetic algorithm",
+      "doi": "10.1016/j.jenvman.2023.118061",
+      "authors": [
+        "Ozan Nadirgil"
+      ],
+      "journal": "Journal of Environmental Management",
+      "year": 2023,
+      "abstract": "",
+      "citation_count": 89,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 9.2,
+        "jcr": "JCR Q1 / 中科院环境科学与生态学2区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Breeding crop plants with deep roots: their role in sustainable carbon, nutrient and water sequestration",
+      "doi": "10.1093/aob/mcr175",
+      "authors": [
+        "Douglas B. Kell"
+      ],
+      "journal": "Annals of Botany",
+      "year": 2011,
+      "abstract": "",
+      "citation_count": 438,
+      "source": "openalex",
+      "quality_level": "A",
+      "quality_detail": {
+        "level": "A",
+        "if_2026": 4.1,
+        "jcr": "JCR Q1 / 中科院生物学2区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Coupling machine learning and crop modeling improves crop yield prediction in the US Corn Belt",
+      "doi": "10.1038/s41598-020-80820-1",
+      "authors": [
+        "Mohsen Shahhosseini",
+        "Guiping Hu",
+        "Isaiah Huber",
+        "Sotirios V. Archontoulis"
+      ],
+      "journal": "Scientific Reports",
+      "year": 2021,
+      "abstract": "",
+      "citation_count": 407,
+      "source": "openalex",
+      "quality_level": "A",
+      "quality_detail": {
+        "level": "A",
+        "if_2026": 4.9,
+        "jcr": "JCR Q1 / 中科院综合性期刊3区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Negative emissions technologies and carbon capture and storage to achieve the Paris Agreement commitments",
+      "doi": "10.1098/rsta.2016.0447",
+      "authors": [
+        "R. Stuart Haszeldine",
+        "Stephanie Flude",
+        "Gareth Johnson",
+        "Vivian Scott"
+      ],
+      "journal": "Philosophical Transactions of the Royal Society A Mathematical Physical and Engineering Sciences",
+      "year": 2018,
+      "abstract": "",
+      "citation_count": 351,
+      "source": "openalex",
+      "quality_level": "A",
+      "quality_detail": {
+        "level": "A",
+        "if_2026": 3.7,
+        "jcr": "JCR Q1 / 中科院综合性期刊3区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Comparative genomic analysis of carbon and nitrogen assimilation mechanisms in three indigenous bioleaching bacteria: predictions and validations",
+      "doi": "10.1186/1471-2164-9-581",
+      "authors": [
+        "Gloria Levicán",
+        "Juan A. Ugalde",
+        "Nicole Ehrenfeld",
+        "Alejandro Maass",
+        "Pilar Parada"
+      ],
+      "journal": "BMC Genomics",
+      "year": 2008,
+      "abstract": "",
+      "citation_count": 129,
+      "source": "openalex",
+      "quality_level": "A",
+      "quality_detail": {
+        "level": "A",
+        "if_2026": 3.9,
+        "jcr": "JCR Q2 / 中科院生物学2区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Assessing “Dangerous Climate Change”: Required Reduction of Carbon Emissions to Protect Young People, Future Generations and Nature",
+      "doi": "10.1371/journal.pone.0081648",
+      "authors": [
+        "James E. Hansen",
+        "Pushker Kharecha",
+        "Makiko Sato",
+        "Valérie Masson‐Delmotte",
+        "Frank Ackerman",
+        "David J. Beerling",
+        "Paul J. Hearty",
+        "Ove Hoegh‐Guldberg",
+        "Shi-Ling Hsu",
+        "Camille Parmesan",
+        "Johan Rockström",
+        "Eelco J. Rohling",
+        "Jeffrey D. Sachs",
+        "Pete Smith",
+        "Konrad Steffen",
+        "Lise Van Susteren",
+        "Karina von Schuckmann",
+        "James C. Zachos"
+      ],
+      "journal": "PLoS ONE",
+      "year": 2013,
+      "abstract": "",
+      "citation_count": 680,
+      "source": "openalex",
+      "quality_level": "B",
+      "quality_detail": {
+        "level": "B",
+        "if_2026": 2.8,
+        "jcr": "JCR Q2 / 中科院综合性期刊3区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Aging of Atmospheric Brown Carbon Aerosol",
+      "doi": "10.1021/acsearthspacechem.0c00346",
+      "authors": [
+        "Rachel F. Hems",
+        "Elijah G. Schnitzler",
+        "Carolyn Liu-Kang",
+        "Christopher D. Cappa",
+        "Jonathan P. D. Abbatt"
+      ],
+      "journal": "ACS Earth and Space Chemistry",
+      "year": 2021,
+      "abstract": "",
+      "citation_count": 307,
+      "source": "openalex",
+      "quality_level": "B",
+      "quality_detail": {
+        "level": "B",
+        "if_2026": 2.6,
+        "jcr": "JCR Q2 / 中科院化学3区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Review of deep learning: concepts, CNN architectures, challenges, applications, future directions",
+      "doi": "10.1186/s40537-021-00444-8",
+      "authors": [
+        "Laith Alzubaidi",
+        "Jinglan Zhang",
+        "Amjad J. Humaidi",
+        "Ayad Q. Al-Dujaili",
+        "Ye Duan",
+        "Omran Al-Shamma",
+        "José Santamaría",
+        "Mohammed A. Fadhel",
+        "Muthana Al‐Amidie",
+        "Laith Farhan"
+      ],
+      "journal": "Journal Of Big Data",
+      "year": 2021,
+      "abstract": "",
+      "citation_count": 7623,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 10.8,
+        "jcr": "JCR Q1 / 中科院计算机科学2区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Ensemble deep learning: A review",
+      "doi": "10.1016/j.engappai.2022.105151",
+      "authors": [
+        "M. A. Ganaie",
+        "Minghui Hu",
+        "A. K. Malik",
+        "M. Tanveer",
+        "Ponnuthurai Nagaratnam Suganthan"
+      ],
+      "journal": "Engineering Applications of Artificial Intelligence",
+      "year": 2022,
+      "abstract": "",
+      "citation_count": 2061,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 9.0,
+        "jcr": "JCR Q1 / 中科院计算机科学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Convergence of Edge Computing and Deep Learning: A Comprehensive Survey",
+      "doi": "10.1109/comst.2020.2970550",
+      "authors": [
+        "Xiaofei Wang",
+        "Yiwen Han",
+        "Victor C. M. Leung",
+        "Dusit Niyato",
+        "Xueqiang Yan",
+        "Xu Chen"
+      ],
+      "journal": "IEEE Communications Surveys & Tutorials",
+      "year": 2020,
+      "abstract": "",
+      "citation_count": 1441,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 50.6,
+        "jcr": "JCR Q1 / 中科院计算机科学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Deep Learning for Household Load Forecasting—A Novel Pooling Deep RNN",
+      "doi": "10.1109/tsg.2017.2686012",
+      "authors": [
+        "Heng Shi",
+        "Minghao Xu",
+        "Ran Li"
+      ],
+      "journal": "IEEE Transactions on Smart Grid",
+      "year": 2017,
+      "abstract": "",
+      "citation_count": 1093,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 10.1,
+        "jcr": "JCR Q1 / 中科院工程技术1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "A survey on deep learning methods for power load and renewable energy forecasting in smart microgrids",
+      "doi": "10.1016/j.rser.2021.110992",
+      "authors": [
+        "Sheraz Aslam",
+        "Herodotos Herodotou",
+        "Syed Muhammad Mohsin",
+        "Nadeem Javaid",
+        "Nouman Ashraf",
+        "Shahzad Aslam"
+      ],
+      "journal": "Renewable and Sustainable Energy Reviews",
+      "year": 2021,
+      "abstract": "",
+      "citation_count": 620,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 18.0,
+        "jcr": "JCR Q1 / 中科院工程技术1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "A deep learning framework for building energy consumption forecast",
+      "doi": "10.1016/j.rser.2020.110591",
+      "authors": [
+        "Nivethitha Somu",
+        "M. R. Gauthama Raman",
+        "Krithi Ramamritham"
+      ],
+      "journal": "Renewable and Sustainable Energy Reviews",
+      "year": 2020,
+      "abstract": "",
+      "citation_count": 479,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 18.0,
+        "jcr": "JCR Q1 / 中科院工程技术1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Building thermal load prediction through shallow machine learning and deep learning",
+      "doi": "10.1016/j.apenergy.2020.114683",
+      "authors": [
+        "Zhe Wang",
+        "Tianzhen Hong",
+        "Mary Ann Piette"
+      ],
+      "journal": "Applied Energy",
+      "year": 2020,
+      "abstract": "",
+      "citation_count": 478,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 11.0,
+        "jcr": "SCIE Q1",
+        "note": "偏工程",
+        "source": "local"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Deep learning framework to forecast electricity demand",
+      "doi": "10.1016/j.apenergy.2019.01.113",
+      "authors": [
+        "Jatin Bedi",
+        "Durga Toshniwal"
+      ],
+      "journal": "Applied Energy",
+      "year": 2019,
+      "abstract": "",
+      "citation_count": 469,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 11.0,
+        "jcr": "SCIE Q1",
+        "note": "偏工程",
+        "source": "local"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Empirical Mode Decomposition based ensemble deep learning for load demand time series forecasting",
+      "doi": "10.1016/j.asoc.2017.01.015",
+      "authors": [
+        "Xueheng Qiu",
+        "Ye Ren",
+        "Ponnuthurai Nagaratnam Suganthan",
+        "G.A.J. Amaratunga"
+      ],
+      "journal": "Applied Soft Computing",
+      "year": 2017,
+      "abstract": "",
+      "citation_count": 452,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 7.8,
+        "jcr": "JCR Q1 / 中科院计算机科学2区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Deep learning models for solar irradiance forecasting: A comprehensive review",
+      "doi": "10.1016/j.jclepro.2021.128566",
+      "authors": [
+        "Pratima Kumari",
+        "Durga Toshniwal"
+      ],
+      "journal": "Journal of Cleaner Production",
+      "year": 2021,
+      "abstract": "",
+      "citation_count": 420,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 10.7,
+        "jcr": "JCR Q1 / 中科院环境科学与生态学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Machine Learning, Deep Learning and Statistical Analysis for forecasting building energy consumption — A systematic review",
+      "doi": "10.1016/j.engappai.2022.105287",
+      "authors": [
+        "Mohamad Khalil",
+        "A. Stephen McGough",
+        "Zoya Pourmirza",
+        "Mehdi Pazhoohesh",
+        "Sara Walker"
+      ],
+      "journal": "Engineering Applications of Artificial Intelligence",
+      "year": 2022,
+      "abstract": "",
+      "citation_count": 290,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 9.0,
+        "jcr": "JCR Q1 / 中科院计算机科学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Forecasting of transportation-related energy demand and CO2 emissions in Turkey with different machine learning algorithms",
+      "doi": "10.1016/j.spc.2021.10.001",
+      "authors": [
+        "Ümit Ağbulut"
+      ],
+      "journal": "Sustainable Production and Consumption",
+      "year": 2021,
+      "abstract": "",
+      "citation_count": 273,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 9.2,
+        "jcr": "JCR Q1 / SSCI Q1 / 中科院环境科学与生态学1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "A deep learning-based forecasting model for renewable energy scenarios to guide sustainable energy policy: A case study of Korea",
+      "doi": "10.1016/j.rser.2020.109725",
+      "authors": [
+        "KiJeon Nam",
+        "Soonho Hwangbo",
+        "ChangKyoo Yoo"
+      ],
+      "journal": "Renewable and Sustainable Energy Reviews",
+      "year": 2020,
+      "abstract": "",
+      "citation_count": 264,
+      "source": "openalex",
+      "quality_level": "S",
+      "quality_detail": {
+        "level": "S",
+        "if_2026": 18.0,
+        "jcr": "JCR Q1 / 中科院工程技术1区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "A Deep Learning Approach to Network Intrusion Detection",
+      "doi": "10.1109/tetci.2017.2772792",
+      "authors": [
+        "Nathan Shone",
+        "Trần Nguyên Ngọc",
+        "Vu Dinh Phai",
+        "Qi Shi"
+      ],
+      "journal": "IEEE Transactions on Emerging Topics in Computational Intelligence",
+      "year": 2018,
+      "abstract": "",
+      "citation_count": 1695,
+      "source": "openalex",
+      "quality_level": "A",
+      "quality_detail": {
+        "level": "A",
+        "if_2026": 6.0,
+        "jcr": "JCR Q2 / 中科院计算机科学2区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Review of Deep Learning Algorithms and Architectures",
+      "doi": "10.1109/access.2019.2912200",
+      "authors": [
+        "Ajay Shrestha",
+        "Ausif Mahmood"
+      ],
+      "journal": "IEEE Access",
+      "year": 2019,
+      "abstract": "",
+      "citation_count": 1843,
+      "source": "openalex",
+      "quality_level": "B",
+      "quality_detail": {
+        "level": "B",
+        "if_2026": 4.2,
+        "jcr": "JCR Q2 / 中科院计算机科学4区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Optimal load dispatch of community microgrid with deep learning based solar power and load forecasting",
+      "doi": "10.1016/j.energy.2019.01.075",
+      "authors": [
+        "Lulu Wen",
+        "Kaile Zhou",
+        "Shanlin Yang",
+        "Xinhui Lu"
+      ],
+      "journal": "Energy",
+      "year": 2019,
+      "abstract": "",
+      "citation_count": 388,
+      "source": "openalex",
+      "quality_level": "B",
+      "quality_detail": {
+        "level": "B",
+        "if_2026": 9.0,
+        "jcr": "SCIE Q1",
+        "note": "偏工程，高发文量",
+        "source": "local"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Machine Learning and Deep Learning in Energy Systems: A Review",
+      "doi": "10.3390/su14084832",
+      "authors": [
+        "Mohammad Mahdi Forootan",
+        "Iman Larki",
+        "Rahim Zahedi",
+        "Abolfazl Ahmadi"
+      ],
+      "journal": "Sustainability",
+      "year": 2022,
+      "abstract": "",
+      "citation_count": 314,
+      "source": "openalex",
+      "quality_level": "B",
+      "quality_detail": {
+        "level": "B",
+        "if_2026": 4.1,
+        "jcr": "JCR Q2 / SSCI Q2 / 中科院环境科学与生态学3区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "State-of-the-art review on energy and load forecasting in microgrids using artificial neural networks, machine learning, and deep learning techniques",
+      "doi": "10.1016/j.epsr.2023.109792",
+      "authors": [
+        "Raniyah Wazirali",
+        "Elnaz Yaghoubi",
+        "Mohammed Shadi S. Abujazar",
+        "Rami Ahmad",
+        "Amir Hossein Vakili"
+      ],
+      "journal": "Electric Power Systems Research",
+      "year": 2023,
+      "abstract": "",
+      "citation_count": 277,
+      "source": "openalex",
+      "quality_level": "B",
+      "quality_detail": {
+        "level": "B",
+        "if_2026": 4.3,
+        "jcr": "JCR Q2 / 中科院工程技术3区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Load demand forecasting of residential buildings using a deep learning model",
+      "doi": "10.1016/j.epsr.2019.106073",
+      "authors": [
+        "Lulu Wen",
+        "Kaile Zhou",
+        "Shanlin Yang"
+      ],
+      "journal": "Electric Power Systems Research",
+      "year": 2019,
+      "abstract": "",
+      "citation_count": 212,
+      "source": "openalex",
+      "quality_level": "B",
+      "quality_detail": {
+        "level": "B",
+        "if_2026": 4.3,
+        "jcr": "JCR Q2 / 中科院工程技术3区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Building energy load forecasting using Deep Neural Networks",
+      "doi": "10.1109/iecon.2016.7793413",
+      "authors": [
+        "Daniel L. Marino",
+        "Kasun Amarasinghe",
+        "Milos Manic"
+      ],
+      "journal": "",
+      "year": 2016,
+      "abstract": "",
+      "citation_count": 498,
+      "source": "openalex",
+      "quality_level": "C",
+      "quality_detail": {
+        "level": "C",
+        "if_2026": null,
+        "jcr": "未知",
+        "note": "未在注册表中且未查询API",
+        "source": "fallback"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Deep Neural Network Based Demand Side Short Term Load Forecasting",
+      "doi": "10.3390/en10010003",
+      "authors": [
+        "Seunghyoung Ryu",
+        "Jae-Koo Noh",
+        "Hongseok Kim"
+      ],
+      "journal": "Energies",
+      "year": 2016,
+      "abstract": "",
+      "citation_count": 407,
+      "source": "openalex",
+      "quality_level": "C",
+      "quality_detail": {
+        "level": "C",
+        "if_2026": 3.9,
+        "jcr": "JCR Q3 / 中科院工程技术4区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Deep neural networks for energy load forecasting",
+      "doi": "10.1109/isie.2017.8001465",
+      "authors": [
+        "Kasun Amarasinghe",
+        "Daniel Marino",
+        "Milos Manic"
+      ],
+      "journal": "",
+      "year": 2017,
+      "abstract": "",
+      "citation_count": 338,
+      "source": "openalex",
+      "quality_level": "C",
+      "quality_detail": {
+        "level": "C",
+        "if_2026": null,
+        "jcr": "未知",
+        "note": "未在注册表中且未查询API",
+        "source": "fallback"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Energy Demand Forecasting Using Deep Learning: Applications for the French Grid",
+      "doi": "10.3390/en13092242",
+      "authors": [
+        "Alejandro J. del Real",
+        "Fernando Dorado",
+        "Jaime Durán"
+      ],
+      "journal": "Energies",
+      "year": 2020,
+      "abstract": "",
+      "citation_count": 64,
+      "source": "openalex",
+      "quality_level": "C",
+      "quality_detail": {
+        "level": "C",
+        "if_2026": 3.9,
+        "jcr": "JCR Q3 / 中科院工程技术4区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    },
+    {
+      "title": "Deep Learning-Based Short-Term Load Forecasting for Supporting Demand Response Program in Hybrid Energy System",
+      "doi": "10.3390/en12173359",
+      "authors": [
+        "Sholeh Hadi Pramono",
+        "Mahdin Rohmatillah",
+        "Eka Maulana",
+        "Rini Nur Hasanah",
+        "Fakhriy Hario"
+      ],
+      "journal": "Energies",
+      "year": 2019,
+      "abstract": "",
+      "citation_count": 61,
+      "source": "openalex",
+      "quality_level": "C",
+      "quality_detail": {
+        "level": "C",
+        "if_2026": 3.9,
+        "jcr": "JCR Q3 / 中科院工程技术4区",
+        "note": "easyScholar查询",
+        "source": "api"
+      },
+      "author_h_index": 0,
+      "is_preprint": false
+    }
+  ],
+  "preprints": [
+    {
+      "title": "Flamingo: a Visual Language Model for Few-Shot Learning",
+      "doi": "10.48550/arxiv.2204.14198",
+      "authors": [
+        "Jean-Baptiste Alayrac",
+        "Jeff Donahue",
+        "Pauline Luc",
+        "Antoine Miech",
+        "Iain Barr",
+        "Yana Hasson",
+        "Karel Lenc",
+        "Arthur Mensch",
+        "Katie Millican",
+        "Malcolm Reynolds",
+        "Roman Ring",
+        "Eliza Rutherford",
+        "Serkan Cabi",
+        "Tengda Han",
+        "Zhitao Gong",
+        "Sina Samangooei",
+        "Marianne Monteiro",
+        "Jacob Menick",
+        "Sebastian Borgeaud",
+        "Andrew Brock",
+        "Aida Nematzadeh",
+        "Sahand Sharifzadeh",
+        "Mikołaj Bińkowski",
+        "Ricardo Barreira",
+        "Oriol Vinyals",
+        "Andrew Zisserman",
+        "Karen Simonyan"
+      ],
+      "journal": "arXiv (Cornell University)",
+      "year": 2022,
+      "abstract": "",
+      "citation_count": 1244,
+      "source": "openalex",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Changing Data Sources in the Age of Machine Learning for Official Statistics",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2023,
+      "abstract": "Data science has become increasingly essential for the production of official statistics, as it enables the automated collection, processing, and analysis of large amounts of data. With such data science practices in place, it enables more timely, more insightful and more flexible reporting. However, the quality and integrity of data-science-driven statistics rely on the accuracy and reliability of the data sources and the machine learning techniques that support them. In particular, changes in ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "DOME: Recommendations for supervised machine learning validation in biology",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2020,
+      "abstract": "Modern biology frequently relies on machine learning to provide predictions and improve decision processes. There have been recent calls for more scrutiny on machine learning performance and possible limitations. Here we present a set of community-wide recommendations aiming to help establish standards of supervised machine learning validation in biology. Adopting a structured methods description for machine learning based on data, optimization, model, evaluation (DOME) will aim to help both rev",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Learning Curves for Decision Making in Supervised Machine Learning: A Survey",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2022,
+      "abstract": "Learning curves are a concept from social sciences that has been adopted in the context of machine learning to assess the performance of a learning algorithm with respect to a certain resource, e.g., the number of training examples or the number of training iterations. Learning curves have important applications in several machine learning contexts, most notably in data acquisition, early stopping of model training, and model selection. For instance, learning curves can be used to model the perf",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Physics-Inspired Interpretability Of Machine Learning Models",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2023,
+      "abstract": "The ability to explain decisions made by machine learning models remains one of the most significant hurdles towards widespread adoption of AI in highly sensitive areas such as medicine, cybersecurity or autonomous driving. Great interest exists in understanding which features of the input data prompt model decision making. In this contribution, we propose a novel approach to identify relevant features of the input data, inspired by methods from the energy landscapes field, developed in the phys",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Active learning for data streams: a survey",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2023,
+      "abstract": "Online active learning is a paradigm in machine learning that aims to select the most informative data points to label from a data stream. The problem of minimizing the cost associated with collecting labeled observations has gained a lot of attention in recent years, particularly in real-world applications where data is only available in an unlabeled form. Annotating each observation can be time-consuming and costly, making it difficult to obtain large amounts of labeled data. To overcome this ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Public Policymaking for International Agricultural Trade using Association Rules and Ensemble Machine Learning",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2021,
+      "abstract": "International economics has a long history of improving our understanding of factors causing trade, and the consequences of free flow of goods and services across countries. The recent shocks to the free trade regime, especially trade disputes among major economies, as well as black swan events, such as trade wars and pandemics, raise the need for improved predictions to inform policy decisions. AI methods are allowing economists to solve such prediction problems in new ways. In this manuscript,",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Privacy-preserving machine learning for healthcare: open challenges and future perspectives",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2023,
+      "abstract": "Machine Learning (ML) has recently shown tremendous success in modeling various healthcare prediction tasks, ranging from disease diagnosis and prognosis to patient treatment. Due to the sensitive nature of medical data, privacy must be considered along the entire ML pipeline, from model training to inference. In this paper, we conduct a review of recent literature concerning Privacy-Preserving Machine Learning (PPML) for healthcare. We primarily focus on privacy-preserving training and inferenc",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "A Benchmark Study of Machine Learning Models for Online Fake News Detection",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "The proliferation of fake news and its propagation on social media has become a major concern due to its ability to create devastating impacts. Different machine learning approaches have been suggested to detect fake news. However, most of those focused on a specific type of news (such as political) which leads us to the question of dataset-bias of the models used. In this research, we conducted a benchmark study to assess the performance of different applicable machine learning approaches on th",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "MerLin: A Discovery Engine for Photonic and Hybrid Quantum Machine Learning",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2026,
+      "abstract": "Identifying where quantum models may offer practical benefits in near term quantum machine learning (QML) requires moving beyond isolated algorithmic proposals toward systematic and empirical exploration across models, datasets, and hardware constraints. We introduce MerLin, an open-source framework designed as a discovery engine for photonic and hybrid quantum machine learning. MerLin integrates optimized strong simulation of linear optical circuits into standard PyTorch and scikit learn workfl",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Emotion in Reinforcement Learning Agents and Robots: A Survey",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2017,
+      "abstract": "This article provides the first survey of computational models of emotion in reinforcement learning (RL) agents. The survey focuses on agent/robot emotions, and mostly ignores human user emotions. Emotions are recognized as functional in decision-making by influencing motivation and action selection. Therefore, computational emotion models are usually grounded in the agent's decision making architecture, of which RL is an important subclass. Studying emotions in RL-based agents is useful for thr",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Fourier Learning Machines: Nonharmonic Fourier-Based Neural Networks for Scientific Machine Learning",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2025,
+      "abstract": "We introduce the Fourier Learning Machine (FLM), a neural network (NN) architecture designed to represent a multidimensional nonharmonic Fourier series. The FLM uses a simple feedforward structure with cosine activation functions to learn the frequencies, amplitudes, and phase shifts of the series as trainable parameters. This design allows the model to create a problem-specific spectral basis adaptable to both periodic and nonperiodic functions. Unlike previous Fourier-inspired NN models, the F",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "MEMe: An Accurate Maximum Entropy Method for Efficient Approximations in Large-Scale Machine Learning",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "Efficient approximation lies at the heart of large-scale machine learning problems. In this paper, we propose a novel, robust maximum entropy algorithm, which is capable of dealing with hundreds of moments and allows for computationally efficient approximations. We showcase the usefulness of the proposed method, its equivalence to constrained Bayesian variational inference and demonstrate its superiority over existing approaches in two applications, namely, fast log determinant estimation and in",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Generalizing Machine Learning Evaluation through the Integration of Shannon Entropy and Rough Set Theory",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2024,
+      "abstract": "This research paper delves into the innovative integration of Shannon entropy and rough set theory, presenting a novel approach to generalize the evaluation approach in machine learning. The conventional application of entropy, primarily focused on information uncertainty, is extended through its combination with rough set theory to offer a deeper insight into data's intrinsic structure and the interpretability of machine learning models. We introduce a comprehensive framework that synergizes th",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "ALERT-Transformer: Bridging Asynchronous and Synchronous Machine Learning for Real-Time Event-based Spatio-Temporal Data",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2024,
+      "abstract": "We seek to enable classic processing of continuous ultra-sparse spatiotemporal data generated by event-based sensors with dense machine learning models. We propose a novel hybrid pipeline composed of asynchronous sensing and synchronous processing that combines several ideas: (1) an embedding based on PointNet models -- the ALERT module -- that can continuously integrate new and dismiss old events thanks to a leakage mechanism, (2) a flexible readout of the embedded data that allows to feed any ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Learning Representations from Dendrograms",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2018,
+      "abstract": "We propose unsupervised representation learning and feature extraction from dendrograms. The commonly used Minimax distance measures correspond to building a dendrogram with single linkage criterion, with defining specific forms of a level function and a distance function over that. Therefore, we extend this method to arbitrary dendrograms. We develop a generalized framework wherein different distance measures and representations can be inferred from different types of dendrograms, level functio",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Unsupervised Representation Learning with Minimax Distance Measures",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "We investigate the use of Minimax distances to extract in a nonparametric way the features that capture the unknown underlying patterns and structures in the data. We develop a general-purpose and computationally efficient framework to employ Minimax distances with many machine learning methods that perform on numerical data. We study both computing the pairwise Minimax distances for all pairs of objects and as well as computing the Minimax distances of all the objects to/from a fixed (test) obj",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Automatic Machine Learning by Pipeline Synthesis using Model-Based Reinforcement Learning and a Grammar",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "Automatic machine learning is an important problem in the forefront of machine learning. The strongest AutoML systems are based on neural networks, evolutionary algorithms, and Bayesian optimization. Recently AlphaD3M reached state-of-the-art results with an order of magnitude speedup using reinforcement learning with self-play. In this work we extend AlphaD3M by using a pipeline grammar and a pre-trained model which generalizes from many different datasets and similar tasks. Our results demonst",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Beyond Volume: The Impact of Complex Healthcare Data on the Machine Learning Pipeline",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2017,
+      "abstract": "From medical charts to national census, healthcare has traditionally operated under a paper-based paradigm. However, the past decade has marked a long and arduous transformation bringing healthcare into the digital age. Ranging from electronic health records, to digitized imaging and laboratory reports, to public health datasets, today, healthcare now generates an incredible amount of digital information. Such a wealth of data presents an exciting opportunity for integrated machine learning solu",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Explanatory machine learning for sequential human teaching",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2022,
+      "abstract": "The topic of comprehensibility of machine-learned theories has recently drawn increasing attention. Inductive Logic Programming (ILP) uses logic programming to derive logic theories from small data based on abduction and induction techniques. Learned theories are represented in the form of rules as declarative descriptions of obtained knowledge. In earlier work, the authors provided the first evidence of a measurable increase in human comprehension based on machine-learned logic rules for simple",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Evaluating the Economic Implications of Using Machine Learning in Clinical Psychiatry",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2024,
+      "abstract": "With the growing interest in using AI and machine learning (ML) in medicine, there is an increasing number of literature covering the application and ethics of using AI and ML in areas of medicine such as clinical psychiatry. The problem is that there is little literature covering the economic aspects associated with using ML in clinical psychiatry. This study addresses this gap by specifically studying the economic implications of using ML in clinical psychiatry. In this paper, we evaluate the ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Reproducibility in Machine Learning for Health",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "Machine learning algorithms designed to characterize, monitor, and intervene on human health (ML4H) are expected to perform safely and reliably when operating at scale, potentially outside strict human supervision. This requirement warrants a stricter attention to issues of reproducibility than other fields of machine learning.\n  In this work, we conduct a systematic evaluation of over 100 recently published ML4H research papers along several dimensions related to reproducibility. We find that t",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "ML-Schema: Exposing the Semantics of Machine Learning with Schemas and Ontologies",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2018,
+      "abstract": "The ML-Schema, proposed by the W3C Machine Learning Schema Community Group, is a top-level ontology that provides a set of classes, properties, and restrictions for representing and interchanging information on machine learning algorithms, datasets, and experiments. It can be easily extended and specialized and it is also mapped to other more domain-specific ontologies developed in the area of machine learning and data mining. In this paper we overview existing state-of-the-art machine learning ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Stop Explaining Black Box Machine Learning Models for High Stakes Decisions and Use Interpretable Models Instead",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2018,
+      "abstract": "Black box machine learning models are currently being used for high stakes decision-making throughout society, causing problems throughout healthcare, criminal justice, and in other domains. People have hoped that creating methods for explaining these black box models will alleviate some of these problems, but trying to \\textit{explain} black box models, rather than creating models that are \\textit{interpretable} in the first place, is likely to perpetuate bad practices and can potentially cause",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "A Framework for Implementing Machine Learning on Omics Data",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2018,
+      "abstract": "The potential benefits of applying machine learning methods to -omics data are becoming increasingly apparent, especially in clinical settings. However, the unique characteristics of these data are not always well suited to machine learning techniques. These data are often generated across different technologies in different labs, and frequently with high dimensionality. In this paper we present a framework for combining -omics data sets, and for handling high dimensional data, making -omics res",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Teaching Uncertainty Quantification in Machine Learning through Use Cases",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2021,
+      "abstract": "Uncertainty in machine learning is not generally taught as general knowledge in Machine Learning course curricula. In this paper we propose a short curriculum for a course about uncertainty in machine learning, and complement the course with a selection of use cases, aimed to trigger discussion and let students play with the concepts of uncertainty in a programming setting. Our use cases cover the concept of output uncertainty, Bayesian neural networks and weight distributions, sources of uncert",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Evaluating the Economic Feasibility of Labor Replacement Through Robotics and Automation in Qatar",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2025,
+      "abstract": "This paper investigates the economic feasibility of replacing human labor with robotics and automation in Qatar's manufacturing and service sectors. By analyzing labor costs, productivity gains, and implementation expenses, the study assesses the potential financial impact and return on investment of robotic integration. Results indicate the sectors where automation is economically viable and identify challenges related to workforce adaptation, policy, and infrastructure. These insights provide ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "The Scientific Method in the Science of Machine Learning",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "In the quest to align deep learning with the sciences to address calls for rigor, safety, and interpretability in machine learning systems, this contribution identifies key missing pieces: the stages of hypothesis formulation and testing, as well as statistical and systematic uncertainty estimation -- core tenets of the scientific method. This position paper discusses the ways in which contemporary science is conducted in other domains and identifies potentially useful practices. We present a ca",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Multimodal Machine Learning for Automated ICD Coding",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2018,
+      "abstract": "This study presents a multimodal machine learning model to predict ICD-10 diagnostic codes. We developed separate machine learning models that can handle data from different modalities, including unstructured text, semi-structured text and structured tabular data. We further employed an ensemble method to integrate all modality-specific models to generate ICD-10 codes. Key evidence was also extracted to make our prediction more convincing and explainable. We used the Medical Information Mart for",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Machine Learning for Health (ML4H) Workshop at NeurIPS 2018",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2018,
+      "abstract": "This volume represents the accepted submissions from the Machine Learning for Health (ML4H) workshop at the conference on Neural Information Processing Systems (NeurIPS) 2018, held on December 8, 2018 in Montreal, Canada.",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "TapNet: Neural Network Augmented with Task-Adaptive Projection for Few-Shot Learning",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "Handling previously unseen tasks after given only a few training examples continues to be a tough challenge in machine learning. We propose TapNets, neural networks augmented with task-adaptive projection for improved few-shot learning. Here, employing a meta-learning strategy with episode-based training, a network and a set of per-class reference vectors are learned across widely varying tasks. At the same time, for every episode, features in the embedding space are linearly projected into a ne",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Toxicity of Carbon Nanomaterials",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2021,
+      "abstract": "The outstanding multidisciplinary applicability of nanomaterials has paved the path for the rapid advancement of nanoscience during the last few decades. Such technological progress subsequently results in an inevitable environmental exposure of nanomaterials. Presently, nanomaterials are employed in an extensive range of commercial products. Safe and sustainable incorporation of nanomaterials in industrial products requires a profound and comprehensive understanding of their potential toxicity.",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Encapsulating C59N azafullerene derivatives inside single-wall carbon nanotubes",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2006,
+      "abstract": "Filling of single-wall carbon nanotubes with C59N azafullerene derivatives is reported from toluene solvent at ambient temperature. The filling is characterized by high resolution transmission electron microscopy and Raman spectroscopy. The filling efficiency is the same as for C60 fullerenes and the tube-azafullerene interaction is similar to the tube-C60 interaction. Vacuum annealing of the encapsulated azafullerene results in the growth of inner tubes, however no spectroscopic signature of ni",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Structural characterization of carbon nanotubes via the vibrational density of states",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2017,
+      "abstract": "The electrical and chemical properties of carbon nanotubes vary significantly with different chirality and diameter, making the experimental determination of these structural properties important. Here, we show that the vibrational density of states (VDOS) contains information on the structure of carbon nanotubes, particularly at low frequencies. We show that the diameter and chirality of the nanotubes can be determined from the characteristic low frequency $L$ and $L'$ modes in the VDOS. For zi",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Controlling Carbon Nanostructure Synthesis in Thermal Plasma Jet: Correlation of Process Parameters, Plasma Characteristics, and Product Morphology",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2025,
+      "abstract": "Thermal plasma has emerged as an effective approach for producing carbon nanostructures without the need for specific catalysts nor substrates. While efforts have focused on the effect of process parameters such as reaction pressure, input power or carbon source, the intricate role and relationship with plasma characteristics like density and temperature are often overlooked due to the complexity of the environment. This study addresses this gap by establishing a correlation between process para",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Experimental and Theoretical Aspects of the Fragmentation of Carbon's Single and Multi-Walled Nanotubes",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2025,
+      "abstract": "Energetic ion irradiation is an effective method for studying how single and multi-shelled carbon nanotubes break apart. The energy from ions is dissipated through both linear and nonlinear processes in the nanotubes, leading to defect formation. Fragmentation occurs via atomic collision cascades and thermal spikes, each described by different theoretical models. Experiments with Cs-irradiated nanotubes support these models, and an information-theoretic approach further explains the fragmentatio",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Macro carbon price prediction with support vector regression and Paris accord targets",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2022,
+      "abstract": "Carbon neutralization is an urgent task in society because of the global warming threat. And carbon trading is an essential market mechanics to solve carbon reduction targets. Macro carbon price prediction is vital in the useful management and decision-making of the carbon market. We focus on the EU carbon market and we choose oil price, coal price, gas price, and DAX index to be the four market factors in predicting carbon price, and also we select carbon emission targets from Paris Accord as t",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Exploring the SDSS Dataset with Linked Scatter Plots: I. EMP, CEMP, and CV Stars",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2017,
+      "abstract": "We present the results of a search for extremely metal-poor (EMP), carbon-enhanced metal-poor (CEMP), and cataclysmic variable (CV) stars using a new exploration tool based on linked scatter plots (LSPs). Our approach is especially designed to work with very large spectrum data sets such as the SDSS, LAMOST, RAVE, and Gaia data sets, and it can be applied to stellar, galaxy, and quasar spectra. As a demonstration, we conduct our search using the SDSS DR10 data set. We first created a 3326-dimens",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Contextual Quantum Neural Networks for Stock Price Prediction",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2025,
+      "abstract": "In this paper, we apply quantum machine learning (QML) to predict the stock prices of multiple assets using a contextual quantum neural network. Our approach captures recent trends to predict future stock price distributions, moving beyond traditional models that focus on entire historical data, enhancing adaptability and precision. Utilizing the principles of quantum superposition, we introduce a new training technique called the quantum batch gradient update (QBGU), which accelerates the stand",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Towards Smart Healthcare: Challenges and Opportunities in IoT and ML",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2023,
+      "abstract": "The COVID-19 pandemic and other ongoing health crises have underscored the need for prompt healthcare services worldwide. The traditional healthcare system, centered around hospitals and clinics, has proven inadequate in the face of such challenges. Intelligent wearable devices, a key part of modern healthcare, leverage Internet of Things technology to collect extensive data related to the environment as well as psychological, behavioral, and physical health. However, managing the substantial da",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Application of carbon nanomaterials in the electronic industry",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2020,
+      "abstract": "Nanomaterials have much improved properties compared to their bulk counterparts, which promotes them as ideal material for applications in various industries. Among the various nanomaterials, different nanoallotropes of carbon, namely fullerene, carbon nanotubes, and graphene, are the most important as indicated by the fact that their discoverers gained prestigious awards such as Nobel Prize or Kavli Prize. Carbon forms different nano-allotropes by varying the nature of orbital hybridization. Si",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Carbon Nanomaterials to Combat Virus: A perspective in view of COVID-19",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2020,
+      "abstract": "The rapid outbreaks of lethal viruses necessitate the development of novel antiviral substance. Besides the conventional antiviral substances, biocompatible nanomaterials also have significant potential in combating the virus at various stages of infection. Carbon nanomaterials have an impressive record against viruses and can deal with many crucial healthcare issues. In accordance with the published literature, biocompatible carbon nanomaterials have a promising prospect as an antiviral substan",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Atomic and electronic structures of stable linear carbon chains on Ag-nanoparticles",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2017,
+      "abstract": "In this work, we report X-ray photoelectron (XPS) and valence band (VB) spectroscopy measurements of surfactant-free silver nanoparticles and silver/linear carbon chains (Ag@LCC) structures prepared by pulse laser ablation (PLA) in water. Our measurements demonstrate significant oxidation only on the surfaces of the silver nanoparticles with many covalent carbon-silver bonds but only negligible traces of carbon-oxygen bonds. Theoretical modeling also provides evidence of the formation of robust ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Carbon price fluctuation prediction using blockchain information A new hybrid machine learning approach",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2024,
+      "abstract": "In this study, the novel hybrid machine learning approach is proposed in carbon price fluctuation prediction. Specifically, a research framework integrating DILATED Convolutional Neural Networks (CNN) and Long Short-Term Memory (LSTM) neural network algorithm is proposed. The advantage of the combined framework is that it can make feature extraction more efficient. Then, based on the DILATED CNN-LSTM framework, the L1 and L2 parameter norm penalty as regularization method is adopted to predict. ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Understanding the Impacts of Dark Pools on Price Discovery",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2016,
+      "abstract": "This paper investigates the impact of dark pools on price discovery (the efficiency of prices on stock exchanges to aggregate information). Assets are traded in either an exchange or a dark pool, with the dark pool offering better prices but lower execution rates. Informed traders receive noisy and heterogeneous signals about an asset's fundamental. We find that informed traders use dark pools to mitigate their information risk and there is a sorting effect: in equilibrium, traders with strong s",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Machine Learning for Everyone: Simplifying Healthcare Analytics with BigQuery ML",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2025,
+      "abstract": "Machine learning (ML) transforms healthcare by enabling predictive analytics, personalized treatments, and improved patient outcomes. However, traditional ML workflows often require specialized skills, infrastructure, and resources, limiting accessibility for many healthcare professionals. This paper explores how BigQuery ML Cloud service helps healthcare researchers and data analysts to build and deploy models using SQL, without need for advanced ML knowledge. Our results demonstrate that the B",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Carbon nanotube chirality determines properties of encapsulated linear carbon chain",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2017,
+      "abstract": "Long linear carbon chains encapsulated inside carbon nanotubes are a very close realization of carbyne, the truly one-dimensional allotrope of carbon. Here we study individual pairs of double-walled carbon nanotubes and encapsulated linear carbon chains by tip-enhanced Raman scattering. We observe that the radial breathing mode of the inner nanotube correlates with the frequency of the carbon chain's Raman mode, revealing that the nanotube chirality determines the vibronic and electronic propert",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Carbon Based Superconductors",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2007,
+      "abstract": "We review the characteristics of some carbon based novel superconductors which emerged in the past two decades since the discovery of superconductivity in the high-T_c oxocuprates. In particular, we summarize the properties of ternary layered carbide halides of the rare rarth metals with composition RE2C2X2 (RE = Y, La; X=Cl, Br, I) and of the rare earth di- and sesquicarbides, YC2, LaC2 and La2C3. Finally, we briefly discuss the properties of the recently discovered Ca and Yb intercalated graph",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "An Open-Source ML-Based Full-Stack Optimization Framework for Machine Learning Accelerators",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2023,
+      "abstract": "Parameterizable machine learning (ML) accelerators are the product of recent breakthroughs in ML. To fully enable their design space exploration (DSE), we propose a physical-design-driven, learning-based prediction framework for hardware-accelerated deep neural network (DNN) and non-DNN ML algorithms. It adopts a unified approach that combines backend power, performance, and area (PPA) analysis with frontend performance simulation, thereby achieving a realistic estimation of both backend PPA and",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Catalytic Formation of Narrow Nb Nanowires inside Carbon Nanotubes",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "We propose a previously unexplored way to form Nb nanowires from NbCl$_3$ molecules inside carbon nanotubes (CNTs). We have studied this reaction by ab initio density functional calculations and found it to be catalytically promoted in presence of graphitic carbon. Our results suggest that chemisorption of NbCl$_3$ on the CNT is accompanied by a charge transfer of ~0.5 electrons to the nanotube wall, which significantly weakens the Nb-Cl bond. We found that the bcc structure of Nb is not affecte",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "The unexpected thermal conductivity from graphene disk, carbon nanocone to carbon nanotube",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2016,
+      "abstract": "Graphene and single-wall carbon nanotube (SWCNT) have attracted great attention because of their ultra-high thermal conductivity. However, there are few works exploring the relations of their thermal conductivity quantitatively. The carbon nanocone (CNC) is a graded structure fall in between graphene disk (GD) and SWCNT. We perform non-equilibrium molecular dynamics (NEMD) simulation to study the thermal conductivity of CNC with different apex angles, and then compare them with that of GD and SW",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Radiomics-enhanced Deep Multi-task Learning for Outcome Prediction in Head and Neck Cancer",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2022,
+      "abstract": "Outcome prediction is crucial for head and neck cancer patients as it can provide prognostic information for early treatment planning. Radiomics methods have been widely used for outcome prediction from medical images. However, these methods are limited by their reliance on intractable manual segmentation of tumor regions. Recently, deep learning methods have been proposed to perform end-to-end outcome prediction so as to remove the reliance on manual segmentation. Unfortunately, without segment",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Thermal conductivity of a new carbon nanotube analogue: the diamond nanothread",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2015,
+      "abstract": "Based on the non-equilibrium molecular dynamics simulations, we have studied the thermal conductivities of a novel ultra-thin one-dimensional carbon nanomaterial - diamond nanothread (DNT). Unlike single-wall carbon nanotube (CNT), the existence of the Stone-Wales transformations in DNT endows it with richer thermal transport characteristics. There is a transition from wave-dominated to particle-dominated transport region, which depends on the length of poly-benzene rings. However, independent o",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Primordial origins of Earth's carbon",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2012,
+      "abstract": "In this chapter we review the astrophysical origins of Earth's carbon, starting from the products of the Big Bang and culminating with the Earth's formation. We review the measured compositions of different primitive objects including comets, various classes of meteorites and interstellar dust particles. We discuss the composition of the Solar Nebula, especially with regards to the distribution of volatiles such as carbon. We discuss dynamical models of planetary formation from planetesimals and",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Computer-predicted ionization energy of carbon within 1 cm$^{-1}$ of the best experiment",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2020,
+      "abstract": "We show that we can predict the first ionization energy of the carbon atom to within 0.872 cm$^{-1}$ of the experimental value. This is an improvement of more than a factor of 6.5 over the preceding best prediction in [Phys. Rev. A 81, 022503], and opens the door to achieving sub-cm$^{-1}$ accuracy for ab-initio predictions in larger elements of the periodic table.",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Carbon Nanotube Thin Film Field Emitting Diode: Understanding the System Response Based on Multiphysics Modeling",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2007,
+      "abstract": "In this paper, we model the evolution and self-assembly of randomly oriented carbon nanotubes (CNTs), grown on a metallic substrate in the form of a thin film for field emission under diode configuration. Despite high output, the current in such a thin film device often decays drastically. The present paper is focused on understanding this problem. A systematic, multiphysics based modelling approach is proposed. First, a nucleation coupled model for degradation of the CNT thin film is derived, w",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "The Price of Stability for First Price Auction",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2022,
+      "abstract": "This paper establishes the Price of Stability (PoS) for First Price Auctions, for all equilibrium concepts that have been studied in the literature: Bayes Nash Equilibrium $\\subsetneq$ Bayes Correlated Equilibrium $\\subsetneq$ Bayes Coarse Correlated Equilibrium}\n  $\\bullet$ Bayes Nash Equilibrium: For independent valuations, the tight PoS is $1 - 1/ e^{2} \\approx 0.8647$, matching the counterpart Price of Anarchy (PoA) bound \\cite{JL22}. For correlated valuations, the tight $\\PoS$ is $1 - 1 / e",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Searching for a magnetic proximity effect in magnetite-carbon structures",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2004,
+      "abstract": "In order to study a possible magnetic proximity effect in magnetite-carbon structures, we have performed magnetization measurements of graphite-magnetite composites with different mass ratios as well as the measurement of the magnetoresistance of one of them and of the magnetization of a magnetite-carbon bilayer. The overall results do not indicate the induction of bulk ferromagnetism in graphite and disordered carbon structures through their contact with magnetite.",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Organic Carbon Cycle in the Atmosphere of Venus",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2021,
+      "abstract": "The community commonly assumes that the Venusian atmosphere lacks organic (reduced) carbon. This is reflected in the literature, which now for almost a half a century does not mention organic carbon in connection with the Venus atmosphere. This assumption persists despite the failure of models that exclude organic carbon to account for many well-established observed features of the Venusian atmosphere. Here is presented a model summarizing reactions that almost certainly are occurring in the Ven",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Carbon Price Forecasting with Quantile Regression and Feature Selection",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2023,
+      "abstract": "Carbon futures has recently emerged as a novel financial asset in the trading markets such as the European Union and China. Monitoring the trend of the carbon price has become critical for both national policy-making as well as industrial manufacturing planning. However, various geopolitical, social, and economic factors can impose substantial influence on the carbon price. Due to its volatility and non-linearity, predicting accurate carbon prices is generally a difficult task. In this study, we",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Lapsing Quickly into Fatalism: Bell on Backward Causation",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2021,
+      "abstract": "This is a dialogue between Huw Price and Travis Norsen, loosely inspired by a letter that Price received from J. S. Bell in 1988. The main topic of discussion is Bell's views about retrocausal approaches to quantum theory, and their relevance to contemporary issues.",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "A comparative assessment of deep learning models for day-ahead load forecasting: Investigating key accuracy drivers",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2023,
+      "abstract": "Short-term load forecasting (STLF) is vital for the effective and economic operation of power grids and energy markets. However, the non-linearity and non-stationarity of electricity demand as well as its dependency on various external factors renders STLF a challenging task. To that end, several deep learning models have been proposed in the literature for STLF, reporting promising results. In order to evaluate the accuracy of said models in day-ahead forecasting settings, in this paper we focu",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Learn to Accumulate Evidence from All Training Samples: Theory and Practice",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2023,
+      "abstract": "Evidential deep learning, built upon belief theory and subjective logic, offers a principled and computationally efficient way to turn a deterministic neural network uncertainty-aware. The resultant evidential models can quantify fine-grained uncertainty using the learned evidence. To ensure theoretically sound evidential models, the evidence needs to be non-negative, which requires special activation functions for model training and inference. This constraint often leads to inferior predictive ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "The Modern Mathematics of Deep Learning",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2021,
+      "abstract": "We describe the new field of mathematical analysis of deep learning. This field emerged around a list of research questions that were not answered within the classical framework of learning theory. These questions concern: the outstanding generalization power of overparametrized neural networks, the role of depth in deep architectures, the apparent absence of the curse of dimensionality, the surprisingly successful optimization performance despite the non-convexity of the problem, understanding ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Deep Learning and Computational Physics (Lecture Notes)",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2023,
+      "abstract": "These notes were compiled as lecture notes for a course developed and taught at the University of the Southern California. They should be accessible to a typical engineering graduate student with a strong background in Applied Mathematics.\n  The main objective of these notes is to introduce a student who is familiar with concepts in linear algebra and partial differential equations to select topics in deep learning. These lecture notes exploit the strong connections between deep learning algorit",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "The Importance of Environmental Factors in Forecasting Australian Power Demand",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "We develop a time series model to forecast weekly peak power demand for three main states of Australia for a yearly time-scale, and show the crucial role of environmental factors in improving the forecasts. More precisely, we construct a seasonal autoregressive integrated moving average (SARIMA) model and reinforce it by employing the exogenous environmental variables including, maximum temperature, minimum temperature, and solar exposure. The estimated hybrid SARIMA-regression model exhibits an",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Monodense Deep Neural Model for Determining Item Price Elasticity",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2026,
+      "abstract": "Item Price Elasticity is used to quantify the responsiveness of consumer demand to changes in item prices, enabling businesses to create pricing strategies and optimize revenue management. Sectors such as store retail, e-commerce, and consumer goods rely on elasticity information derived from historical sales and pricing data. This elasticity provides an understanding of purchasing behavior across different items, consumer discount sensitivity, and demand elastic departments. This information is",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Lasso estimation for GEFCom2014 probabilistic electric load forecasting",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2016,
+      "abstract": "We present a methodology for probabilistic load forecasting that is based on lasso (least absolute shrinkage and selection operator) estimation. The model considered can be regarded as a bivariate time-varying threshold autoregressive(AR) process for the hourly electric load and temperature. The joint modeling approach incorporates the temperature effects directly, and reflects daily, weekly, and annual seasonal patterns and public holiday effects. We provide two empirical studies, one based on ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Compute and Energy Consumption Trends in Deep Learning Inference",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2021,
+      "abstract": "The progress of some AI paradigms such as deep learning is said to be linked to an exponential growth in the number of parameters. There are many studies corroborating these trends, but does this translate into an exponential increase in energy consumption? In order to answer this question we focus on inference costs rather than training costs, as the former account for most of the computing effort, solely because of the multiplicative factors. Also, apart from algorithmic innovations, we accoun",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Probabilistic Hierarchical Forecasting with Deep Poisson Mixtures",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2021,
+      "abstract": "Hierarchical forecasting problems arise when time series have a natural group structure, and predictions at multiple levels of aggregation and disaggregation across the groups are needed. In such problems, it is often desired to satisfy the aggregation constraints in a given hierarchy, referred to as hierarchical coherence in the literature. Maintaining coherence while producing accurate forecasts can be a challenging problem, especially in the case of probabilistic forecasting. We present a nov",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Hurricane Forecasting: A Novel Multimodal Machine Learning Framework",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2020,
+      "abstract": "This paper describes a novel machine learning (ML) framework for tropical cyclone intensity and track forecasting, combining multiple ML techniques and utilizing diverse data sources. Our multimodal framework, called Hurricast, efficiently combines spatial-temporal data with statistical data by extracting features with deep-learning encoder-decoder architectures and predicting with gradient-boosted trees. We evaluate our models in the North Atlantic and Eastern Pacific basins on 2016-2019 for 24",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "A multitask deep learning model for real-time deployment in embedded systems",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2017,
+      "abstract": "We propose an approach to Multitask Learning (MTL) to make deep learning models faster and lighter for applications in which multiple tasks need to be solved simultaneously, which is particularly useful in embedded, real-time systems. We develop a multitask model for both Object Detection and Semantic Segmentation and analyze the challenges that appear during its training. Our multitask network is 1.6x faster, lighter and uses less memory than deploying the single-task models in parallel. We con",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Deep learning observables in computational fluid dynamics",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "Many large scale problems in computational fluid dynamics such as uncertainty quantification, Bayesian inversion, data assimilation and PDE constrained optimization are considered very challenging computationally as they require a large number of expensive (forward) numerical solutions of the corresponding PDEs. We propose a machine learning algorithm, based on deep artificial neural networks, that predicts the underlying \\emph{input parameters to observable} map from a few training samples (com",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "DILIE: Deep Internal Learning for Image Enhancement",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2020,
+      "abstract": "We consider the generic deep image enhancement problem where an input image is transformed into a perceptually better-looking image. Recent methods for image enhancement consider the problem by performing style transfer and image restoration. The methods mostly fall into two categories: training data-based and training data-independent (deep internal learning methods). We perform image enhancement in the deep internal learning framework. Our Deep Internal Learning for Image Enhancement framework",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Generalized Regularized Evidential Deep Learning Models: Theory and Comprehensive Evaluation",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2025,
+      "abstract": "Evidential deep learning (EDL) models, based on Subjective Logic, introduce a principled and computationally efficient way to make deterministic neural networks uncertainty-aware. The resulting evidential models can quantify fine-grained uncertainty using learned evidence. However, the Subjective-Logic framework constrains evidence to be non-negative, requiring specific activation functions whose geometric properties can induce activation-dependent learning-freeze behavior: a regime where gradie",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Activation Analysis of a Byte-Based Deep Neural Network for Malware Classification",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "Feature engineering is one of the most costly aspects of developing effective machine learning models, and that cost is even greater in specialized problem domains, like malware classification, where expert skills are necessary to identify useful features. Recent work, however, has shown that deep learning models can be used to automatically learn feature representations directly from the raw, unstructured bytes of the binaries themselves. In this paper, we explore what these models are learning",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Predicting Thrombectomy Recanalization from CT Imaging Using Deep Learning Models",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2023,
+      "abstract": "For acute ischemic stroke (AIS) patients with large vessel occlusions, clinicians must decide if the benefit of mechanical thrombectomy (MTB) outweighs the risks and potential complications following an invasive procedure. Pre-treatment computed tomography (CT) and angiography (CTA) are widely used to characterize occlusions in the brain vasculature. If a patient is deemed eligible, a modified treatment in cerebral ischemia (mTICI) score will be used to grade how well blood flow is reestablished",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Quantile Regression for Qualifying Match of GEFCom2017 Probabilistic Load Forecasting",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2018,
+      "abstract": "We present a simple quantile regression-based forecasting method that was applied in a probabilistic load forecasting framework of the Global Energy Forecasting Competition 2017 (GEFCom2017). The hourly load data is log transformed and split into a long-term trend component and a remainder term. The key forecasting element is the quantile regression approach for the remainder term that takes into account weekly and annual seasonalities such as their interactions. Temperature information is only ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Forecasting intermittent time series with Gaussian Processes and Tweedie likelihood",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2025,
+      "abstract": "We adopt Gaussian Processes (GPs) as latent functions for probabilistic forecasting of intermittent time series. The model is trained in a Bayesian framework that accounts for the uncertainty about the latent function. We couple the latent GP variable with two types of forecast distributions: the negative binomial (NegBinGP) and the Tweedie distribution (TweedieGP). While the negative binomial has already been used in forecasting intermittent time series, this is the first time in which a fully ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "DeepCFL: Deep Contextual Features Learning from a Single Image",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2020,
+      "abstract": "Recently, there is a vast interest in developing image feature learning methods that are independent of the training data, such as deep image prior, InGAN, SinGAN, and DCIL. These methods are unsupervised and are used to perform low-level vision tasks such as image restoration, image editing, and image synthesis. In this work, we proposed a new training data-independent framework, called Deep Contextual Features Learning (DeepCFL), to perform image synthesis and image restoration based on the se",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "PePR: Performance Per Resource Unit as a Metric to Promote Small-Scale Deep Learning in Medical Image Analysis",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2024,
+      "abstract": "The recent advances in deep learning (DL) have been accelerated by access to large-scale data and compute. These large-scale resources have been used to train progressively larger models which are resource intensive in terms of compute, data, energy, and carbon emissions. These costs are becoming a new type of entry barrier to researchers and practitioners with limited access to resources at such scale, particularly in the Global South. In this work, we take a comprehensive look at the landscape",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Combining time-series and textual data for taxi demand prediction in event areas: a deep learning approach",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2018,
+      "abstract": "Accurate time-series forecasting is vital for numerous areas of application such as transportation, energy, finance, economics, etc. However, while modern techniques are able to explore large sets of temporal data to build forecasting models, they typically neglect valuable information that is often available under the form of unstructured text. Although this data is in a radically different format, it often contains contextual explanations for many of the patterns that are observed in the tempo",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Yield Curve Forecasting using Machine Learning and Econometrics: A Comparative Analysis",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2026,
+      "abstract": "While machine learning has revolutionized many fields such as natural language processing (NLP) and computer vision, its impact on time-series forecasting is still widely disputed, especially in the finance domain. This paper compares forecasting performance on U.S. Treasury yield curve data across econometrics/time-series analysis, classical machine learning, and deep learning methods, using daily data over 47 years. The Treasury yield curve is important because it is widely used by every parti",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Solution of Physics-based Bayesian Inverse Problems with Deep Generative Priors",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2021,
+      "abstract": "Inverse problems are ubiquitous in nature, arising in almost all areas of science and engineering ranging from geophysics and climate science to astrophysics and biomechanics. One of the central challenges in solving inverse problems is tackling their ill-posed nature. Bayesian inference provides a principled approach for overcoming this by formulating the inverse problem into a statistical framework. However, it is challenging to apply when inferring fields that have discrete representations of",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Forecasting Smog Clouds With Deep Learning",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2024,
+      "abstract": "In this proof-of-concept study, we conduct multivariate timeseries forecasting for the concentrations of nitrogen dioxide (NO2), ozone (O3), and (fine) particulate matter (PM10 & PM2.5) with meteorological covariates between two locations using various deep learning models, with a focus on long short-term memory (LSTM) and gated recurrent unit (GRU) architectures. In particular, we propose an integrated, hierarchical model architecture inspired by air pollution dynamics and atmospheric science t",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "The Dark Energy Survey",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2005,
+      "abstract": "We describe the Dark Energy Survey (DES), a proposed optical-near infrared survey of 5000 sq. deg of the South Galactic Cap to ~24th magnitude in SDSS griz, that would use a new 3 sq. deg CCD camera to be mounted on the Blanco 4-m telescope at Cerro Telolo Inter-American Observatory (CTIO). The survey data will allow us to measure the dark energy and dark matter densities and the dark energy equation of state through four independent methods: galaxy clusters, weak gravitational lensing tomograph",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Hybrid deep learning-based strategy for the hepatocellular carcinoma cancer grade classification of H&E stained liver histopathology images",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2024,
+      "abstract": "Hepatocellular carcinoma (HCC) is a common type of liver cancer whose early-stage diagnosis is a common challenge, mainly due to the manual assessment of hematoxylin and eosin-stained whole slide images, which is a time-consuming process and may lead to variability in decision-making. For accurate detection of HCC, we propose a hybrid deep learning-based architecture that uses transfer learning to extract the features from pre-trained convolutional neural network (CNN) models and a classifier ma",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Deep Learning for Crime Forecasting: The Role of Mobility at Fine-grained Spatiotemporal Scales",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2025,
+      "abstract": "Objectives: To develop a deep learning framework to evaluate if and how incorporating micro-level mobility features, alongside historical crime and sociodemographic data, enhances predictive performance in crime forecasting at fine-grained spatial and temporal resolutions.\n  Methods: We advance the literature on computational methods and crime forecasting by focusing on four U.S. cities (i.e., Baltimore, Chicago, Los Angeles, and Philadelphia). We employ crime incident data obtained from each ci",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Application of Deep Learning Long Short-Term Memory in Energy Demand Forecasting",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2019,
+      "abstract": "The smart metering infrastructure has changed how electricity is measured in both residential and industrial application. The large amount of data collected by smart meter per day provides a huge potential for analytics to support the operation of a smart grid, an example of which is energy demand forecasting. Short term energy forecasting can be used by utilities to assess if any forecasted peak energy demand would have an adverse effect on the power system transmission and distribution infrast",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Large Synoptic Survey Telescope: Dark Energy Science Collaboration",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2012,
+      "abstract": "This white paper describes the LSST Dark Energy Science Collaboration (DESC), whose goal is the study of dark energy and related topics in fundamental physics with data from the Large Synoptic Survey Telescope (LSST). It provides an overview of dark energy science and describes the current and anticipated state of the field. It makes the case for the DESC by laying out a robust analytical framework for dark energy science that has been defined by its members and the comprehensive three-year work",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    },
+    {
+      "title": "Modelling tourism demand to Spain with machine learning techniques. The impact of forecast horizon on model selection",
+      "doi": "",
+      "authors": [],
+      "journal": "arXiv",
+      "year": 2018,
+      "abstract": "This study assesses the influence of the forecast horizon on the forecasting performance of several machine learning techniques. We compare the fo recast accuracy of Support Vector Regression (SVR) to Neural Network (NN) models, using a linear model as a benchmark. We focus on international tourism demand to all seventeen regions of Spain. The SVR with a Gaussian radial basis function kernel outperforms the rest of the models for the longest forecast horizons. We also find that machine learning ",
+      "citation_count": 0,
+      "source": "arxiv",
+      "quality_level": "D",
+      "quality_detail": {
+        "level": "D",
+        "note": "预印本，未正式发表",
+        "source": "preprint"
+      },
+      "author_h_index": 0,
+      "is_preprint": true
+    }
+  ],
+  "level_counts": {
+    "S": 47,
+    "A": 6,
+    "B": 9,
+    "C": 9
+  }
+}
