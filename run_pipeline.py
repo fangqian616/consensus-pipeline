@@ -541,6 +541,73 @@ def reclassify_papers(papers):
     return papers
 
 
+def filter_by_content_relevance(papers):
+    """
+    v5.1.7: 内容相关性过滤——S级论文也不能仅凭期刊名入选。
+    检查每篇论文的标题+abstract是否与主题（能源+ML）相关，
+    不相关的论文降级为C（不删除，但不进入综述引用池）。
+    """
+    log("Phase4.6", "内容相关性过滤（标题+abstract vs 主题关键词）...")
+
+    # 能源领域核心词
+    energy_keywords = {
+        "energy", "electricity", "carbon", "power", "renewable",
+        "solar", "wind", "oil", "gas", "fuel", "climate",
+        "emission", "grid", "load", "price", "demand", "supply",
+        "forecast", "market", "nuclear", "hydrogen", "battery",
+        "能源", "电力", "碳", "电价", "负荷", "预测",
+        "pv", "photovoltaic", "consumption", "heating", "cooling",
+        "building energy", "smart grid", "microgrid", "storage",
+        "coal", "petroleum", "lng", "cng", "thermal",
+    }
+
+    # ML/AI核心词
+    ml_keywords = {
+        "machine learning", "deep learning", "neural network",
+        "lstm", "gru", "xgboost", "random forest", "transformer",
+        "gradient boosting", "reinforcement learning", "cnn", "rnn",
+        "gnn", "svm", "svr", "regression", "classification",
+        "clustering", "nlp", "gan", "autoencoder", "attention",
+        "ai", "artificial intelligence", "ml", "dl", "prediction",
+        "forecasting model", "time series", "optimization algorithm",
+        "ensemble", "bayesian", "causal inference", "transfer learning",
+        "federated learning", "机器学习", "深度学习", "神经网络",
+        "分解-集成", "混合模型", "集成学习",
+    }
+
+    demoted = 0
+    for p in papers:
+        if p.quality_level not in ("S", "A"):
+            continue  # B/C级不过滤，本来引用概率低
+
+        text = (p.title + " " + (p.abstract or "")).lower()
+
+        has_energy = any(kw in text for kw in energy_keywords)
+        has_ml = any(kw in text for kw in ml_keywords)
+
+        if not has_energy and not has_ml:
+            # 完全不相关（化学/生物/纯社科等）
+            old = p.quality_level
+            p.quality_level = "C"
+            log("Phase4.6", f"  降级 [{old}→C] 无能源无ML: {p.title[:50]}... ({p.journal})")
+            demoted += 1
+        elif has_ml and not has_energy:
+            # ML论文但不涉及能源领域（网络安全/医学/自然语言等）
+            old = p.quality_level
+            p.quality_level = "C"
+            log("Phase4.6", f"  降级 [{old}→C] 有ML无能源: {p.title[:50]}... ({p.journal})")
+            demoted += 1
+        elif has_energy and not has_ml:
+            # 能源论文但无ML——保留但标注（可作为领域背景引用）
+            pass
+
+    from collections import Counter
+    level_counts = Counter(p.quality_level for p in papers)
+    log("Phase4.6", f"内容相关性过滤完成: {demoted}篇降级, 分级分布: {dict(level_counts)}")
+
+    return papers
+
+
 # ============ Phase 7: 最终报告 + PDF（v5.1: 双模板 ReportGenerator） ============
 def phase7_final_report(papers, preprints, dept_outputs, cross_results,
                         prog_output="", tut_output="", relevance_log=None):
@@ -791,6 +858,9 @@ def main():
 
         # Phase 4.5: 用最新注册表重新分级论文（v5.1.3）
         papers = reclassify_papers(papers)
+
+        # Phase 4.6: 内容相关性过滤（v5.1.7）
+        papers = filter_by_content_relevance(papers)
 
         # Phase 5: 部门辩论
         dept_outputs = phase5_debate(config, papers, preprints)
