@@ -172,10 +172,11 @@ class ReportGenerator:
         fact_check_summary: str,
     ) -> str:
         """用LLM基于论文元数据直接撰写学术综述报告"""
-        # 构建论文清单供AI参考
-        paper_list = self._format_paper_list(papers)
-        year_dist = self._compute_year_distribution(papers)
-        method_dist = self._compute_method_distribution(papers)
+        # 构建论文清单供AI参考——只传S/A/B级，C级不传
+        qualified = [p for p in papers if p.quality_level in ("S", "A", "B")]
+        paper_list = self._format_paper_list(qualified)
+        year_dist = self._compute_year_distribution(qualified)
+        method_dist = self._compute_method_distribution(qualified)
         consensus_text = "\n".join([f"- {c}" for c in (consensus_points or [])])
 
         system_prompt = """你是一位资深学术综述撰写专家。你的任务是基于给定的论文数据撰写一篇结构完整的学术动向综述报告。
@@ -187,7 +188,9 @@ class ReportGenerator:
 4. 趋势分析基于年份分布数据，说明演进脉络
 5. 反面证据必须包含：对主流方法的有效批评、失败案例、适用边界
 6. 研究空白要从"为什么没人做"和"做了有什么价值"两个角度分析
-7. 语言学术化但不晦涩，避免空话套话"""
+7. 语言学术化但不晦涩，避免空话套话
+8. 只引用论文清单中提供的论文，不要凭空编造不存在的论文
+9. 清单中可能包含与主题不太相关的论文（如化学、材料学等），请仅引用与主题直接相关的论文"""
 
         user_prompt = f"""请撰写「{topic}」领域的学术动向综述报告。
 
@@ -199,7 +202,7 @@ class ReportGenerator:
 ### 方法分布（从标题/摘要提取）
 {method_dist}
 
-### 论文清单（{len(papers)}篇：S级{len(s_papers)}、A级{len(a_papers)}、B级{len(b_papers)}）
+### 论文清单（{len(qualified)}篇S/A/B级，其中S级{len(s_papers)}、A级{len(a_papers)}、B级{len(b_papers)}）
 {paper_list}
 
 ### 部门辩论共识
@@ -239,7 +242,7 @@ class ReportGenerator:
             report = self._llm_call_long(system_prompt, user_prompt, temperature=0.25)
             if report and len(report) > 500:
                 # 用论文元数据重建参考文献，保证引用序号一一对应
-                report = self._rebuild_references(report, papers)
+                report = self._rebuild_references(report, qualified)
                 # 补充页脚
                 if fact_check_summary:
                     report += f"\n\n---\n\n> 📋 事实校验：{fact_check_summary}"
