@@ -30,3 +30,15 @@ Thumbs.db
 
 # 审校报告（在项目空间管理）
 审校报告*.md
+
+# 开发笔记/计划
+ALIGNMENT_PLAN*
+journal_registry_extension*
+v517_acceptance*
+
+# 测试脚本
+run_test.sh
+test_full_pipeline.py
+
+# 根目录残留的旧版文件
+/report_generator.py
