@@ -412,11 +412,21 @@ def phase6_cross_debate(config, dept_outputs):
 
 
 # ============ Phase 7: 最终报告 + PDF ============
-def phase7_final_report(papers, preprints, dept_outputs, cross_results):
-    """生成最终报告"""
-    log("Phase7", "生成最终报告")
+def phase7_final_report(papers, preprints, dept_outputs, cross_results, prog_output="", tut_output=""):
+    """
+    生成最终报告（v5.1重构：学术调研标准结构）
 
-    # 构建Markdown报告
+    报告结构：
+    1. 摘要
+    2. 主题聚类（从topic_clustering组提取）
+    3. 方法论对比（从methodology_review组提取）
+    4. 核心发现与反面证据（从counter_evidence组提取）
+    5. 程序与教程产出
+    6. 局限性与研究建议
+    7. 参考文献
+    """
+    log("Phase7", "生成最终报告（v5.1结构）")
+
     now = datetime.now().strftime("%Y年%m月%d日")
 
     # 统计
@@ -426,44 +436,96 @@ def phase7_final_report(papers, preprints, dept_outputs, cross_results):
 
     sections = []
 
-    # 标题页
+    # ===== 一、标题页+摘要 =====
     sections.append(f"""# {TOPIC}
 
-> 学术动向调研报告 | Consensus Pipeline v4.5
+> 学术动向调研报告 | Consensus Pipeline v5.1
 > 生成日期：{now}
 
----""")
+---
 
-    # 摘要
-    sections.append(f"""## 一、摘要
+## 一、摘要
 
-本报告对「{TOPIC}」领域的学术论文动向进行了系统性调研。
-共检索并筛选 **{len(papers)}** 篇高质量文献（S级{level_counts.get('S',0)}篇、A级{level_counts.get('A',0)}篇、B级{level_counts.get('B',0)}篇），
-另有预印本 {len(preprints)} 篇作为附录参考。
+本报告对「{TOPIC}」领域进行了系统性学术调研。
+共筛选 **{len(papers)}** 篇期刊论文（S级{level_counts.get('S',0)}篇、A级{level_counts.get('A',0)}篇、B级{level_counts.get('B',0)}篇），
+另有预印本 {len(preprints)} 篇作为补充参考。检索源覆盖 arXiv、Semantic Scholar、OpenAlex，
+经四道筛子过滤（期刊分级→引用加权→作者声望→内容相关性）确保论文质量与主题相关性。
 
-本报告通过多部门辩论（文献检索组、方法论审查组、反方质疑组、主题聚类组、可视化组、
-报告整合组、程序部、教程部）和交叉辩论，确保调研结论的全面性和客观性。""")
+报告按「主题聚类→方法论对比→核心发现→反面证据→实践工具→局限性」结构组织，
+通过多部门交叉辩论确保结论的全面性和批判性。""")
 
-    # 领域概览
-    sections.append(f"""## 二、领域概览
+    # ===== 二、主题聚类 =====
+    clustering_output = dept_outputs.get("topic_clustering", {})
+    sections.append(f"""## 二、主题聚类
 
-### 检索范围
-- 检索源：arXiv / Semantic Scholar / OpenAlex
-- 检索关键词：machine learning energy economics / ML carbon price prediction / deep learning energy demand forecasting
-- 期刊质量：CSSCI及以上（S级为主、A级辅助、B级代表性1-2篇）
-- 论文总数：{len(papers)}篇（期刊）+ {len(preprints)}篇（预印本）
+*基于{len(papers)}篇论文的9维度聚类分析（研究领域、方法论、数据类型、地理范围、时间特征、研究设计、核心发现、政策含义、技术路线）*
 
-### 质量分布
+{(clustering_output.get("consensus") or "（聚类分析待补充）")}""")
 
-| 等级 | 数量 | 说明 |
-|------|------|------|
-| S级 | {level_counts.get('S',0)} | SCI/SSCI Q1顶刊，主力来源 |
-| A级 | {level_counts.get('A',0)} | 高质量辅助来源 |
-| B级 | {level_counts.get('B',0)} | 代表性文献 |
-| C级 | {level_counts.get('C',0)} | 回退补充（高引） |""")
+    # ===== 三、方法论对比 =====
+    method_output = dept_outputs.get("methodology_review", {})
+    sections.append(f"""## 三、方法论对比
 
-    # 论文清单
-    sections.append("## 三、论文清单\n")
+*从方法论严格性角度审视该领域主流方法的优势、局限与适用边界*
+
+{(method_output.get("consensus") or "（方法论对比待补充）")}""")
+
+    # ===== 四、核心发现与反面证据 =====
+    counter_output = dept_outputs.get("counter_evidence", {})
+    report_output = dept_outputs.get("report_integration", {})
+    sections.append(f"""## 四、核心发现与反面证据
+
+### 4.1 核心发现
+
+{(report_output.get("consensus") or "（核心发现待补充）")}
+
+### 4.2 反面证据与争议
+
+*批判性审视：以下为反方质疑组识别的争议点和适用边界*
+
+{(counter_output.get("consensus") or "（反面证据待补充）")}""")
+
+    # ===== 五、程序与教程 =====
+    sections.append(f"""## 五、实践工具
+
+### 5.1 程序部产出：技术选型与可运行代码
+
+{prog_output or "（程序部产出待补充）"}
+
+### 5.2 教程部产出：入门与进阶教程
+
+{tut_output or "（教程部产出待补充）"}""")
+
+    # ===== 六、局限性与研究建议 =====
+    sections.append(f"""## 六、局限性与研究建议
+
+### 6.1 本报告局限性
+- 检索词为英文，未覆盖中文文献（如CSSCI中文期刊）
+- Semantic Scholar存在API限流，部分高引论文可能遗漏
+- 相关性筛选基于关键词匹配，可能误滤跨学科论文
+- 预印本未经同行评审，结论需谨慎引用
+
+### 6.2 研究建议
+- 建议补充中文关键词检索（如"机器学习 碳价预测"、"深度学习 电力负荷"）
+- 重点关注Energy Economics、Applied Energy等核心期刊的最新特刊
+- 建议采用计量经济学与ML混合方法，弥补纯数据驱动的理论不足
+- 建议关注可解释AI（XAI）在能源政策评估中的应用""")
+
+    # ===== 七、交叉辩论摘要 =====
+    if cross_results:
+        cross_summary_parts = []
+        for cr in cross_results:
+            side_a = cr.get("side_a", "?")
+            side_b = cr.get("side_b", "?")
+            topic = cr.get("topic", "")
+            result_text = cr.get("result", "")
+            cross_summary_parts.append(f"**{side_a} vs {side_b}**（{topic}）\n\n{result_text}")
+        sections.append(f"""## 七、交叉辩论摘要
+
+{chr(10).join(cross_summary_parts)}""")
+
+    # ===== 八、参考文献 =====
+    sections.append("## 八、参考文献\n")
     level_order = {"S": 0, "A": 1, "B": 2, "C": 3}
     sorted_papers = sorted(papers, key=lambda p: (level_order.get(p.quality_level, 5), -p.citation_count))
 
@@ -471,47 +533,13 @@ def phase7_final_report(papers, preprints, dept_outputs, cross_results):
         authors_str = ", ".join(p.authors[:3])
         if len(p.authors) > 3:
             authors_str += " et al."
-        sections.append(
-            f"### [{i}] [{p.quality_level}级] {p.title}\n"
-            f"- 作者: {authors_str}\n"
-            f"- 期刊: *{p.journal}* ({p.year}), 被引{p.citation_count}次\n"
-            f"- DOI: {p.doi or 'N/A'}\n"
-        )
-        if p.abstract:
-            sections.append(f"> {p.abstract[:300]}...\n")
-
-    # 各部门辩论产出
-    sections.append("## 四、部门辩论产出\n")
-    for dept_key, output in dept_outputs.items():
-        dept_name = output.get("department", dept_key)
-        sections.append(f"### {dept_name}\n")
-        if output.get("consensus"):
-            sections.append(output["consensus"])
-        sections.append("")
-
-    # 交叉辩论
-    if cross_results:
-        sections.append("## 五、交叉辩论\n")
-        for cr in cross_results:
-            sections.append(f"### {cr.get('side_a','?')} vs {cr.get('side_b','?')}\n")
-            sections.append(f"**主题**: {cr.get('topic','')}\n")
-            if cr.get("result"):
-                sections.append(cr["result"])
-            sections.append("")
-
-    # 参考文献
-    sections.append("## 六、参考文献\n")
-    for i, p in enumerate(sorted_papers, 1):
-        authors_str = ", ".join(p.authors[:3])
-        if len(p.authors) > 3:
-            authors_str += " et al."
         doi_str = f" DOI: {p.doi}" if p.doi else ""
-        sections.append(f"[{i}] {authors_str}. {p.title}. *{p.journal}*, {p.year}.{doi_str}")
+        sections.append(f"[{i}] [{p.quality_level}级] {authors_str}. {p.title}. *{p.journal}*, {p.year}.{doi_str}")
 
     # 预印本附录
     if preprints:
-        sections.append("\n## 附录：预印本\n")
-        for i, p in enumerate(preprints[:10], 1):
+        sections.append(f"\n## 附录：预印本（{len(preprints)}篇，未经同行评审）\n")
+        for i, p in enumerate(preprints[:20], 1):
             sections.append(f"[P{i}] {p.title} ({p.year}), 被引{p.citation_count}次")
 
     full_report = "\n\n".join(sections)
@@ -674,14 +702,15 @@ def main():
         # Phase 6: 交叉辩论
         cross_results = phase6_cross_debate(config, dept_outputs)
 
-        # Phase 7: 最终报告
-        report = phase7_final_report(papers, preprints, dept_outputs, cross_results)
-
         # 程序部独立输出
         prog_output = generate_programming_output(papers)
 
         # 教程部独立输出
         tut_output = generate_tutorial_output(papers)
+
+        # Phase 7: 最终报告（v5.1: 程序+教程产出直接接入报告正文）
+        report = phase7_final_report(papers, preprints, dept_outputs, cross_results,
+                                     prog_output=prog_output, tut_output=tut_output)
 
         # 自我评估
         evaluation = self_evaluation(report, papers, dept_outputs)

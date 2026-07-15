@@ -193,8 +193,8 @@ class AcademicSearchEngine:
                 paper.quality_detail = detail
                 journal_papers.append(paper)
 
-        # 四道筛子过滤（仅期刊论文）
-        filtered = self._apply_four_sieves(journal_papers)
+        # 四道筛子过滤（仅期刊论文，v5.1: 传入query激活第四道相关性筛子）
+        filtered = self._apply_four_sieves(journal_papers, query=query)
 
         # 保证数量回退：如果筛选后不足min_results，逐步放宽
         if len(filtered) < self.min_results:
@@ -450,8 +450,20 @@ class AcademicSearchEngine:
 
         return result
 
-    def _apply_four_sieves(self, papers: List[PaperCandidate]) -> List[PaperCandidate]:
-        """四道筛子过滤（v4.4: 独立B级计数+第三道筛子已激活）"""
+    def _apply_four_sieves(
+        self,
+        papers: List[PaperCandidate],
+        query: str = "",
+        relevance_threshold: float = 0.10,
+    ) -> List[PaperCandidate]:
+        """
+        四道筛子过滤（v5.1: 第四道筛子激活——内容相关性过滤）
+
+        Args:
+            papers: 候选论文
+            query: 原始检索词（用于相关性计算）
+            relevance_threshold: 相关性阈值（0~1），低于此值的论文被过滤
+        """
         import datetime
         current_year = datetime.datetime.now().year
         result = []
@@ -486,7 +498,108 @@ class AcademicSearchEngine:
                 if paper.quality_level not in ["S"]:
                     continue
 
-            # 第四道：内容初筛（暂不实现，由辩论环节处理）
+            # 第四道：内容相关性筛选（v5.1激活）
+            if query:
+                relevance = self._compute_relevance(paper, query)
+                if relevance < relevance_threshold:
+                    continue
+
             result.append(paper)
 
         return result
+
+    @staticmethod
+    def _compute_relevance(paper: PaperCandidate, query: str) -> float:
+        """
+        计算论文与检索词的相关性分数（0~1）。
+
+        算法：检索词拆分为关键词，统计标题+摘要中命中的比例，
+        并对标题命中加权。如果核心领域词（如"energy""ML""learning"）
+        完全未出现，给予惩罚。
+
+        Args:
+            paper: 候选论文
+            query: 原始检索词
+
+        Returns:
+            相关性分数 0~1
+        """
+        # 预处理：拆分检索词为关键词集合
+        stop_words = {
+            "a", "an", "the", "in", "on", "of", "for", "and", "or",
+            "to", "with", "by", "from", "at", "is", "are", "was",
+            "were", "be", "been", "being", "that", "this", "it",
+            "not", "no", "but", "as", "its", "has", "had", "have",
+            "can", "will", "would", "could", "should", "may", "might",
+            "do", "does", "did", "using", "used", "use", "based",
+            "via", "through", "into", "over", "between", "among",
+        }
+
+        # 领域核心词（必须至少命中一个，否则惩罚）
+        domain_must_have = {
+            "energy", "electricity", "carbon", "power", "renewable",
+            "solar", "wind", "oil", "gas", "fuel", "climate",
+            "emission", "grid", "load", "price", "demand", "supply",
+            "forecast", "market", "nuclear", "hydrogen", "battery",
+            "能源", "电力", "碳", "电价", "负荷", "预测",
+        }
+
+        ml_must_have = {
+            "machine learning", "deep learning", "neural network",
+            "lstm", "xgboost", "random forest", "transformer",
+            "gradient boosting", "reinforcement learning", "cnn",
+            "rnn", "gnn", "svm", "regression", "classification",
+            "clustering", "nlp", "gan", "autoencoder", "attention",
+            "ai", "artificial intelligence", "ml", "dl",
+            "机器学习", "深度学习", "神经网络",
+        }
+
+        query_lower = query.lower()
+        # 提取查询关键词
+        query_tokens = set()
+        for token in query_lower.replace(",", " ").replace("/", " ").split():
+            token = token.strip()
+            if token and token not in stop_words and len(token) > 1:
+                query_tokens.add(token)
+
+        # 大粒度短语（如"machine learning"）
+        query_phrases = set()
+        for phrase in [query_lower]:
+            for sub in phrase.split(","):
+                sub = sub.strip()
+                if len(sub.split()) >= 2:
+                    query_phrases.add(sub)
+
+        if not query_tokens:
+            return 0.5  # 无有效关键词时不过滤
+
+        # 论文文本
+        title_lower = paper.title.lower()
+        abstract_lower = (paper.abstract or "").lower()
+        combined = title_lower + " " + abstract_lower
+
+        # 命中计算
+        title_hits = sum(1 for t in query_tokens if t in title_lower)
+        abstract_hits = sum(1 for t in query_tokens if t in abstract_lower)
+        phrase_hits = sum(1 for p in query_phrases if p in combined)
+
+        # 标题命中加权2x，短语命中加权3x
+        raw_score = (title_hits * 2 + abstract_hits + phrase_hits * 3)
+        max_score = len(query_tokens) * 2 + len(query_phrases) * 3  # 标题全命中的满分
+
+        if max_score == 0:
+            return 0.5
+
+        base_score = min(raw_score / max_score, 1.0)
+
+        # 领域必须词检查：如果论文完全不涉及energy领域或ML领域，降权
+        has_domain = any(w in combined for w in domain_must_have)
+        has_ml = any(w in combined for w in ml_must_have)
+
+        penalty = 1.0
+        if not has_domain:
+            penalty *= 0.3  # 不涉及能源领域→大幅降权
+        if not has_ml:
+            penalty *= 0.5  # 不涉及ML→中等降权
+
+        return base_score * penalty

@@ -1,7 +1,8 @@
 """
-报告生成器 — Consensus Pipeline v4.0
+报告生成器 — Consensus Pipeline v5.1
 
-将所有部门的输出整合为最终的组会汇报PDF/Markdown。
+将所有部门的输出整合为学术调研标准结构报告。
+v5.1: 报告结构从"论文清单"改为"主题聚类→方法论对比→核心发现→反面证据→实践工具→局限性"
 """
 import json
 import os
