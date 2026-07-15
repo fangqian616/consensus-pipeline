@@ -13,15 +13,21 @@ from datetime import datetime
 # 确保模块路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# 加载.env文件（密钥管理）
+from dotenv import load_dotenv
+_env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+if os.path.exists(_env_path):
+    load_dotenv(_env_path)
+
 # ============ 配置 ============
 API_URL = "https://api.deepseek.com/v1/chat/completions"
-API_KEY = "DEEPSEEK_API_KEY_REMOVED"
+API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 MODEL = "deepseek-v4-flash"
 TOPIC = "机器学习在能源经济学上的运用"
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_output")
 
-# easyScholar API密钥（v5.0：实时期刊分级）
-os.environ["EASYSCHOLAR_SECRET_KEY"] = "EASYSCHOLAR_KEY_REMOVED"
+# easyScholar API密钥（v5.0：实时期刊分级）— 从环境变量读取
+# 如需使用，请设置环境变量 EASYSCHOLAR_SECRET_KEY
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 

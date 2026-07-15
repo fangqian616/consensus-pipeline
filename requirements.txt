@@ -1,3 +1,4 @@
 streamlit>=1.30.0
 requests>=2.28.0
 fpdf2>=2.8
+python-dotenv>=1.0.0
