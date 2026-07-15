@@ -384,7 +384,7 @@ class AcademicSearchEngine:
             import urllib.request
 
             import urllib.parse as _urlp
-            url = f"https://api.openalex.org/works?search={_urlp.quote_plus(query)}&per_page={max_results}&select=id,doi,title,publication_year,cited_by_count,authorships,primary_location,type"
+            url = f"https://api.openalex.org/works?search={_urlp.quote_plus(query)}&per_page={max_results}&select=id,doi,title,publication_year,cited_by_count,authorships,primary_location,type,abstract_inverted_index"
             req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
             with urllib.request.urlopen(req, timeout=20) as resp:
                 data = json.loads(resp.read())
@@ -408,12 +408,25 @@ class AcademicSearchEngine:
 
                 is_preprint = work_type in ["preprint", "working_paper"]
 
+                # v5.1.7: 从abstract_inverted_index还原abstract文本
+                abstract_text = ""
+                aii = work.get("abstract_inverted_index")
+                if aii and isinstance(aii, dict):
+                    # 将倒排索引还原为有序文本
+                    word_positions = []
+                    for word, positions in aii.items():
+                        for pos in positions:
+                            word_positions.append((pos, word))
+                    word_positions.sort()
+                    abstract_text = " ".join(w for _, w in word_positions)
+
                 results.append(PaperCandidate(
                     title=work.get("title", ""),
                     doi=doi,
                     authors=authors,
                     journal=journal_name,
                     year=work.get("publication_year") or 0,
+                    abstract=safe_truncate(abstract_text, 500),
                     citation_count=work.get("cited_by_count", 0) or 0,
                     source="openalex",
                     is_preprint=is_preprint,
