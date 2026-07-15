@@ -33,8 +33,9 @@ class ReportGenerator:
     - internal_doc.md：内部工作文档，完整过程记录
     """
 
-    def __init__(self, output_dir: str = "./output"):
+    def __init__(self, output_dir: str = "./output", llm_call_fn=None):
         self.output_dir = output_dir
+        self.llm_call_fn = llm_call_fn
 
     def generate(
         self,
@@ -80,6 +81,11 @@ class ReportGenerator:
             topic, papers, clusters, consensus_points,
             fact_check_summary, methodology_reviews,
         )
+
+        # AI精炼去废话
+        if self.llm_call_fn:
+            final_content = self._ai_refine(final_content, topic)
+
         final_path = os.path.join(self.output_dir, "final_report.md")
         with open(final_path, "w", encoding="utf-8") as f:
             f.write(final_content)
@@ -165,14 +171,7 @@ class ReportGenerator:
         # 页脚
         sections.append(self._build_final_footer(now, fact_check_summary))
 
-        full_text = "\n\n".join(sections)
-
-        # v5.1: 硬性截断保护——交付报告不超过3000字符（含标题+页脚）
-        MAX_CHARS = 3000
-        if len(full_text) > MAX_CHARS:
-            full_text = full_text[:MAX_CHARS - 50] + "\n\n> ⚠️ 报告已截断，完整内容见内部工作文档。"
-
-        return full_text
+        return "\n\n".join(sections)
 
     def _build_final_title(self, topic: str, now: str) -> str:
         return f"""# {topic}
@@ -239,6 +238,33 @@ class ReportGenerator:
             return result[:max_chars - 1] + "…"
         return result
 
+    def _ai_refine(self, draft: str, topic: str) -> str:
+        """用LLM精炼报告：去废话、提信息密度、保留所有section"""
+        system_prompt = """你是一位学术报告精炼编辑。你的任务：
+1. 删除所有寒暄语、角色扮演语（如"好的"、"作为XX专家"、"我来分析"等）
+2. 每句话必须承载可验证结论或具体数据，删除零信息量表述
+3. 保留所有章节结构和参考文献
+4. 核心发现部分：从辩论共识中提取实质学术结论，不要保留辩论过程描述
+5. 量化指标优先于定性描述（"提升了15%"优于"有显著提升"）
+6. 反面证据必须保留并标注
+7. 输出Markdown，不添加原文没有的新章节"""
+
+        user_prompt = f"""请精炼以下学术调研报告，去除废话、保留精华。不要改变章节结构，不要删除参考文献。
+
+主题：{topic}
+
+---报告草稿---
+{draft}
+---结束---"""
+
+        try:
+            refined = self.llm_call_fn(system_prompt, user_prompt, temperature=0.15)
+            if refined and len(refined) > 200:
+                return refined
+        except Exception:
+            pass
+        return draft
+
     def _build_final_findings(
         self,
         s_papers: List[PaperCandidate],
@@ -296,32 +322,27 @@ class ReportGenerator:
         clusters: List[ClusterResult],
         methodology_reviews: Optional[Dict[str, Any]],
     ) -> str:
-        """方法论分布：≤8行表格，趋势标注"""
-        lines = ["## 二、方法论分布", ""]
-        lines.append("| 方法类别 | 论文数 | 代表论文 | 适用场景 | 趋势 |")
-        lines.append("|---------|--------|---------|---------|------|")
-
-        # 优先从methodology_reviews提取
+        """方法论分布：有数据时才输出表格"""
+        # 收集方法分布
+        method_items = []
         if methodology_reviews and "distribution" in methodology_reviews:
             dist = methodology_reviews["distribution"]
-            for cat, info in list(dist.items())[:8]:
+            for cat, info in list(dist.items())[:5]:
                 count = info.get("count", 0) if isinstance(info, dict) else info
                 scenario = info.get("scenario", "") if isinstance(info, dict) else ""
                 trend = info.get("trend", "→") if isinstance(info, dict) else "→"
-                lines.append(f"| {cat} | {count} | - | {scenario} | {trend} |")
+                method_items.append(f"- **{cat}**: {count}篇，{scenario} {trend}")
         else:
-            # 从cluster回退
-            meth_cluster = None
             for c in clusters:
-                if c.dimension == "methodology":
-                    meth_cluster = c
-                    break
-            if meth_cluster and meth_cluster.distribution:
-                for cat, count in sorted(meth_cluster.distribution.items(), key=lambda x: -x[1])[:8]:
-                    lines.append(f"| {cat} | {count} | - | - | → |")
+                if c.dimension == "methodology" and c.distribution:
+                    for cat, count in sorted(c.distribution.items(), key=lambda x: -x[1])[:5]:
+                        method_items.append(f"- **{cat}**: {count}篇")
 
-        lines.append("")
-        lines.append("> 趋势：↑ 新兴热点 | → 稳定主流 | ↓ 逐渐衰退")
+        if not method_items:
+            return "## 二、方法论分布\n\n*待方法论审查部门产出后补充*"
+
+        lines = ["## 二、方法论分布", ""]
+        lines.extend(method_items)
         return "\n".join(lines)
 
     def _build_final_trends(self, papers: List[PaperCandidate]) -> str:
@@ -347,7 +368,7 @@ class ReportGenerator:
         s_papers: List[PaperCandidate],
         a_papers: List[PaperCandidate],
     ) -> str:
-        """代表性论文 Top 5"""
+        """代表性论文 Top 5，仅标题+期刊+年份"""
         lines = ["## 四、代表性论文", ""]
 
         top = (s_papers + a_papers)[:5]
@@ -356,14 +377,10 @@ class ReportGenerator:
             return "\n".join(lines)
 
         for i, p in enumerate(top, 1):
-            title = _safe_truncate(p.title, 80)
+            title = _safe_truncate(p.title, 60)
             journal = p.journal or "预印本"
             year = p.year or "未知"
-            lines.append(f"{i}. **{title}** — *{journal}*, {year}")
-            if p.abstract:
-                reason = self._extract_significance(p)
-                lines.append(f"   > {reason}")
-            lines.append("")
+            lines.append(f"{i}. {title} — *{journal}*, {year}")
 
         return "\n".join(lines)
 
@@ -393,23 +410,22 @@ class ReportGenerator:
         s_papers: List[PaperCandidate],
         a_papers: List[PaperCandidate],
     ) -> str:
-        """参考文献 ≤10篇，GB/T 7714格式"""
+        """参考文献：S级+A级全量列出"""
         lines = ["## 六、参考文献", ""]
 
-        top = (s_papers + a_papers)[:10]
+        top = s_papers + a_papers
         if not top:
             return "\n".join(lines)
 
         for i, p in enumerate(top, 1):
-            authors = ", ".join(p.authors[:3])
-            if len(p.authors) > 3:
+            authors = ", ".join(p.authors[:2])
+            if len(p.authors) > 2:
                 authors += " 等"
-            title = _safe_truncate(p.title, 120)
+            title = _safe_truncate(p.title, 60)
             journal = p.journal or "预印本"
             year = p.year or "未知"
-            doi = f" DOI: {p.doi}." if p.doi else ""
 
-            lines.append(f"[{i}] {authors}. {title}[J]. {journal}, {year}.{doi}")
+            lines.append(f"[{i}] {authors}. {title}. {journal}, {year}.")
 
         return "\n".join(lines)
 
