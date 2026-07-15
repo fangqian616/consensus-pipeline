@@ -579,8 +579,27 @@ class ReportGenerator:
         for dept_name, content in debate_outputs.items():
             lines.append(f"### {dept_name}")
             lines.append("")
-            lines.append(content)
-            lines.append("")
+            if isinstance(content, dict):
+                # 结构化辩论输出：提取consensus + debater_arguments
+                if content.get("consensus"):
+                    lines.append(f"**共识：** {content['consensus']}")
+                    lines.append("")
+                if content.get("debater_arguments"):
+                    args = content["debater_arguments"]
+                    if isinstance(args, dict):
+                        for debater, arg in args.items():
+                            lines.append(f"**{debater}：** {arg}")
+                            lines.append("")
+                    elif isinstance(args, list):
+                        for arg in args:
+                            lines.append(str(arg))
+                            lines.append("")
+                    else:
+                        lines.append(str(args))
+                        lines.append("")
+            else:
+                lines.append(str(content))
+                lines.append("")
 
         return "\n".join(lines)
 
