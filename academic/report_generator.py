@@ -190,7 +190,8 @@ class ReportGenerator:
 6. 研究空白要从"为什么没人做"和"做了有什么价值"两个角度分析
 7. 语言学术化但不晦涩，避免空话套话
 8. 只引用论文清单中提供的论文，不要凭空编造不存在的论文
-9. 清单中可能包含与主题不太相关的论文（如化学、材料学等），请仅引用与主题直接相关的论文"""
+9. 清单中标注⚠️的论文与本主题不相关，请不要引用
+10. 清单中可能包含与主题不太相关的论文（如化学、材料学等），请仅引用与主题直接相关的论文"""
 
         user_prompt = f"""请撰写「{topic}」领域的学术动向综述报告。
 
@@ -314,7 +315,14 @@ class ReportGenerator:
 
     @staticmethod
     def _format_paper_list(papers: List[PaperCandidate], max_papers: int = 80) -> str:
-        """格式化论文清单供AI参考"""
+        """格式化论文清单供AI参考，标注可能不相关的论文"""
+        # 不相关领域关键词
+        irrelevant_markers = [
+            "plant survival", "drought mortality", "genomic", "gapseq", "bacterial metabolic",
+            "rubisco", "carbon isotope", "soil respiration", "two-sided market",
+            "agricultural economics", "crop breeding", "botany", "annals of botany",
+            "new phytologist", "genome biology", "bmc genomics",
+        ]
         lines = []
         for i, p in enumerate(papers[:max_papers], 1):
             authors = ", ".join(p.authors[:2])
@@ -325,7 +333,11 @@ class ReportGenerator:
             year = p.year or "n/a"
             level = p.quality_level
             cite = p.citation_count
-            lines.append(f"[{i}] [{level}] {authors}. {title}. {journal}, {year}. (引用:{cite})")
+            # 检查相关性
+            text = (p.title + " " + (p.journal or "")).lower()
+            is_irrelevant = any(kw in text for kw in irrelevant_markers)
+            marker = " ⚠️可能不相关" if is_irrelevant else ""
+            lines.append(f"[{i}] [{level}]{marker} {authors}. {title}. {journal}, {year}. (引用:{cite})")
         if len(papers) > max_papers:
             lines.append(f"... 共{len(papers)}篇，此处省略{len(papers)-max_papers}篇")
         return "\n".join(lines)
