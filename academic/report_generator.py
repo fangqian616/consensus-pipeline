@@ -182,7 +182,7 @@ class ReportGenerator:
         method_dist = self._compute_method_distribution(qualified)
         consensus_text = "\n".join([f"- {c}" for c in (consensus_points or [])])
 
-        system_prompt = """你是一位资深学术综述撰写专家。你的任务是基于给定的论文数据撰写一篇结构完整的学术动向综述报告。
+        system_prompt = """你是一位资深学术综述撰写专家。你的任务是基于给定的论文数据和辩论组共识撰写一篇结构完整的学术动向综述报告。
 
 写作规范：
 1. 每个章节要有实质内容段落，不是干巴巴的要点列表
@@ -199,7 +199,11 @@ class ReportGenerator:
 12. 【反面证据】核心发现章节中，每个主流结论必须至少配1条反对或质疑证据，标注置信度🟢高🟡中🔴低
 13. 【引用忠实性】引用[N]时，只能描述论文清单中该论文的标题和摘要已知信息。严禁编造该论文中不存在的具体实验、方法细节、数据结果或案例。如果你对该论文内容不确定，使用"参见[N]"代替具体描述
 14. 【续写规则】如果你需要续写未完成的内容，续写部分的引用[N]同样必须严格遵循规则13，只描述清单中的已知信息
-15. 【部门辩论整合】如果提供了部门辩论产出，优先采用各部门已验证的分析结论和论文描述，这些结论已经过交叉验证，可信度高于你自己推断的内容。在此基础上进行综述性整合，而非从零重新描述论文"""
+15. 【部门辩论整合】如果提供了部门辩论产出，优先采用各部门已验证的分析结论和论文描述，这些结论已经过交叉验证，可信度高于你自己推断的内容。在此基础上进行综述性整合，而非从零重新描述论文
+16. 【量化硬规则】描述任何方法效果时，必须包含至少一项量化指标（如"预测精度MAPE=3.2%""在XX数据集上R²=0.95""降低了15%的RMSE"），禁止只写"效果良好""广泛应用""取得显著提升"等空泛描述。若论文未报告量化指标，注明"该论文未报告量化指标"
+17. 【辩论焦点必现】综述中至少3处引用辩论组的分歧点，格式为"XX部门认为...，但反方质疑部门指出..."，最终给出交叉辩论后的结论。这是共识管线区别于普通AI综述的核心特征
+18. 【对比矩阵填充】方法论对比表每个单元格必须非空，预测精度列必须包含具体数值或"未报告"，趋势列使用↑↑(快速上升)/↑(上升)/→(平稳)/↓(下降)符号
+19. 【数据卡片先行】综述开头必须先输出结构化数据卡片"""
 
         user_prompt = f"""请撰写「{topic}」领域的学术动向综述报告。
 
@@ -227,26 +231,42 @@ class ReportGenerator:
 
 > 学术动向综述 | Consensus Pipeline v5 | {now}
 
-## 摘要
-（200字以内，概述调研范围、核心发现、方法论格局）
+## 数据卡片
+
+| 指标 | 值 |
+|------|------|
+| 检索论文数 | {len(qualified)} |
+| S级 | {len(s_papers)} |
+| A级 | {len(a_papers)} |
+| B级 | {len(b_papers)} |
+| 时间跨度 | {self._compute_year_span(qualified)} |
+| 方法类别数 | {len(method_dist.split(chr(10)))} |
+| 预印本数 | {len(papers) - len(qualified)} |
 
 ## 一、研究概况与发展脉络
 （基于年份分布，描述该领域从何时兴起、关键转折点、当前热度。引用具体论文说明里程碑工作）
 
-## 二、方法论格局与对比
-（分类别阐述主流方法，每类说明：核心思路、代表论文、优势、局限、适用场景。用表格做横向对比）
+## 二、方法论演进与量化对比
+（2.1 时间线：从统计→深度学习→混合→因果的演进脉络，标注年份节点和方法论突破论文）
+（2.2 量化对比矩阵：每个单元格必须有具体数字或"未报告"，趋势列用↑↑/↑/→/↓）
+（2.3 辩论焦点：至少3处引用"XX部门认为...但反方质疑部门指出..."的交锋，给出交叉辩论结论）
 
 | 方法类别 | 代表论文 | 预测精度 | 可解释性 | 数据需求 | 计算开销 | 趋势 |
 |---------|---------|---------|---------|---------|---------|------|
 
 ## 三、核心发现与争议
-（3-5条实质性发现，每条必须有支撑论文和反面证据。标注置信度🟢高🟡中🔴低）
+（3-5条实质性发现，每条=支持证据链+反方质疑+交叉辩论结论。标注置信度🟢高🟡中🔴低。
+格式：**发现N：标题**
+支持证据：...[N]...
+反方质疑：...[N]...
+辩论结论：...
+置信度：🟢/🟡/🔴）
 
-## 四、研究空白与前沿方向
-（5个空白，每个说明：现状→为什么重要→可行路径→预期突破）
+## 四、研究空白与文献计量证据
+（5个空白，每个：现状→文献计量佐证(如"76篇中仅2篇涉及")→为什么没人做→价值→可行路径）
 
 ## 五、参考文献
-（列出所有S级和A级论文，GB/T 7714格式）"""
+（列出所有S级和A级论文，按S/A/B分组，GB/T 7714格式）"""
 
         try:
             # 综述需要长输出，用专用调用
@@ -580,6 +600,17 @@ class ReportGenerator:
                 continue
             
             dept_name_map = {
+                "文献检索组": "文献检索部",
+                "元数据审查组": "元数据审查部",
+                "引用网络组": "引用网络部",
+                "方法论审查组": "方法论审查部",
+                "数据验证组": "数据验证部",
+                "反方质疑组": "反方质疑部",
+                "主题聚类组": "主题聚类部",
+                "可视化组": "可视化部",
+                "报告整合组": "报告整合部",
+                "程序开发组": "程序开发部",
+                "教程编写组": "教程编写部",
                 "literature_search": "文献检索部",
                 "methodology_review": "方法论审查部",
                 "counter_evidence": "反方质疑部",
@@ -587,6 +618,10 @@ class ReportGenerator:
                 "data_validation": "数据验证部",
                 "topic_clustering": "主题聚类部",
                 "metadata_inspector": "元数据审查部",
+                "visualization": "可视化部",
+                "report_integration": "报告整合部",
+                "programming": "程序开发部",
+                "tutorial": "教程编写部",
             }
             dept_name = dept_name_map.get(dept_key, dept_key)
             
@@ -654,6 +689,14 @@ class ReportGenerator:
         return "\n".join(lines)
 
     @staticmethod
+    def _compute_year_span(papers: List[PaperCandidate]) -> str:
+        """计算年份跨度"""
+        years = [p.year for p in papers if p.year and p.year > 1990]
+        if not years:
+            return "N/A"
+        return f"{min(years)}-{max(years)}"
+
+    @staticmethod
     def _compute_year_distribution(papers: List[PaperCandidate]) -> str:
         """计算年份分布"""
         year_counts = {}
@@ -675,15 +718,22 @@ class ReportGenerator:
             "LSTM/GRU": ["lstm", "gru", "rnn", "recurrent"],
             "Transformer": ["transformer", "attention", "bert", "gpt"],
             "CNN": ["cnn", "convolutional", "convnet"],
-            "XGBoost/GBDT": ["xgboost", "gbdt", "gradient boosting", "lightgbm"],
+            "XGBoost/GBDT": ["xgboost", "gbdt", "gradient boosting", "lightgbm", "catboost"],
             "GNN/Graph": ["gnn", "graph neural", "graph convolution"],
-            "因果推断": ["causal", "did", "difference-in-diff", "instrumental"],
+            "因果推断": ["causal", "did", "difference-in-diff", "instrumental", "causal inference"],
             "强化学习": ["reinforcement", "rl ", "deep q", "policy gradient"],
             "贝叶斯": ["bayesian", "mcmc", "variational inference"],
             "集成学习": ["ensemble", "stacking", "bagging", "random forest"],
             "优化算法": ["optimization", "pso", "genetic algorithm", "evolutionary"],
-            "NLP/文本": ["nlp", "text mining", "sentiment", "word2vec"],
+            "NLP/文本": ["nlp", "text mining", "sentiment", "word2vec", "topic model"],
             "联邦学习": ["federated", "federated learning"],
+            # v5.1.5: 能源经济学特有方法
+            "分解-集成": ["emd", "ceemdan", "vmd", "wavelet", "decompos", "empirical mode", "eemd"],
+            "混合模型": ["hybrid", "combined model", "ensemble deep", "multi-model", "fusion"],
+            "物理信息融合": ["physics-informed", "pinns", "physics-guided", "mechanism", "domain knowledge"],
+            "迁移学习": ["transfer learn", "domain adapt", "pre-train", "fine-tun"],
+            "SVAR/计量": ["svar", "var ", "vecm", "cointegrat", "econometric", "granger"],
+            "SVM/SVR": ["svm", "svr", "support vector", "kernel method"],
         }
         counts = {}
         for cat, kws in method_keywords.items():

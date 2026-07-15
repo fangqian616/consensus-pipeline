@@ -240,17 +240,87 @@ def phase4_search():
     return all_papers, all_preprints, relevance_log
 
 
-# ============ Phase 5: 部门辩论（简化版） ============
+# ============ Phase 5: 部门辩论 ============
+
+# 部门→论文筛选关键词映射（v5.1.5: 按部门分配相关论文）
+DEPT_PAPER_FILTERS = {
+    "literature_search": {"any": ["review", "survey", "overview", "systematic"]},
+    "metadata_inspector": None,  # 全量
+    "citation_network": {"any": ["citation", "impact", "influential", "network"]},
+    "methodology_review": {"any": ["lstm", "transformer", "xgboost", "cnn", "svm", "ensemble",
+                                     "reinforcement", "bayesian", "decompos", "hybrid", "forecast",
+                                     "prediction", "neural", "deep learn", "machine learn",
+                                     "random forest", "gru", "attention"]},
+    "data_validation": {"any": ["validation", "cross", "robust", "benchmark", "comparison",
+                                 "empirical", "dataset", "sample"]},
+    "counter_evidence": {"any": ["limitation", "failure", "challenge", "comparison", "versus",
+                                  "against", "outperform", "superior", "robust", "sensitivity"]},
+    "topic_clustering": None,  # 全量
+    "visualization": None,  # 全量
+    "report_integration": None,  # 全量
+    "programming": {"any": ["python", "code", "implementation", "framework", "open-source",
+                             "pytorch", "tensorflow", "scikit", "pipeline", "algorithm"]},
+    "tutorial": {"any": ["tutorial", "guide", "beginner", "introduction", "step", "practical"]},
+}
+
+
+def _filter_papers_for_dept(dept_key, papers, top_n=40):
+    """按部门关键词筛选相关论文，返回按相关性排序的子集"""
+    filters = DEPT_PAPER_FILTERS.get(dept_key)
+    if filters is None:
+        # 全量，但限制数量
+        return papers[:top_n]
+
+    keywords = filters.get("any", [])
+    scored = []
+    for p in papers:
+        text = (p.title + " " + (p.abstract or "")).lower()
+        score = sum(1 for kw in keywords if kw in text)
+        # 质量加权：S级+2, A级+1
+        if p.quality_level == 'S':
+            score += 2
+        elif p.quality_level == 'A':
+            score += 1
+        scored.append((score, p))
+
+    scored.sort(key=lambda x: (-x[0], -x[1].citation_count))
+    result = [p for s, p in scored if s > 0]
+    # 至少保留15篇，不足则补充高质量论文
+    if len(result) < 15:
+        existing_ids = {id(p) for p in result}
+        for p in papers:
+            if id(p) not in existing_ids and p.quality_level in ('S', 'A'):
+                result.append(p)
+                existing_ids.add(id(p))
+                if len(result) >= 15:
+                    break
+    return result[:top_n]
+
+
+def _build_papers_summary(papers, max_abstract=300):
+    """构建论文摘要文本供辩论使用"""
+    lines = []
+    for i, p in enumerate(papers, 1):
+        authors = ", ".join(p.authors[:3])
+        if len(p.authors) > 3:
+            authors += " et al."
+        abstract_text = (p.abstract or 'N/A')[:max_abstract]
+        lines.append(
+            f"[{i}] {p.title}\n"
+            f"    作者: {authors} | 期刊: {p.journal} | 年份: {p.year} | "
+            f"被引: {p.citation_count} | 等级: {p.quality_level}\n"
+            f"    摘要: {abstract_text}"
+        )
+    return "\n".join(lines)
+
+
 def phase5_debate(config, papers, preprints):
-    """各部门辩论产出"""
+    """各部门辩论产出（v5.1.5: 按部门筛选论文+注入abstract）"""
     log("Phase5", "开始部门辩论")
 
     departments = config.get("departments", {})
     dept_order = config.get("dept_order", list(departments.keys()))
     debate_rounds = config.get("debate_rounds", 2)
-
-    # 准备论文摘要供辩论使用
-    papers_summary = _build_papers_summary(papers)
 
     dept_outputs = {}
 
@@ -259,7 +329,12 @@ def phase5_debate(config, papers, preprints):
         dept_name = dept_info.get("zh_name", dept_key)
         debaters = dept_info.get("debaters", {})
 
-        log("Phase5", f"部门: {dept_name} ({dept_key}), 辩手: {list(debaters.keys())}")
+        # v5.1.5: 按部门筛选相关论文
+        dept_papers = _filter_papers_for_dept(dept_key, papers, top_n=40)
+        papers_summary = _build_papers_summary(dept_papers, max_abstract=400)
+
+        log("Phase5", f"部门: {dept_name} ({dept_key}), 辩手: {list(debaters.keys())}, "
+            f"论文: {len(dept_papers)}/{len(papers)}")
 
         # 为每个部门生成辩论产出
         output = _debate_department(dept_key, dept_name, debaters, papers_summary, debate_rounds)
@@ -268,23 +343,6 @@ def phase5_debate(config, papers, preprints):
 
     save_json(dept_outputs, "phase5_all_dept_outputs.json")
     return dept_outputs
-
-
-def _build_papers_summary(papers):
-    """构建论文摘要文本供辩论使用"""
-    lines = []
-    for i, p in enumerate(papers[:50], 1):  # 扩展到50篇
-        authors = ", ".join(p.authors[:3])
-        if len(p.authors) > 3:
-            authors += " et al."
-        abstract_text = p.abstract[:300] if p.abstract else 'N/A'
-        lines.append(
-            f"[{i}] {p.title}\n"
-            f"    作者: {authors} | 期刊: {p.journal} | 年份: {p.year} | "
-            f"被引: {p.citation_count} | 等级: {p.quality_level}\n"
-            f"    摘要: {abstract_text}"
-        )
-    return "\n".join(lines)
 
 
 def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
@@ -365,7 +423,7 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
 3. 给出可操作的建议
 4. 中文输出，结构化格式"""
 
-        user_msg = f"论文列表：\n{papers_summary[:8000]}"
+        user_msg = f"论文列表：\n{papers_summary[:12000]}"
 
         log("Phase5", f"  辩手 {debater['name']} 发言中...")
         response = llm_call(system_prompt, user_msg, temperature=0.4)
