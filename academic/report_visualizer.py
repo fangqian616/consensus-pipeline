@@ -151,7 +151,7 @@ def _plot_method_distribution(papers: List[PaperCandidate], charts_dir: str, top
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
 
-    # 方法关键词映射
+    # 方法关键词映射（互斥分类：每篇论文只归入第一个匹配的类别）
     method_keywords = {
         "LSTM/GRU": ["lstm", "gru", "rnn", "recurrent"],
         "Transformer": ["transformer", "attention", "bert", "gpt"],
@@ -164,33 +164,29 @@ def _plot_method_distribution(papers: List[PaperCandidate], charts_dir: str, top
         "集成学习": ["ensemble", "stacking", "bagging", "random forest"],
         "优化算法": ["optimization", "pso", "genetic algorithm", "evolutionary"],
         "联邦学习": ["federated", "federated learning"],
-        "其他": [],
     }
 
+    # 互斥分类：每篇论文只归入第一个匹配的类别
     counts = {}
     classified = set()
-    for cat, kws in method_keywords.items():
-        if cat == "其他":
-            continue
-        c = 0
-        for i, p in enumerate(papers):
-            text = (p.title + " " + (p.abstract or "")).lower()
+    for i, p in enumerate(papers):
+        text = (p.title + " " + (p.abstract or "")).lower()
+        matched = False
+        for cat, kws in method_keywords.items():
             if any(k in text for k in kws):
-                c += 1
+                counts[cat] = counts.get(cat, 0) + 1
                 classified.add(i)
-        if c > 0:
-            counts[cat] = c
-
-    # 未被任何分类覆盖的归入"其他"
-    other_count = len(papers) - len(classified)
-    if other_count > 0:
-        counts["其他"] = other_count
+                matched = True
+                break  # 每篇论文只归入第一个匹配的类别
+        # 未匹配任何类别的论文归入"其他"
+        if not matched:
+            counts["其他"] = counts.get("其他", 0) + 1
 
     if not counts:
         return ""
 
-    # 合并小分类（<5%归入其他）
-    total = sum(counts.values())
+    # 合并小分类（<3%归入其他），互斥分类下total = len(papers)
+    total = len(papers)
     merged = {}
     other_extra = 0
     for cat, c in counts.items():
