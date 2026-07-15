@@ -47,3 +47,4 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+run_output/run.log
