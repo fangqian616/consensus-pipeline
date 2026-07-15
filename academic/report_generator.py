@@ -204,7 +204,9 @@ class ReportGenerator:
 17. 【辩论焦点必现】综述中至少3处引用辩论组的分歧点，格式为"XX部门认为...，但反方质疑部门指出..."，最终给出交叉辩论后的结论。这是共识管线区别于普通AI综述的核心特征
 18. 【对比矩阵填充】方法论对比表每个单元格必须包含具体内容（数字、"未报告"、或简短描述），绝对禁止填写"参见[N]"。预测精度列必须包含具体数值或"未报告"，趋势列使用↑↑(快速上升)/↑(上升)/→(平稳)/↓(下降)符号
 19. 【数据卡片先行】综述开头必须先输出结构化数据卡片
-20. 【正文连贯性】每个段落必须是完整的学术论述句，禁止出现孤立的引用句号等断裂式引用。引用必须嵌入完整句子中"""
+20. 【正文连贯性】每个段落必须是完整的学术论述句，禁止出现孤立的引用句号等断裂式引用。引用必须嵌入完整句子中
+21. 【摘要驱动引用】论文清单已包含每篇论文的摘要。引用[N]时，描述的内容必须与该论文摘要中的实际内容一致，不得凭标题推断。如果摘要为空或不足以支撑你的论述，注明"该论文摘要信息不足"而不是自行推测
+22. 【无关论文已过滤】内容相关性过滤已在上游完成，被降级的论文不会出现在清单中。但仍请检查：如果某篇论文的摘要明显与主题无关，不要引用"""
 
         user_prompt = f"""请撰写「{topic}」领域的学术动向综述报告。
 
@@ -661,7 +663,7 @@ class ReportGenerator:
 
     @staticmethod
     def _format_paper_list(papers: List[PaperCandidate], max_papers: int = 80) -> str:
-        """格式化论文清单供AI参考，标注可能不相关的论文"""
+        """格式化论文清单供AI参考（v5.1.7: 注入abstract，标注不相关论文）"""
         # 不相关领域关键词
         irrelevant_markers = [
             "plant survival", "drought mortality", "genomic", "gapseq", "bacterial metabolic",
@@ -683,7 +685,15 @@ class ReportGenerator:
             text = (p.title + " " + (p.journal or "")).lower()
             is_irrelevant = any(kw in text for kw in irrelevant_markers)
             marker = " ⚠️可能不相关" if is_irrelevant else ""
-            lines.append(f"[{i}] [{level}]{marker} {authors}. {title}. {journal}, {year}. (引用:{cite})")
+            # v5.1.7: 注入abstract，让综述AI能看到论文具体内容
+            abstract_text = ""
+            if p.abstract:
+                max_abs = 150 if level in ("S", "A") else 80
+                abstract_text = p.abstract[:max_abs]
+                if len(p.abstract) > max_abs:
+                    abstract_text += "..."
+            abs_line = f"\n    摘要: {abstract_text}" if abstract_text else ""
+            lines.append(f"[{i}] [{level}]{marker} {authors}. {title}. {journal}, {year}. (引用:{cite}){abs_line}")
         if len(papers) > max_papers:
             lines.append(f"... 共{len(papers)}篇，此处省略{len(papers)-max_papers}篇")
         return "\n".join(lines)
