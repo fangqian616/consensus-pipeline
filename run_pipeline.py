@@ -541,6 +541,70 @@ def reclassify_papers(papers):
     return papers
 
 
+def backfill_abstracts(papers):
+    """
+    v5.1.7: 对S/A级论文回填abstract。
+    使用Semantic Scholar API按DOI/标题查询，补充缺失的摘要。
+    """
+    log("Phase4.7", "回填S/A级论文abstract...")
+
+    to_fill = [p for p in papers if p.quality_level in ("S", "A") and not p.abstract]
+    if not to_fill:
+        log("Phase4.7", "无需回填，所有S/A级论文已有abstract")
+        return papers
+
+    log("Phase4.7", f"需要回填: {len(to_fill)}篇")
+
+    filled = 0
+    for p in to_fill:
+        try:
+            import urllib.request
+            import urllib.parse as _urlp
+
+            # 优先用DOI查询
+            if p.doi:
+                url = f"https://api.semanticscholar.org/graph/v1/paper/DOI:{_urlp.quote_plus(p.doi)}?fields=abstract"
+            else:
+                url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={_urlp.quote_plus(p.title[:100])}&limit=1&fields=abstract"
+
+            req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/5.1.7"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read())
+
+            # 从搜索结果或直接结果中提取abstract
+            abstract = ""
+            if "abstract" in data and data["abstract"]:
+                abstract = data["abstract"]
+            elif "data" in data and data["data"]:
+                for item in data["data"]:
+                    if item.get("abstract"):
+                        abstract = item["abstract"]
+                        break
+
+            if abstract:
+                p.abstract = abstract[:500]
+                filled += 1
+                log("Phase4.7", f"  ✓ 回填: {p.title[:50]}...")
+            else:
+                log("Phase4.7", f"  ✗ 无abstract: {p.title[:50]}...")
+
+            # SS限流：每秒不超过1次
+            time.sleep(1.1)
+
+        except Exception as e:
+            log("Phase4.7", f"  ✗ 回填失败: {p.title[:40]}... ({e})")
+            time.sleep(1)
+
+    log("Phase4.7", f"abstract回填完成: {filled}/{len(to_fill)}篇成功")
+
+    # 统计最终abstract覆盖率
+    total_sa = sum(1 for p in papers if p.quality_level in ("S", "A"))
+    with_abs = sum(1 for p in papers if p.quality_level in ("S", "A") and p.abstract)
+    log("Phase4.7", f"S/A级abstract覆盖率: {with_abs}/{total_sa} ({with_abs*100//max(total_sa,1)}%)")
+
+    return papers
+
+
 def filter_by_content_relevance(papers):
     """
     v5.1.7: 内容相关性过滤——S级论文也不能仅凭期刊名入选。
@@ -861,6 +925,9 @@ def main():
 
         # Phase 4.6: 内容相关性过滤（v5.1.7）
         papers = filter_by_content_relevance(papers)
+
+        # Phase 4.7: 回填S/A级论文abstract（v5.1.7）
+        papers = backfill_abstracts(papers)
 
         # Phase 5: 部门辩论
         dept_outputs = phase5_debate(config, papers, preprints)
