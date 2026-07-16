@@ -549,12 +549,21 @@ class AcademicSearchEngine:
         }
 
         # 领域核心词（必须至少命中一个，否则惩罚）
+        # v5.1.8-fix2: carbon需搭配市场/价格/排放语境才计为能源领域
         domain_must_have = {
-            "energy", "electricity", "carbon", "power", "renewable",
+            "energy", "electricity", "power", "renewable",
             "solar", "wind", "oil", "gas", "fuel", "climate",
             "emission", "grid", "load", "price", "demand", "supply",
             "forecast", "market", "nuclear", "hydrogen", "battery",
+            "carbon price", "carbon market", "carbon emission", "carbon trading",
+            "carbon tax", "carbon capture", "carbon budget",
             "能源", "电力", "碳", "电价", "负荷", "预测",
+        }
+        # 含carbon但非能源语境的排除词
+        carbon_exclude = {
+            "carbon nitride", "carbon nanotube", "carbon fiber",
+            "carbon dioxide reduction", "graphitic carbon", "activated carbon",
+            "carbon black", "carbon film",
         }
 
         ml_must_have = {
@@ -614,5 +623,8 @@ class AcademicSearchEngine:
             penalty *= 0.3  # 不涉及能源领域→大幅降权
         if not has_ml:
             penalty *= 0.5  # 不涉及ML→中等降权
+        # v5.1.8-fix2: 排除非能源语境的carbon词（纳米材料/化学等）
+        if any(ex in combined for ex in carbon_exclude):
+            penalty *= 0.2
 
         return base_score * penalty
