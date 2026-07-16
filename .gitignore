@@ -36,6 +36,10 @@ ALIGNMENT_PLAN*
 journal_registry_extension*
 v517_acceptance*
 
+# 运行脚本（含本地路径/敏感配置）
+run_v6.sh
+run_wrapper.sh
+
 # 测试脚本
 run_test.sh
 test_full_pipeline.py
