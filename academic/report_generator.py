@@ -343,9 +343,9 @@ class ReportGenerator:
         if not cited_indices:
             return report  # 无引用则不改
 
-        # 2. 找到并移除所有"参考文献"section（v5.1.8-fix: 防止重复段）
-        # AI可能在报告中多次生成"参考文献"，全部移除后统一重建
-        report = re.sub(r'\n#{1,3}\s*参考文献.*', '', report, flags=re.DOTALL)
+        # 2. 找到并移除所有"参考文献"section（v5.1.8-fix2: 防止重复段）
+        # AI可能生成"## 五、参考文献"或"## 参考文献"，全部移除后统一重建
+        report = re.sub(r'\n#{1,3}\s*(?:[一二三四五六七八九十]+[、.．]\s*)?参考文献.*', '', report, flags=re.DOTALL)
         ref_section = "\n\n## 参考文献\n\n"
 
         # 3. 用论文元数据生成参考文献列表——按等级分组
@@ -695,6 +695,8 @@ class ReportGenerator:
             "rubisco", "carbon isotope", "soil respiration", "two-sided market",
             "agricultural economics", "crop breeding", "botany", "annals of botany",
             "new phytologist", "genome biology", "bmc genomics",
+            "carbon nitride", "carbon nanotube", "graphitic carbon", "activated carbon",
+            "cyber security", "movement primitives", "assessment for learning",
         ]
         lines = []
         for i, p in enumerate(papers[:max_papers], 1):
@@ -1401,7 +1403,7 @@ class ReportGenerator:
             return "混合模型策略，在预测精度上取得突破"
         if "lstm" in title_lower or "gru" in title_lower:
             return "深度学习在能源时序预测中的基准性工作"
-        if "carbon" in title_lower:
+        if "carbon price" in title_lower or "carbon market" in title_lower or "carbon emission" in title_lower or "carbon trading" in title_lower or "carbon budget" in title_lower:
             return "碳市场/碳价格建模的核心研究"
         return "在方法论或应用场景上有重要贡献"
 
