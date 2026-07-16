@@ -82,6 +82,7 @@ class PaperCandidate:
     quality_detail: Dict[str, Any] = field(default_factory=dict)
     author_h_index: int = 0  # 第三道筛子使用
     is_preprint: bool = False  # v4.4: 标记预印本
+    layer: str = ""  # v6.0: QC标注层 (core/method/background)
 
     def to_dict(self) -> dict:
         import dataclasses
@@ -107,6 +108,7 @@ class AcademicSearchEngine:
         recent_year_buffer: int = 3,
         min_results: int = 20,  # v4.4: 保证最少产出论文数
         include_preprints: bool = True,  # v4.4: 是否包含预印本
+        domain_config: Optional[Dict[str, Any]] = None,  # v6.0: 动态领域配置
     ):
         """
         Args:
@@ -116,6 +118,7 @@ class AcademicSearchEngine:
             recent_year_buffer: 近N年论文放宽引用要求
             min_results: 保证最少产出论文数（不足时自动放宽筛子）
             include_preprints: 是否在最终结果中保留预印本（降级附录）
+            domain_config: v6.0动态领域配置（由domain_config_generator生成）
         """
         self.quality_levels = quality_levels or ["S", "A", "B"]
         self.min_citations = min_citations
@@ -123,6 +126,7 @@ class AcademicSearchEngine:
         self.recent_year_buffer = recent_year_buffer
         self.min_results = min_results
         self.include_preprints = include_preprints
+        self.domain_config = domain_config
 
     def search(
         self,
@@ -511,9 +515,9 @@ class AcademicSearchEngine:
                 if paper.quality_level not in ["S"]:
                     continue
 
-            # 第四道：内容相关性筛选（v5.1激活）
+            # 第四道：内容相关性筛选（v5.1激活，v6.0: 支持domain_config驱动）
             if query:
-                relevance = self._compute_relevance(paper, query)
+                relevance = self._compute_relevance(paper, query, domain_config=self.domain_config)
                 if relevance < relevance_threshold:
                     continue
 
@@ -522,17 +526,20 @@ class AcademicSearchEngine:
         return result
 
     @staticmethod
-    def _compute_relevance(paper: PaperCandidate, query: str) -> float:
+    def _compute_relevance(paper: PaperCandidate, query: str, domain_config: Optional[Dict[str, Any]] = None) -> float:
         """
         计算论文与检索词的相关性分数（0~1）。
 
+        v6.0: 如果提供了domain_config，从中读取exclusion_signals和tier_definitions，
+        不再使用硬编码的领域关键词。命中exclusion_signals的论文直接返回0.0（不是penalty×0.2）。
+
         算法：检索词拆分为关键词，统计标题+摘要中命中的比例，
-        并对标题命中加权。如果核心领域词（如"energy""ML""learning"）
-        完全未出现，给予惩罚。
+        并对标题命中加权。如果核心领域词完全未出现，给予惩罚。
 
         Args:
             paper: 候选论文
             query: 原始检索词
+            domain_config: v6.0动态领域配置（可选）
 
         Returns:
             相关性分数 0~1
@@ -548,33 +555,57 @@ class AcademicSearchEngine:
             "via", "through", "into", "over", "between", "among",
         }
 
-        # 领域核心词（必须至少命中一个，否则惩罚）
-        # v5.1.8-fix2: carbon需搭配市场/价格/排放语境才计为能源领域
-        domain_must_have = {
-            "energy", "electricity", "power", "renewable",
-            "solar", "wind", "oil", "gas", "fuel", "climate",
-            "emission", "grid", "load", "price", "demand", "supply",
-            "forecast", "market", "nuclear", "hydrogen", "battery",
-            "carbon price", "carbon market", "carbon emission", "carbon trading",
-            "carbon tax", "carbon capture", "carbon budget",
-            "能源", "电力", "碳", "电价", "负荷", "预测",
-        }
-        # 含carbon但非能源语境的排除词
-        carbon_exclude = {
-            "carbon nitride", "carbon nanotube", "carbon fiber",
-            "carbon dioxide reduction", "graphitic carbon", "activated carbon",
-            "carbon black", "carbon film",
-        }
+        # v6.0: 如果有domain_config，从中读取排除信号和层级定义
+        if domain_config:
+            exclusion_signals = domain_config.get("exclusion_signals", [])
+            tier_defs = domain_config.get("tier_definitions", {})
 
-        ml_must_have = {
-            "machine learning", "deep learning", "neural network",
-            "lstm", "xgboost", "random forest", "transformer",
-            "gradient boosting", "reinforcement learning", "cnn",
-            "rnn", "gnn", "svm", "regression", "classification",
-            "clustering", "nlp", "gan", "autoencoder", "attention",
-            "ai", "artificial intelligence", "ml", "dl",
-            "机器学习", "深度学习", "神经网络",
-        }
+            # 从tier_definitions提取领域核心词和方法词
+            domain_must_have = set()
+            ml_must_have = set()
+            carbon_exclude = set()
+
+            # core层关键词 → domain_must_have
+            if "core" in tier_defs:
+                domain_must_have.update(kw.lower() for kw in tier_defs["core"].get("keywords", []))
+            # method层关键词 → ml_must_have
+            if "method" in tier_defs:
+                ml_must_have.update(kw.lower() for kw in tier_defs["method"].get("keywords", []))
+            # background层关键词也加入domain_must_have
+            if "background" in tier_defs:
+                domain_must_have.update(kw.lower() for kw in tier_defs["background"].get("keywords", []))
+
+            # exclusion_signals → carbon_exclude（命名延续，实际是所有排除信号）
+            carbon_exclude = set(s.lower() for s in exclusion_signals)
+        else:
+            # 回退到v5.1.8-fix2的硬编码逻辑
+            # 领域核心词（必须至少命中一个，否则惩罚）
+            # v5.1.8-fix2: carbon需搭配市场/价格/排放语境才计为能源领域
+            domain_must_have = {
+                "energy", "electricity", "power", "renewable",
+                "solar", "wind", "oil", "gas", "fuel", "climate",
+                "emission", "grid", "load", "price", "demand", "supply",
+                "forecast", "market", "nuclear", "hydrogen", "battery",
+                "carbon price", "carbon market", "carbon emission", "carbon trading",
+                "carbon tax", "carbon capture", "carbon budget",
+                "能源", "电力", "碳", "电价", "负荷", "预测",
+            }
+            # 含carbon但非能源语境的排除词
+            carbon_exclude = {
+                "carbon nitride", "carbon nanotube", "carbon fiber",
+                "carbon dioxide reduction", "graphitic carbon", "activated carbon",
+                "carbon black", "carbon film",
+            }
+
+            ml_must_have = {
+                "machine learning", "deep learning", "neural network",
+                "lstm", "xgboost", "random forest", "transformer",
+                "gradient boosting", "reinforcement learning", "cnn",
+                "rnn", "gnn", "svm", "regression", "classification",
+                "clustering", "nlp", "gan", "autoencoder", "attention",
+                "ai", "artificial intelligence", "ml", "dl",
+                "机器学习", "深度学习", "神经网络",
+            }
 
         query_lower = query.lower()
         # 提取查询关键词
@@ -600,6 +631,12 @@ class AcademicSearchEngine:
         abstract_lower = (paper.abstract or "").lower()
         combined = title_lower + " " + abstract_lower
 
+        # v6.0: 命中exclusion_signals的论文直接返回0.0（不是penalty×0.2）
+        if domain_config and carbon_exclude:
+            # domain_config模式下，carbon_exclude = exclusion_signals
+            if any(ex in combined for ex in carbon_exclude):
+                return 0.0  # 直接踢出，不是惩罚
+
         # 命中计算
         title_hits = sum(1 for t in query_tokens if t in title_lower)
         abstract_hits = sum(1 for t in query_tokens if t in abstract_lower)
@@ -624,7 +661,8 @@ class AcademicSearchEngine:
         if not has_ml:
             penalty *= 0.5  # 不涉及ML→中等降权
         # v5.1.8-fix2: 排除非能源语境的carbon词（纳米材料/化学等）
-        if any(ex in combined for ex in carbon_exclude):
+        # v6.0: 如果没有domain_config（回退模式），保留旧逻辑
+        if not domain_config and any(ex in combined for ex in carbon_exclude):
             penalty *= 0.2
 
         return base_score * penalty

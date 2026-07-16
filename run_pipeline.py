@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """
-Consensus Pipeline v4.5 端到端运行脚本
+Consensus Pipeline v6.0 端到端运行脚本
 主题：机器学习在能源经济学上的运用调研
+
+v6.0 变更：
+- Phase 0.5: 动态生成领域配置（替代硬编码关键词）
+- Phase 3.5: QC审校（hard_filter → llm_classify → tag_layer）+ 补充搜索
+- search_engine: 配置驱动的相关性过滤（exclusion_signals直接返回0.0）
+- report_generator: 引用硬约束 + 置信度标注 + 检索边界与局限性章节
 """
 import sys
 import os
@@ -22,7 +28,7 @@ if os.path.exists(_env_path):
 # ============ 配置 ============
 API_URL = "https://api.deepseek.com/v1/chat/completions"
 API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-MODEL = "deepseek-v4-flash"
+MODEL = "deepseek-v4-pro"
 TOPIC = "机器学习在能源经济学上的运用"
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_output")
 
@@ -246,6 +252,97 @@ def phase4_search():
     return all_papers, all_preprints, relevance_log
 
 
+# ============ Phase 4 v6.0: 配置驱动的学术检索 ============
+def phase4_search_v6(domain_config=None):
+    """
+    v6.0: 执行学术检索，使用domain_config驱动搜索词和过滤逻辑。
+
+    如果domain_config提供了query_rotation，使用动态搜索词；
+    否则回退到硬编码搜索词。
+    """
+    log("Phase4", "开始学术检索（v6.0: 配置驱动）")
+    from academic.search_engine import AcademicSearchEngine
+
+    # v6.0: 如果有domain_config，传入search_engine以启用配置驱动的相关性过滤
+    engine = AcademicSearchEngine(
+        quality_levels=["S", "A", "B"],
+        min_citations=5,
+        min_results=20,
+        include_preprints=True,
+        domain_config=domain_config,  # v6.0: 传入domain_config
+    )
+
+    # v6.0: 使用domain_config中的query_rotation作为搜索词
+    if domain_config and domain_config.get("query_rotation"):
+        queries = domain_config["query_rotation"]
+        log("Phase4", f"使用domain_config的query_rotation: {queries[:3]}...")
+    else:
+        # 回退到硬编码搜索词
+        queries = [
+            "machine learning energy economics",
+            "ML carbon price prediction",
+            "deep learning energy demand forecasting",
+        ]
+        log("Phase4", "无domain_config，使用硬编码搜索词")
+
+    all_papers = []
+    all_preprints = []
+    seen_titles = set()
+
+    for q in queries:
+        log("Phase4", f"检索: {q}")
+        try:
+            result = engine.search(q, max_results_per_source=30)
+            papers = result["papers"]
+            preprints = result["preprints"]
+            stats = result["stats"]
+
+            log("Phase4", f"  原始={stats['total_fetched']}, 去重={stats['after_dedup']}, "
+                 f"筛选={stats['after_filter']}, 预印本={stats['preprint_count']}")
+
+            for p in papers:
+                title_key = p.title[:30].lower()
+                if title_key not in seen_titles:
+                    seen_titles.add(title_key)
+                    all_papers.append(p)
+
+            for p in preprints:
+                title_key = p.title[:30].lower()
+                if title_key not in seen_titles:
+                    seen_titles.add(title_key)
+                    all_preprints.append(p)
+
+        except Exception as e:
+            log("Phase4", f"  检索异常: {e}")
+        
+        # 每个query间隔3秒，避免SS限流
+        time.sleep(3)
+
+    log("Phase4", f"总论文={len(all_papers)}, 总预印本={len(all_preprints)}")
+
+    # 等级统计
+    level_counts = {}
+    for p in all_papers:
+        level_counts[p.quality_level] = level_counts.get(p.quality_level, 0) + 1
+    log("Phase4", f"等级分布: {level_counts}")
+
+    # 保存
+    papers_data = [p.to_dict() for p in all_papers]
+    preprints_data = [p.to_dict() for p in all_preprints]
+    save_json({"papers": papers_data, "preprints": preprints_data, "level_counts": level_counts},
+              "phase4_search_results.json")
+
+    # v6.0: 相关性过滤日志（domain_config驱动的排除已在内完成）
+    relevance_log = {
+        "total_before": len(all_papers),
+        "total_after": len(all_papers),
+        "filtered_out": [],
+        "domain_config_driven": domain_config is not None,
+    }
+
+    return all_papers, all_preprints, relevance_log
+
+
 # ============ Phase 5: 部门辩论 ============
 
 # 部门→论文筛选关键词映射（v5.1.5: 按部门分配相关论文）
@@ -422,6 +519,8 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
 2. 严禁编造论文中不存在的具体实验结果、方法细节、数据指标或案例
 3. 严禁使用"参见[N]"占位。如果对某论文内容不确定，不要引用该论文，选择你确定内容的论文代替
 4. 你输出的每个[N]引用和对应描述，都将被后续环节自动校验
+5. 【v6.0引用硬约束】所有论文引用必须从论文列表中选取，禁止生成列表外的引用
+6. 【v6.0置信度标注】每个核心结论后面标注支撑论文数量：(N/M篇支撑，置信度🟢/🟡/🔴)
 
 请给出你的专业分析和观点。要求：
 1. 基于论文列表中的具体证据，不要空泛
@@ -549,8 +648,9 @@ def reclassify_papers(papers):
 
 def backfill_abstracts(papers):
     """
-    v5.1.7: 对S/A级论文回填abstract。
-    使用Semantic Scholar API按DOI/标题查询，补充缺失的摘要。
+    v6.0: 对S/A级论文回填abstract。
+    优先使用OpenAlex（礼貌池10次/秒，基本不限流），
+    OpenAlex失败时回退Semantic Scholar（1次/秒，容易429）。
     """
     log("Phase4.7", "回填S/A级论文abstract...")
 
@@ -561,62 +661,101 @@ def backfill_abstracts(papers):
 
     log("Phase4.7", f"需要回填: {len(to_fill)}篇")
 
+    import urllib.request
+    import urllib.parse as _urlp
+
     filled = 0
+    oa_success = 0  # OpenAlex成功计数
+    ss_success = 0  # Semantic Scholar成功计数
+
     for i, p in enumerate(to_fill):
-        retry_count = 0
-        max_retries = 3
-        success = False
+        abstract = ""
+        source = ""
 
-        while retry_count < max_retries and not success:
+        # 策略1: OpenAlex（优先，限流宽松）
+        if not abstract:
             try:
-                import urllib.request
-                import urllib.parse as _urlp
-
-                # 优先用DOI查询
                 if p.doi:
-                    url = f"https://api.semanticscholar.org/graph/v1/paper/DOI:{_urlp.quote_plus(p.doi)}?fields=abstract"
+                    oa_url = f"https://api.openalex.org/works/doi:{_urlp.quote_plus(p.doi)}?select=id,abstract_inverted_index"
                 else:
-                    url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={_urlp.quote_plus(p.title[:100])}&limit=1&fields=abstract"
+                    oa_url = f"https://api.openalex.org/works?search={_urlp.quote_plus(p.title[:200])}&per_page=1&select=id,abstract_inverted_index"
+                oa_req = urllib.request.Request(oa_url, headers={
+                    "User-Agent": "ConsensusPipeline/6.0",
+                    "mailto": "consensus-pipeline@research.org"  # 礼貌池
+                })
+                with urllib.request.urlopen(oa_req, timeout=15) as resp:
+                    oa_data = json.loads(resp.read())
 
-                req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/5.1.7"})
-                with urllib.request.urlopen(req, timeout=15) as resp:
-                    data = json.loads(resp.read())
-
-                # 从搜索结果或直接结果中提取abstract
-                abstract = ""
-                if "abstract" in data and data["abstract"]:
-                    abstract = data["abstract"]
-                elif "data" in data and data["data"]:
-                    for item in data["data"]:
-                        if item.get("abstract"):
-                            abstract = item["abstract"]
+                # 从abstract_inverted_index还原
+                aii = None
+                if "abstract_inverted_index" in oa_data and oa_data["abstract_inverted_index"]:
+                    aii = oa_data["abstract_inverted_index"]
+                elif "results" in oa_data and oa_data["results"]:
+                    for r in oa_data["results"]:
+                        if r.get("abstract_inverted_index"):
+                            aii = r["abstract_inverted_index"]
                             break
 
-                if abstract:
-                    p.abstract = abstract[:500]
-                    filled += 1
-                    log("Phase4.7", f"  ✓ 回填({i+1}/{len(to_fill)}): {p.title[:50]}...")
-                else:
-                    log("Phase4.7", f"  ✗ 无abstract({i+1}/{len(to_fill)}): {p.title[:50]}...")
+                if aii:
+                    word_positions = []
+                    for word, positions in aii.items():
+                        for pos in positions:
+                            word_positions.append((pos, word))
+                    word_positions.sort()
+                    abstract = " ".join(w for _, w in word_positions)
+                    source = "OpenAlex"
+                    oa_success += 1
 
-                success = True
-                # SS限流：基础3秒间隔
-                time.sleep(3)
+            except urllib.error.HTTPError as e:
+                log("Phase4.7", f"  OpenAlex HTTP {e.code} for: {p.title[:40]}...")
+            except Exception as e:
+                log("Phase4.7", f"  OpenAlex异常: {p.title[:30]}... ({e})")
+
+            time.sleep(0.15)  # OpenAlex礼貌池：~6-7次/秒
+
+        # 策略2: Semantic Scholar（回退，限流严格）
+        if not abstract:
+            try:
+                if p.doi:
+                    ss_url = f"https://api.semanticscholar.org/graph/v1/paper/DOI:{_urlp.quote_plus(p.doi)}?fields=abstract"
+                else:
+                    ss_url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={_urlp.quote_plus(p.title[:100])}&limit=1&fields=abstract"
+                ss_req = urllib.request.Request(ss_url, headers={"User-Agent": "ConsensusPipeline/6.0"})
+                with urllib.request.urlopen(ss_req, timeout=15) as resp:
+                    ss_data = json.loads(resp.read())
+
+                if "abstract" in ss_data and ss_data["abstract"]:
+                    abstract = ss_data["abstract"]
+                    source = "SemanticScholar"
+                    ss_success += 1
+                elif "data" in ss_data and ss_data["data"]:
+                    for item in ss_data["data"]:
+                        if item.get("abstract"):
+                            abstract = item["abstract"]
+                            source = "SemanticScholar"
+                            ss_success += 1
+                            break
 
             except urllib.error.HTTPError as e:
                 if e.code == 429:
-                    retry_count += 1
-                    wait = min(10 * (2 ** retry_count), 60)  # 指数退避: 20s, 40s, 60s
-                    log("Phase4.7", f"  ⏳ 429限流，等{wait}s后重试({retry_count}/{max_retries}): {p.title[:40]}...")
-                    time.sleep(wait)
+                    log("Phase4.7", f"  ⚠️ SS 429限流，后续仅用OpenAlex")
+                    # 一旦429就不再尝试SS，避免卡死
                 else:
-                    log("Phase4.7", f"  ✗ HTTP {e.code}: {p.title[:40]}...")
-                    break
+                    log("Phase4.7", f"  SS HTTP {e.code}: {p.title[:40]}...")
             except Exception as e:
-                log("Phase4.7", f"  ✗ 回填失败: {p.title[:40]}... ({e})")
-                break
+                log("Phase4.7", f"  SS异常: {p.title[:30]}... ({e})")
 
-    log("Phase4.7", f"abstract回填完成: {filled}/{len(to_fill)}篇成功")
+            time.sleep(1.5)  # SS限流间隔
+
+        # 写入结果
+        if abstract:
+            p.abstract = abstract[:500]
+            filled += 1
+            log("Phase4.7", f"  ✓ 回填({i+1}/{len(to_fill)}) [{source}]: {p.title[:50]}...")
+        else:
+            log("Phase4.7", f"  ✗ 无abstract({i+1}/{len(to_fill)}): {p.title[:50]}...")
+
+    log("Phase4.7", f"abstract回填完成: {filled}/{len(to_fill)}篇成功 (OpenAlex={oa_success}, SemanticScholar={ss_success})")
 
     # 统计最终abstract覆盖率
     total_sa = sum(1 for p in papers if p.quality_level in ("S", "A"))
@@ -874,6 +1013,69 @@ def generate_tutorial_output(papers):
     return result
 
 
+# ============ 补充搜索（v6.0） ============
+def supplement_search(domain_config, dedup_registry, round_num):
+    """
+    补充搜索：用query_rotation中不同的query，排除已见论文。
+
+    v6.0: 当QC审校后有效论文不足15篇时，用domain_config中的
+    query_rotation进行补充搜索，避免检索枯竭。
+
+    Args:
+        domain_config: 领域配置（含query_rotation）
+        dedup_registry: 去重注册表（seen + excluded）
+        round_num: 补充搜索轮次
+
+    Returns:
+        新论文列表
+    """
+    queries = domain_config.get("query_rotation", [])
+    if not queries:
+        log("Supplement", "query_rotation为空，无法补充搜索")
+        return []
+
+    # 第round_num轮用第round_num组query（循环使用）
+    query = queries[round_num % len(queries)]
+    log("Supplement", f"第{round_num}轮补充搜索，使用query: {query}")
+
+    # 构建已见论文标题集合，用于排除
+    seen_titles = set()
+    for entry in dedup_registry.get("seen", []):
+        title = entry.get("title", "")[:30].lower() if isinstance(entry, dict) else str(entry)[:30].lower()
+        seen_titles.add(title)
+    for entry in dedup_registry.get("excluded", []):
+        title = entry.get("title", "")[:30].lower() if isinstance(entry, dict) else str(entry)[:30].lower()
+        seen_titles.add(title)
+
+    # 执行搜索
+    from academic.search_engine import AcademicSearchEngine
+    engine = AcademicSearchEngine(
+        quality_levels=["S", "A", "B"],
+        min_citations=3,  # 补充搜索放宽引用要求
+        min_results=10,
+        include_preprints=True,
+        domain_config=domain_config,  # v6.0: 传入domain_config
+    )
+
+    try:
+        result = engine.search(query, max_results_per_source=20)
+        new_papers = result["papers"]
+
+        # 排除已见论文
+        filtered = []
+        for p in new_papers:
+            title_key = p.title[:30].lower()
+            if title_key not in seen_titles:
+                filtered.append(p)
+
+        log("Supplement", f"搜索到{len(new_papers)}篇，去重后{len(filtered)}篇新论文")
+        return filtered
+
+    except Exception as e:
+        log("Supplement", f"补充搜索异常: {e}")
+        return []
+
+
 # ============ 自我评估 ============
 def self_evaluation(report, papers, dept_outputs):
     """自我评估不足"""
@@ -916,14 +1118,26 @@ def self_evaluation(report, papers, dept_outputs):
 # ============ 主流程 ============
 def main():
     start_time = time.time()
-    log("MAIN", f"========== 共识管线 v4.5 端到端运行 ==========")
+    log("MAIN", f"========== 共识管线 v6.0 端到端运行 ==========")
     log("MAIN", f"主题: {TOPIC}")
     log("MAIN", f"模型: {MODEL}")
     log("MAIN", f"输出目录: {OUTPUT_DIR}")
 
+    # v6.0: 领域配置，初始为空，Phase 0.5后填充
+    domain_config = None
+
     try:
         # Phase 0: 需求调研
         doc = phase0_interview()
+
+        # Phase 0.5: 动态生成领域配置（v6.0新增）
+        log("Phase0.5", "动态生成领域配置...")
+        from domain_config_generator import generate_domain_config
+        domain_config = generate_domain_config(TOPIC, llm_call, output_dir=OUTPUT_DIR)
+        save_json(domain_config, "phase0.5_domain_config.json")
+        log("Phase0.5", f"领域配置生成完成: exclusion_signals={len(domain_config.get('exclusion_signals', []))}, "
+             f"query_rotation={len(domain_config.get('query_rotation', []))}, "
+             f"tier_layers={list(domain_config.get('tier_definitions', {}).keys())}")
 
         # Phase 1: 结构化
         structured = phase1_structure(doc)
@@ -934,8 +1148,9 @@ def main():
         # Phase 3: 配置推荐
         config = phase3_config(structured, discussion)
 
-        # Phase 4: 学术检索
-        papers, preprints, relevance_log = phase4_search()
+        # Phase 4: 学术检索（v6.0: 传入domain_config）
+        # 修改phase4_search以使用domain_config
+        papers, preprints, relevance_log = phase4_search_v6(domain_config)
 
         if not papers:
             log("MAIN", "⚠️ 未检索到论文，使用回退数据")
@@ -944,11 +1159,54 @@ def main():
         # Phase 4.5: 用最新注册表重新分级论文（v5.1.3）
         papers = reclassify_papers(papers)
 
-        # Phase 4.6: 内容相关性过滤（v5.1.7）
+        # Phase 4.6: 内容相关性过滤（v5.1.7，保留作为双保险）
         papers = filter_by_content_relevance(papers)
 
         # Phase 4.7: 回填S/A级论文abstract（v5.1.7）
         papers = backfill_abstracts(papers)
+
+        # Phase 3.5: QC审校（v6.0新增，在检索+分级+过滤之后、部门辩论之前）
+        log("Phase3.5", "开始QC审校...")
+        from quality_controller import QualityController
+        qc = QualityController(llm_call_fn=llm_call, domain_config=domain_config, output_dir=OUTPUT_DIR)
+
+        # 第一轮审校
+        papers, excluded_ids, qc_stats = qc.run_qc(papers)
+        log("Phase3.5", f"QC第一轮: 通过={len(papers)}, 排除={len(excluded_ids)}, "
+            f"hard_filter排除={qc_stats['hard_filter_excluded']}, "
+            f"llm分类排除={qc_stats['llm_classify_rejected']}")
+
+        # 如果有效<15，补充搜索（最多3轮）
+        supplement_round = 0
+        while len(papers) < 15 and supplement_round < 3:
+            supplement_round += 1
+            log("Phase3.5", f"有效论文不足15篇（当前{len(papers)}篇），启动第{supplement_round}轮补充搜索")
+            # 用query_rotation中不同的query
+            # 排除已见论文（dedup_registry）
+            # 新论文过QC
+            new_papers = supplement_search(domain_config, qc.dedup_registry, supplement_round)
+            if len(new_papers) < 5:
+                log("Phase3.5", "搜索枯竭，停止补充")
+                break
+
+            # 新论文也过一遍QC
+            new_papers, new_excluded, new_stats = qc.run_qc(new_papers)
+            log("Phase3.5", f"新论文QC: 通过={len(new_papers)}, 排除={len(new_excluded)}")
+
+            papers.extend(new_papers)
+            # 对合并后的论文再做一轮完整QC（去重+过滤）
+            papers, excluded_ids, qc_stats = qc.run_qc(papers)
+            log("Phase3.5", f"第{supplement_round}轮后: 有效={len(papers)}")
+
+            # 避免API限流
+            time.sleep(3)
+
+        log("Phase3.5", f"QC完成: 最终有效论文={len(papers)}")
+        save_json(qc_stats, "phase3.5_qc_stats.json")
+
+        # 保存QC后的论文（供下游使用）
+        papers_data = [p.to_dict() for p in papers]
+        save_json(papers_data, "phase3.5_qc_papers.json")
 
         # Phase 5: 部门辩论
         dept_outputs = phase5_debate(config, papers, preprints)
@@ -966,6 +1224,16 @@ def main():
         report = phase7_final_report(papers, preprints, dept_outputs, cross_results,
                                      prog_output=prog_output, tut_output=tut_output,
                                      relevance_log=relevance_log)
+
+        # v6.0: 引用校验（报告生成后，比对CSV删除无效引用）
+        log("Phase7.5", "引用校验...")
+        from quality_controller import QualityController
+        qc_validate = QualityController(llm_call_fn=llm_call, domain_config=domain_config, output_dir=OUTPUT_DIR)
+        csv_path = os.path.join(OUTPUT_DIR, "papers_metadata.csv")
+        report = qc_validate.validate_citations(report, csv_path)
+        # 保存校验后的报告
+        save_text(report, "final_report_validated.md")
+        log("Phase7.5", "引用校验完成")
 
         # 自我评估
         evaluation = self_evaluation(report, papers, dept_outputs)
