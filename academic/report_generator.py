@@ -158,6 +158,7 @@ class ReportGenerator:
         sections.append(self._build_final_trends(papers))
         sections.append(self._build_final_top_papers(s_papers, a_papers))
         sections.append(self._build_final_gaps(papers, consensus_points))
+        sections.append(self._build_final_limitations(papers))
         sections.append(self._build_final_references(s_papers, a_papers))
         sections.append(self._build_final_footer(now, fact_check_summary))
         return "\n\n".join(sections)
@@ -207,7 +208,10 @@ class ReportGenerator:
 20. 【正文连贯性】每个段落必须是完整的学术论述句，禁止出现孤立的引用句号等断裂式引用。引用必须嵌入完整句子中
 21. 【摘要驱动引用】论文清单已包含每篇论文的摘要。引用[N]时，描述的内容必须与该论文摘要中的实际内容一致，不得凭标题推断。如果摘要为空或不足以支撑你的论述，注明"该论文摘要信息不足"而不是自行推测
 22. 【无关论文已过滤】内容相关性过滤已在上游完成，被降级的论文不会出现在清单中。但仍请检查：如果某篇论文的摘要明显与主题无关，不要引用
-23. 【禁止"参见"前缀】正文、对比表、辩论焦点中禁止在[N]前加"参见"前缀（如"参见[10]综述"→应写为"Ghoddusi等[10]综述"）。引用必须紧接作者名或具体描述，不得用"参见"代替"""
+23. 【禁止"参见"前缀】正文、对比表、辩论焦点中禁止在[N]前加"参见"前缀（如"参见[10]综述"→应写为"Ghoddusi等[10]综述"）。引用必须紧接作者名或具体描述，不得用"参见"代替
+24. 【v6.0引用硬约束】所有论文引用必须从论文清单中选取，禁止生成清单外的引用。每个结论必须标注支撑论文数量，格式：(N/M篇支撑，置信度🟢/🟡/🔴)，其中N=支撑论文数，M=该主题总论文数
+25. 【v6.0置信度标注】每个核心结论后面必须标注置信度：(N/M篇支撑，置信度🟢高/🟡中/🔴低)，评判标准：N≥5且方法论一致→🟢；3≤N<5或存在争议→🟡；N<3→🔴
+26. 【v6.0局限性必现】综述必须包含"检索边界与局限性"章节，说明：(a)检索源覆盖范围与盲区；(b)论文数量与代表性限制；(c)方法论评估的边界条件；(d)结论适用范围与外推风险"""
 
         user_prompt = f"""请撰写「{topic}」领域的学术动向综述报告。
 
@@ -273,7 +277,14 @@ class ReportGenerator:
 ## 四、研究空白与文献计量证据
 （5个空白，每个：现状→文献计量佐证(如"76篇中仅2篇涉及")→为什么没人做→价值→可行路径）
 
-## 五、参考文献
+## 五、检索边界与局限性
+（v6.0新增必现章节。必须包含以下4个方面：）
+（5.1 检索源覆盖范围与盲区：说明使用了哪些检索源（arXiv/Semantic Scholar/OpenAlex），覆盖了哪些数据库，哪些期刊/会议可能未被覆盖，非英语文献的覆盖情况）
+（5.2 论文数量与代表性限制：说明最终纳入的论文数量，是否足以支撑普遍性结论，是否存在小样本偏差，N/M篇支撑中N较小时结论的可靠性）
+（5.3 方法论评估的边界条件：说明方法论对比的适用前提（如数据规模、市场类型、时间跨度），哪些条件下的结论可能不成立）
+（5.4 结论适用范围与外推风险：明确说明综述结论的适用范围，警告读者不要将有限样本上的结论过度外推）
+
+## 六、参考文献
 （列出所有S级和A级论文，按S/A/B分组，GB/T 7714格式）"""
 
         try:
@@ -1057,6 +1068,41 @@ class ReportGenerator:
 
         for i, g in enumerate(gaps[:5], 1):
             lines.append(f"**{i}. {g['gap']}** — {g['detail']} → 建议：{g['suggestion']}")
+
+        return "\n".join(lines)
+
+    def _build_final_limitations(
+        self,
+        papers: List[PaperCandidate],
+    ) -> str:
+        """v6.0: 检索边界与局限性章节"""
+        lines = ["## 检索边界与局限性", ""]
+
+        total = len(papers)
+        sa_count = sum(1 for p in papers if p.quality_level in ("S", "A"))
+
+        lines.append("### 检索源覆盖范围与盲区")
+        lines.append("- 检索源：arXiv（预印本）、Semantic Scholar（跨学科）、OpenAlex（全面覆盖）")
+        lines.append("- 盲区：可能遗漏部分中文核心期刊、行业技术报告、会议论文集")
+        lines.append("- 非英语文献覆盖有限，中文CSSCI期刊可能未被充分检索")
+        lines.append("")
+
+        lines.append("### 论文数量与代表性限制")
+        lines.append(f"- 最终纳入论文{total}篇，其中S/A级{sa_count}篇")
+        lines.append(f"- 样本量有限，不宜将本综述结论过度外推为普遍规律")
+        lines.append("- 小样本下（N<5篇支撑），结论置信度较低，需进一步验证")
+        lines.append("")
+
+        lines.append("### 方法论评估的边界条件")
+        lines.append("- 方法论优劣比较依赖于特定数据规模、市场类型和预测窗口")
+        lines.append("- 小样本场景下深度学习未必优于传统统计方法")
+        lines.append("- 不同碳市场（EU-ETS vs 中国）的结论可能不可直接迁移")
+        lines.append("")
+
+        lines.append("### 结论适用范围与外推风险")
+        lines.append("- 本综述结论主要基于近5年英语学术文献，适用范围有限")
+        lines.append("- 不应将有限样本上的方法论对比结论简单外推至所有能源经济场景")
+        lines.append("- 建议读者结合自身研究场景，审慎评估本综述结论的适用性")
 
         return "\n".join(lines)
 
