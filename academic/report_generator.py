@@ -343,22 +343,24 @@ class ReportGenerator:
         if not cited_indices:
             return report  # 无引用则不改
 
-        # 2. 找到参考文献section的位置，替换
-        # 匹配 "## 参考文献" 或 "### 参考文献" 及其后到文末的内容
-        ref_pattern = re.compile(r'(\n#{1,3}\s*参考文献.*)', re.DOTALL)
-        match = ref_pattern.search(report)
-        if not match:
-            # 没有参考文献section，追加
-            ref_section = "\n\n## 参考文献\n\n"
-        else:
-            # 替换已有参考文献section
-            report = report[:match.start()]
-            ref_section = "\n\n## 参考文献\n\n"
+        # 2. 找到并移除所有"参考文献"section（v5.1.8-fix: 防止重复段）
+        # AI可能在报告中多次生成"参考文献"，全部移除后统一重建
+        report = re.sub(r'\n#{1,3}\s*参考文献.*', '', report, flags=re.DOTALL)
+        ref_section = "\n\n## 参考文献\n\n"
 
         # 3. 用论文元数据生成参考文献列表——按等级分组
+        # v5.1.8-fix: 跳过C级论文（被降级=不相关，属于僵尸引用）
         s_refs, a_refs, b_refs = [], [], []
+        c_skipped = 0
         for idx in sorted(cited_indices):
             p = papers[idx - 1]  # 1-based to 0-based
+            level = p.quality_level or "B"
+            if level == "C":
+                # 从正文中移除该C级引用的[N]标记
+                report = re.sub(r'参见\s*\[' + str(idx) + r'\]', '', report)
+                report = report.replace(f'[{idx}]', '')
+                c_skipped += 1
+                continue
             authors_str = ", ".join(p.authors[:3])
             if len(p.authors) > 3:
                 authors_str += ", 等"
@@ -379,6 +381,9 @@ class ReportGenerator:
                 b_refs.append(entry)
 
         # 按等级分组输出
+        if c_skipped > 0:
+            import logging
+            logging.info(f"[v5.1.8-fix] 移除{c_skipped}篇C级僵尸引用")
         ref_section_parts = []
         if s_refs:
             ref_section_parts.append("### S级（顶刊）")
