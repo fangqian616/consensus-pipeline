@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-Consensus Pipeline v6.0 端到端运行脚本
-主题：机器学习在能源经济学上的运用调研
+Consensus Pipeline v6.0 — End-to-end CLI Runner
 
-v6.0 变更：
-- Phase 0.5: 动态生成领域配置（替代硬编码关键词）
-- Phase 3.5: QC审校（hard_filter → llm_classify → tag_layer）+ 补充搜索
-- search_engine: 配置驱动的相关性过滤（exclusion_signals直接返回0.0）
-- report_generator: 引用硬约束 + 置信度标注 + 检索边界与局限性章节
+Usage:
+    python run_pipeline.py --topic "Your Research Topic"
+
+v6.0 Changes:
+- Phase 0.5: Dynamic domain config generation (replaces hardcoded keywords)
+- Phase 3.5: QC department (hard_filter → llm_classify → tag_layer) + supplemental search
+- search_engine: Config-driven relevance filtering (exclusion_signals return 0.0)
+- report_generator: Citation hard constraints + confidence annotations + search boundary section
 """
 import sys
 import os
@@ -29,7 +31,7 @@ if os.path.exists(_env_path):
 API_URL = "https://api.deepseek.com/v1/chat/completions"
 API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 MODEL = "deepseek-v4-pro"
-TOPIC = "机器学习在能源经济学上的运用"
+TOPIC = ""  # Set via --topic argument or DEEPSEEK_TOPIC env var
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_output")
 
 # easyScholar API密钥（v5.0：实时期刊分级）— 从环境变量读取
@@ -97,18 +99,18 @@ def phase0_interview():
     )
 
     # 开始
-    result = interviewer.start("我想调研机器学习在能源经济学中的应用")
+    result = interviewer.start(f"I want to research {TOPIC}")
     log("Phase0", f"领域识别: {result['domain_name']}")
     log("Phase0", f"AI提问: {result['question']}")
 
-    # 模拟用户回答
+    # Simulated user answers (replace with real input in production)
     answers = [
-        "我关注碳价预测和能源需求预测，方法论偏机器学习（LSTM、XGBoost等）",
-        "近5年，2021-2026年的论文",
-        "CSSCI及以上，SCI Q1为主",
-        "预期交付综述论文和组会汇报PDF",
-        "目标受众是导师和同门，需要覆盖arXiv、Semantic Scholar、OpenAlex三个源",
-        "需要引用网络分析，关注方法论创新和跨学科交叉点",
+        "I focus on forecasting and demand prediction, methodology偏ML (LSTM, XGBoost, etc.)",
+        "Recent 5 years, 2021-2026",
+        "CSSCI and above, SCI Q1 preferred",
+        "Expected deliverable: review paper and presentation PDF",
+        "Target audience: advisor and peers, need coverage of arXiv, Semantic Scholar, OpenAlex",
+        "Need citation network analysis, focus on methodology innovation and cross-disciplinary intersections",
     ]
 
     for i, answer in enumerate(answers):
@@ -1254,4 +1256,16 @@ def main():
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Consensus Pipeline CLI Runner")
+    parser.add_argument("--topic", type=str, help="Research topic (required)")
+    args = parser.parse_args()
+    if args.topic:
+        TOPIC = args.topic
+    elif os.environ.get("DEEPSEEK_TOPIC"):
+        TOPIC = os.environ.get("DEEPSEEK_TOPIC")
+    else:
+        print("Error: --topic argument or DEEPSEEK_TOPIC env var required")
+        print('Example: python run_pipeline.py --topic "Machine Learning in Energy Economics"')
+        sys.exit(1)
     main()

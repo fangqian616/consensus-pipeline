@@ -104,11 +104,11 @@ class RequirementInterviewer:
     使用方式：
         interviewer = RequirementInterviewer()
         # 第一步：从用户的一句话初始化
-        result = interviewer.start("我想调研机器学习在能源经济学中的应用")
+        result = interviewer.start("I want to research ML applications in energy economics")
         # result 包含：领域识别 + 首轮追问
 
         # 后续：逐轮对话
-        result = interviewer.chat("我关注碳价预测，方法论偏ML")
+        result = interviewer.chat("I focus on carbon price forecasting, methodology偏向ML")
         # result 包含：追问或完成判断
 
         # 完成：获取结构化需求文档

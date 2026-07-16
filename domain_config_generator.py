@@ -3,8 +3,8 @@
 领域配置生成器 — Consensus Pipeline v6.0
 
 根据研究主题动态生成领域配置，保证管线通用性。
-不再依赖硬编码的领域关键词（如碳纳米管排除词、能源关键词等），
-而是根据用户输入的研究主题，动态生成exclusion_signals、query_rotation、tier_definitions等。
+No more hardcoded domain-specific keywords (e.g., exclusion signals, energy keywords).
+Instead, the LLM dynamically generates exclusion_signals, query_rotation, tier_definitions, etc.
 """
 import json
 import os
@@ -23,7 +23,7 @@ def generate_domain_config(topic: str, llm_call_fn: Callable, output_dir: str = 
     - llm_classify_prompt: LLM二分类prompt模板
 
     Args:
-        topic: 研究主题（如"机器学习在能源经济学上的运用"）
+        topic: Research topic (e.g., "Machine Learning in Energy Economics")
         llm_call_fn: LLM调用函数 (system_prompt, user_message, temperature) -> str
         output_dir: 输出目录，用于保存domain_config.json
 
