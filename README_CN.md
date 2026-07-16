@@ -1,7 +1,8 @@
 # 🧠 Consensus Pipeline 共识管线
 
-> **多Agent辩论驱动的内容生成框架。**
-> 不是单个AI替你写——是一支AI团队辩论、碰撞、达成共识。
+<p align="center">
+  <img src="banner.png" alt="Consensus Pipeline" width="100%">
+</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
@@ -10,7 +11,10 @@
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
-📖 [English](README.md) · 🎬 [演示视频](https://www.bilibili.com/) · 📦 [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases)
+> **多Agent辩论驱动的内容生成框架。**
+> 不是单个AI替你写——是一支AI团队辩论、碰撞、达成共识。
+
+📖 [English](README.md) · 📦 [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases)
 
 ---
 

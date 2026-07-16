@@ -1,7 +1,8 @@
 # 🧠 Consensus Pipeline
 
-> **Multi-agent debate framework for structured content generation.**
-> Instead of one AI writing for you — an AI team debates, collides, and reaches consensus.
+<p align="center">
+  <img src="banner.png" alt="Consensus Pipeline" width="100%">
+</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
@@ -10,7 +11,10 @@
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
-📖 [中文文档](README_CN.md) · 🎬 [Demo Video](https://www.bilibili.com/) · 📦 [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases)
+> **Multi-agent debate framework for structured content generation.**
+> Instead of one AI writing for you — an AI team debates, collides, and reaches consensus.
+
+📖 [中文文档](README_CN.md) · 📦 [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases)
 
 ---
 
