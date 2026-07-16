@@ -1,28 +1,55 @@
-# 🔬 Consensus Pipeline
+# 🧠 Consensus Pipeline
 
-> **A multi-agent debate-driven research & creation framework.**  
-> Not one AI writes for you — an AI team debates, collides, and reaches consensus.
+> **Multi-agent debate framework for structured content generation.**
+> Instead of one AI writing for you — an AI team debates, collides, and reaches consensus.
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit" alt="Streamlit">
-  <img src="https://img.shields.io/badge/Latest-v5.1.1-brightgreen" alt="Version">
+  <img src="https://img.shields.io/badge/Latest-v6.0-brightgreen" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
-> 📖 [中文文档](README_CN.md)
+📖 [中文文档](README_CN.md) · 🎬 [Demo Video](https://www.bilibili.com/) · 📦 [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases)
 
 ---
 
-## 🆕 What's New in v5.x
+## 🎯 What Does It Do?
 
-| Version | Highlight |
-|---------|-----------|
-| **v5.1.1** | 📝 Report compression — final report ≤3000 chars, LLM fluff skipping, hard truncate |
-| **v5.1** | 📊 Dual-template report (deliverable + internal doc), 4th relevance filter, 209-journal registry |
-| **v5.0** | 🔍 easyScholar API integration — S-level papers 3→47, C-level 80→9 |
-| **v4.5** | 🔗 Full pipeline: requirement research → debate → report |
-| **v4.0** | 🧪 Requirement research Tab, academic mode, programming & tutorial departments |
+Consensus Pipeline replaces single-AI generation with **structured multi-agent debate**. Different AI "departments" argue from their professional perspectives, challenge each other's assumptions, and converge on a high-quality consensus output.
+
+**Two pipelines, one framework:**
+
+| | 🔬 Academic Pipeline | 🎬 Creative Pipeline |
+|---|---|---|
+| **Input** | A research topic | A script / story |
+| **Process** | Search → QC → Debate → Review | 8-dept debate → Storyboard → Video prompts |
+| **Output** | Literature review + paper metadata | 9-grid storyboard + per-shot video prompts |
+| **Maturity** | ✅ v6.0 — production-ready | 🔄 v3.0 — actively iterating |
+| **Best for** | Researchers, students, analysts | Animators, content creators |
+
+---
+
+## 🆕 What's New in v6.0
+
+| Feature | Description |
+|---------|-------------|
+| **🔬 QC Department** | 3-layer filter: hard filter → LLM classify → layer tagging. Reduced 219 retrieved papers to 77 relevant ones (64% exclusion rate) |
+| **⚙️ Dynamic Domain Config** | LLM generates domain-specific exclusion signals, query rotation, and tier definitions — zero hardcoding, change topic without code changes |
+| **🔗 Citation Validation** | Auto-verify all `[N]` references against CSV; remove dangling citations |
+| **📊 Confidence Annotation** | Every conclusion tagged with `(N/M papers, confidence level)` — no more unsupported claims |
+| **🔧 OpenAlex Priority** | Abstract backfill uses OpenAlex first (no 429 rate limits), falls back to Semantic Scholar |
+
+### v6.0 vs v5.1.8
+
+| Metric | v5.1.8 | v6.0 |
+|--------|:------:|:----:|
+| Off-topic papers in output | 49/56 (88%) | 0/77 (0%) |
+| "See [N]" placeholder citations | Multiple | 0 |
+| Dangling references | Present | 0 |
+| Confidence annotations | 0 | 15 |
+| Domain switchability | Hardcoded | Dynamic |
+| Self-evaluation | 4.8/10 | 7.4/10 |
 
 Full changelog: [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases)
 
@@ -30,44 +57,73 @@ Full changelog: [GitHub Releases](https://github.com/fangqian616/consensus-pipel
 
 ## 🏗️ Architecture
 
+### Academic Pipeline (v6.0)
+
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                     Consensus Pipeline v5                         │
-├──────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Phase 0-4: Requirement Research (NEW)                           │
-│     AI interview → scope definition → user confirmation           │
-│     ──────────────────────────────────────────                    │
-│                                                                  │
-│  Two Modes:                                                      │
-│  ┌─────────────────────┐    ┌──────────────────────────┐         │
-│  │ 🎬 Animation Mode   │    │ 🔬 Academic Mode         │         │
-│  │                     │    │                          │         │
-│  │ 8 creative depts    │    │ 11 research depts        │         │
-│  │ + video prompts     │    │ + programming + tutorial │         │
-│  │ + 9-grid storyboard │    │ + paper quality filter   │         │
-│  └─────────────────────┘    └──────────────────────────┘         │
-│     │                              │                              │
-│     ▼                              ▼                              │
-│  ┌────────────────────────────────────────────────────┐          │
-│  │ Department Debate (serial, 3-4 debaters each)       │          │
-│  │  → Director synthesis → Department consensus        │          │
-│  └────────────────────────────────────────────────────┘          │
-│     │                                                            │
-│     ▼                                                            │
-│  ┌────────────────────────────────────────────────────┐          │
-│  │ Cross-Department Debate                              │          │
-│  │  Resolve contradictions, strengthen evidence         │          │
-│  └────────────────────────────────────────────────────┘          │
-│     │                                                            │
-│     ▼                                                            │
-│  ┌────────────────────────────────────────────────────┐          │
-│  │ Final Output                                         │          │
-│  │  Deliverable report (≤3000 chars) + Internal doc    │          │
-│  │  + PDF export + CSV metadata + Fact-checking        │          │
-│  └────────────────────────────────────────────────────┘          │
-│                                                                  │
-└──────────────────────────────────────────────────────────────────┘
+Research Topic
+     │
+     ▼
+┌─────────────────────────┐
+│ Phase 0.5: Domain Config │  ← LLM generates exclusion signals, query terms, tier rules
+└────────────┬────────────┘
+             │
+     ▼
+┌─────────────────────────┐
+│ Phase 1: Multi-source   │  ← OpenAlex (primary) + Semantic Scholar + arXiv
+│ Paper Retrieval         │     Deduplication, abstract backfill
+└────────────┬────────────┘
+             │
+     ▼
+┌─────────────────────────┐
+│ Phase 3.5: QC Department│  ← 3-layer sieve:
+│ Quality Control         │     hard_filter → LLM_classify → tag_layer
+│ (NEW in v6.0)           │     219 papers → 77 relevant (core/method/background)
+└────────────┬────────────┘
+             │
+     ▼
+┌─────────────────────────┐
+│ Phase 4: Department     │  ← 11 research departments debate
+│ Debate (serial)         │     Each dept: 3-4 debaters → consensus
+└────────────┬────────────┘
+             │
+     ▼
+┌─────────────────────────┐
+│ Phase 5: Cross-Dept     │  ← Resolve contradictions between departments
+│ Debate                  │
+└────────────┬────────────┘
+             │
+     ▼
+┌─────────────────────────┐
+│ Phase 7: Report         │  ← Literature review with confidence annotations
+│ Generation              │     Citation validation, PDF/DOCX export
+└─────────────────────────┘
+```
+
+### Creative Pipeline (v3.0)
+
+```
+Script / Story
+     │
+     ▼
+┌──────────────────────────────────────────┐
+│ 8 Creative Departments (serial debate)    │
+│ Screenwriter → Spatial → Storyboard → DP │
+│ → Lighting → VFX → Sound → Editing       │
+│ Each dept: 3 debaters → consensus        │
+└──────────────────────┬───────────────────┘
+                       │
+                       ▼
+┌──────────────────────────────────────────┐
+│ Cross-Department Debate                   │
+│ 8 groups resolve spatial/story conflicts  │
+└──────────────────────┬───────────────────┘
+                       │
+                       ▼
+┌──────────────────────────────────────────┐
+│ Output                                    │
+│ 📐 9-grid storyboard (for image AI)      │
+│ 🎬 Per-shot video prompts (for video AI) │
+└──────────────────────────────────────────┘
 ```
 
 ---
@@ -81,30 +137,45 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Open your browser, configure API key in sidebar, then:
+### Academic Pipeline (CLI)
 
-1. **Tab 0** → Describe your needs (AI interviews you or you fill in directly)
-2. **Tab 1** → AI auto-configures departments & debaters
-3. **Tab 2** → Fill in research topic / script
-4. **Tab 3** → Watch departments debate in real-time
-5. **Tab 4** → Cross-department debate
-6. **Tab 5** → Final deliverable report + PDF export
+```bash
+# Set your DeepSeek API key
+export DEEPSEEK_API_KEY=your_key_here
+
+# Run the full pipeline
+python run_pipeline.py --topic "Machine Learning in Energy Economics"
+```
+
+### Academic Pipeline (Streamlit)
+
+1. Configure API key in sidebar
+2. Enter your research topic
+3. AI generates domain config → confirm
+4. Watch papers retrieved, filtered, debated
+5. Get your literature review with confidence annotations
+
+### Creative Pipeline
+
+1. Select "Animation Mode" in sidebar
+2. Enter your script
+3. AI auto-configures 8 departments
+4. Watch departments debate in real-time
+5. Export 9-grid storyboard + video prompts
 
 ---
 
-## 🔬 Academic Mode
-
-The headline feature of v4.0+. A complete academic research pipeline:
+## 🔬 Academic Pipeline Details
 
 ### 11 Research Departments
 
 | Department | Role |
 |-----------|------|
-| Literature Search | Multi-source retrieval, deduplication |
-| Metadata Inspector | DOI verification, metadata completeness |
+| Literature Search | Multi-source retrieval (OpenAlex, Semantic Scholar, arXiv), deduplication |
+| Metadata Inspector | DOI verification, metadata completeness check |
 | Citation Network | Citation analysis, impact metrics |
 | Methodology Review | 7-dimension evaluation (accuracy, efficiency, interpretability...) |
-| Data Validation | Data source quality, reproducibility |
+| Data Validation | Data source quality, reproducibility assessment |
 | Counter-Evidence | Anti-mainstream findings, controversy mapping |
 | Topic Clustering | Thematic grouping, trend identification |
 | Visualization | Chart & distribution analysis |
@@ -112,30 +183,94 @@ The headline feature of v4.0+. A complete academic research pipeline:
 | **Programming** | Analyze mainstream models/tools, output runnable code |
 | **Tutorial** | Teach how to use research tools & methods |
 
-### Paper Quality Filtering (4-Layer Sieve)
+### QC Department (v6.0 New)
+
+The biggest quality leap in v6.0. Three-layer filtering ensures zero pollution:
 
 ```
-Layer 1: easyScholar API → journal rank (S/A/B/C)
-Layer 2: Citation count + h-index filter
-Layer 3: Local 209-journal registry (9 disciplines + 6 AI conferences + 3 CN CSSCI)
-Layer 4: Relevance scoring (_compute_relevance) — domain must-have + ML must-have
+Input: 219 papers (from multi-source retrieval)
+  │
+  ├── Layer 1: Hard Filter (exclusion signals)
+  │   → Removes obviously off-topic papers (e.g., carbon nanotube, botany)
+  │   → Excluded: 5 papers
+  │
+  ├── Layer 2: LLM Classify (domain membership)
+  │   → LLM judges each paper: "belongs to domain?" Yes/No
+  │   → Excluded: 137 papers
+  │
+  └── Layer 3: Layer Tagging (importance tier)
+      → core (68) / method (6) / background (3)
+      → Final output: 77 papers
+
+Exclusion rate: 64.8%
+Off-topic rate in final output: 0%
 ```
 
-**Results (ML in Energy Economics experiment):**
+### Dynamic Domain Config (v6.0 New)
 
-| Metric | v4.5 (no easyScholar) | v5.0 (easyScholar) | v5.1 (full pipeline) |
-|--------|:---:|:---:|:---:|
-| S-level papers | 3 | 47 | 41 |
-| C-level papers | 80 | 9 | 9 |
-| Total papers | 84 | 71 | 76 |
-| Self-evaluation | 4/10 | 4/10 | 5.5/10 |
+No more hardcoded keywords. LLM generates everything based on your topic:
 
-### Dual-Template Report
+```json
+{
+  "domain_definition": "Application of ML methods to energy economics...",
+  "exclusion_signals": ["carbon nanotube", "botany", "materials science"],
+  "query_rotation": ["machine learning energy forecasting", "deep learning electricity pricing", ...],
+  "tier_definitions": {"core": "...", "method": "...", "background": "..."},
+  "llm_classify_prompt": "Given a paper with title and abstract..."
+}
+```
 
-- **Deliverable report** (≤3000 chars): Core findings with confidence levels, methodology distribution, top papers, research gaps
-- **Internal document** (full detail): Complete debate transcripts, all papers with metadata, programming & tutorial output
+Change topic from "ML in Energy Economics" to "LLM in Healthcare"? Zero code changes.
 
-Both exportable as PDF with Chinese font support (LXGW WenKai).
+### Confidence Annotation
+
+Every conclusion in the report carries a confidence tag:
+
+> Deep learning methods dominate short-term energy load forecasting **(42/77 papers, high confidence)**
+
+> Graph neural networks show emerging potential in energy network optimization **(3/77 papers, low confidence — trend not established)**
+
+No more unsupported claims.
+
+---
+
+## 🎬 Creative Pipeline Details
+
+### 8 Creative Departments
+
+| Department | Debaters | Focus |
+|-----------|----------|-------|
+| Screenwriter | Micro-expression / Body Language / Emotional Pacing / Narrative Architect | Character details, story beats, on-screen roster |
+| Spatial | Scene Surveyor / Blocking Director / Spatial Logic | Layout, positioning, movement paths |
+| Storyboard | Long Take / Montage / Impact Frame | Shot composition, 9-grid keyframes |
+| Cinematography | Lens Realist / Light & Shadow / Motion Designer | Focal length, depth, camera movement |
+| Lighting | Natural Light / Dramatic / Practical | Light sources, mood, contrast |
+| VFX | Particle / Physics / Composite | Effects, destruction, energy |
+| Sound | Ambience / Foley / Score-placeholder | Environmental audio, action sounds |
+| Editing | Narrative Pace / Visual Continuity / Shot Integrity | Cut timing, segment splitting |
+
+### Output Format (v3.1 Verified)
+
+Each shot follows a proven template tested with real AI video generation:
+
+```
+SHOT 01 | Scene Name | 0-2s
+Reference: 9-grid cell position
+Camera: ...
+Lighting: ...
+Guide: ...
+Subject: Character [Character Reference Sheet] + action description
+Background: ...
+
+Positive Prompt: (English, complete camera + scene + lighting + render description)
+Audio: (Sound effects only, no BGM)
+```
+
+Key rules learned from iteration:
+- **One action per shot** — no action arcs within a single shot
+- **Absolute direction** — "facing carriage rear (sandworm approach)", never "facing camera"
+- **Reference sheet notation** — `Character [Character Reference Sheet]` instead of describing appearance
+- **Interior/Exterior separation** — A-line (inside) and B-line (outside) are separate files
 
 ---
 
@@ -144,12 +279,6 @@ Both exportable as PDF with Chinese font support (LXGW WenKai).
 ### 🧠 AI Router — Smart Configuration
 AI analyzes your needs → selects departments → configures debaters → generates presets. All editable.
 
-### 💬 Requirement Research (v4.0+)
-AI-conducted interview (Phase 0-4) before entering the main pipeline. Define scope, constraints, and priorities through dialogue.
-
-### 🏪 Market Simulation Mode
-Creative ideas compete like products: Candidates → Quality interrogation → Voting → Patch refinement
-
 ### 🔄 Four Architecture Modes
 
 | Mode | Mechanism | Quality | Speed | Best For |
@@ -157,12 +286,12 @@ Creative ideas compete like products: Candidates → Quality interrogation → V
 | **Consensus Pipeline** | Serial dept debate | ★★★★★ | ★★ | Maximum quality |
 | **Market Simulation** | Competition + voting | ★★★★ | ★★ | Exploring directions |
 | **Expert Pool** | 2/dept curated | ★★★ | ★★★ | Fast iteration |
-| **Single Agent** | No debate | ★★ | ★★★★★ | Baseline |
+| **Single Agent** | No debate | ★★ | ★★★★★ | Baseline comparison |
 
 ### 📦 Skill Injection
 Upload proprietary knowledge (Markdown) → auto-injected into target department prompts.
 
-### 🔍 Fact-Checking (Phase 7.5)
+### 🔍 Fact-Checking
 Automated factual verification of report claims with source tracing.
 
 ---
@@ -171,9 +300,9 @@ Automated factual verification of report claims with source tracing.
 
 | Provider | API URL | Recommended Model |
 |----------|--------|-------------------|
-| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
+| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` or `deepseek-v4-pro` |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o` |
-| Custom | Any compatible endpoint | Any model |
+| Custom | Any OpenAI-compatible endpoint | Any model |
 
 ### Optional: easyScholar API
 
@@ -186,34 +315,44 @@ export EASYSCHOLAR_SECRET_KEY=your_key_here
 
 Without easyScholar, the pipeline uses a local 209-journal registry as fallback.
 
+### Environment Variables
+
+```bash
+DEEPSEEK_API_KEY=your_key          # Required for LLM calls
+EASYSCHOLAR_SECRET_KEY=your_key    # Optional, for journal ranking
+```
+
 ---
 
 ## 📁 Project Structure
 
 ```
 consensus-pipeline/
-├── app.py                    # Streamlit main app (9 tabs)
-├── router.py                 # AI Router — smart department config
-├── debate_engine.py          # Core debate engine
-├── config_manager.py         # Config persistence & presets
-├── pdf_exporter.py           # PDF export with Chinese fonts
-├── requirement/              # Requirement research module (v4.0+)
-│   ├── interviewer.py        # AI interview agent
-│   ├── structurer.py         # Scope & constraint extraction
-│   ├── generator.py          # Requirement document generation
-│   ├── validator.py          # Completeness check
+├── app.py                       # Streamlit main app
+├── router.py                    # AI Router — smart department config
+├── debate_engine.py             # Core debate engine (v3.0)
+├── config_manager.py            # Config persistence & presets
+├── run_pipeline.py              # CLI runner for headless execution
+├── quality_controller.py        # QC department (v6.0)
+├── domain_config_generator.py   # Dynamic domain config (v6.0)
+├── report_generator.py          # Report generation with confidence
+├── docx_exporter.py             # Word export with table formatting
+├── pdf_exporter.py              # PDF export with Chinese fonts
+├── academic/                    # Academic research module
+│   ├── search_engine.py         # Multi-source search (OpenAlex, SS, arXiv)
+│   ├── journal_classifier.py   # 4-layer journal quality sieve + easyScholar
+│   ├── journal_registry.py     # 209-journal local registry
+│   ├── fact_checker.py         # Automated fact verification
 │   └── __init__.py
-├── academic/                 # Academic research module (v4.0+)
-│   ├── search_engine.py      # Multi-source search (OpenAlex, Semantic Scholar, arXiv)
-│   ├── journal_classifier.py # 4-layer journal quality sieve + easyScholar
-│   ├── journal_registry.py   # 209-journal local registry
-│   ├── report_generator.py   # Dual-template report generation
-│   ├── fact_checker.py       # Automated fact verification
+├── requirement/                 # Requirement research module
+│   ├── interviewer.py           # AI interview agent
+│   ├── structurer.py            # Scope & constraint extraction
+│   ├── generator.py             # Requirement document generation
+│   ├── validator.py             # Completeness check
 │   └── __init__.py
-├── templates/                # Debate prompt templates
-├── presets/                  # Built-in presets (animation, academic)
-├── fonts/                    # Chinese fonts (LXGW WenKai)
-└── run_pipeline.py           # CLI runner for headless execution
+├── templates/                   # Debate prompt templates
+├── presets/                     # Built-in presets
+└── fonts/                       # Chinese fonts (LXGW WenKai)
 ```
 
 ---
@@ -222,18 +361,30 @@ consensus-pipeline/
 
 | Version | Date | Changes |
 |---------|------|---------|
-| v5.1.1 | 2026-07-15 | Report compression, LLM fluff skipping, 3000-char hard limit |
-| v5.1 | 2026-07-15 | Dual-template report, 4th relevance filter, 209-journal registry, methodology 7-dim framework |
-| v5.0 | 2026-07-15 | easyScholar API integration, journal rank bug fixes |
-| v4.5 | 2026-07-15 | Full requirement→debate pipeline, academic mode UI fix |
-| v4.4 | 2026-07-15 | 20+ paper guarantee, preprint appendix, URL encoding fix |
-| v4.3 | 2026-07-15 | 11 review issues fixed, Chinese tokenization, fuzzy match constraint |
-| v4.2 | 2026-07-15 | easyScholar integration, FactChecker, journal quality enhancement |
-| v4.1 | 2026-07-15 | PDF export with Chinese font support |
+| **v6.0** | 2026-07-16 | QC department, dynamic domain config, citation validation, confidence annotation, OpenAlex priority |
+| v5.1.8-fix2 | 2026-07-16 | Reference section regex fix, carbon keyword filter |
+| v5.1.8 | 2026-07-15 | "See [N]" prefix ban, out-of-scope citation removal |
+| v5.1.7 | 2026-07-15 | Abstract backfill, OpenAlex integration |
+| v5.1 | 2026-07-15 | Dual-template report, 4th relevance filter, 209-journal registry |
+| v5.0 | 2026-07-15 | easyScholar API integration |
 | v4.0 | 2026-07-15 | Requirement research, academic mode, programming & tutorial depts |
 | v3.0 | 2026-07-14 | AI Router, user-editable prompts, local persistence, Skill injection |
 
 All versions available as [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases).
+
+---
+
+## 🗺️ Roadmap
+
+| Priority | Feature | Status |
+|----------|---------|--------|
+| P0 | Report segment generation (plan-then-generate) | Planned |
+| P0 | QC false-positive reverse validation | Planned |
+| P1 | Semantic citation verification (embedding-based) | Planned |
+| P1 | Sub-topic query splitting | Planned |
+| P1 | Publication bias detection (funnel plot) | Planned |
+| P2 | Cross-language retrieval (CNKI + bilingual alignment) | Planned |
+| P2 | Incremental update capability | Planned |
 
 ---
 
