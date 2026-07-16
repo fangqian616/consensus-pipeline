@@ -1,8 +1,8 @@
 """
-学术检索引擎 — Consensus Pipeline v4.4
+Academic Search Engine — Consensus Pipeline v4.4
 
-三线并行检索（arXiv/Semantic Scholar/OpenAlex）+ 期刊质量过滤
-v4.4: 提升论文产出量至20+篇，arXiv预印本特殊处理，新增保证数量回退机制
+Tri-source parallel retrieval (arXiv/Semantic Scholar/OpenAlex) + journal quality filtering
+v4.4: Increased output to 20+ papers, arXiv preprint special handling, guaranteed quantity fallback mechanism
 """
 import json
 from typing import List, Dict, Any, Optional
@@ -13,10 +13,10 @@ import time
 from .journal_registry import JOURNAL_QUALITY_REGISTRY
 
 
-# ============ 安全截断工具 ============
+# ============ Safe Truncation Utilities ============
 
 def safe_truncate(text: str, max_chars: int = 200) -> str:
-    """字符级安全截断，避免多字节字符边界问题。"""
+    """Safe truncation at character boundary to avoid multi-byte encoding issues."""
     if not text:
         return ""
     if len(text) <= max_chars:
@@ -26,13 +26,13 @@ def safe_truncate(text: str, max_chars: int = 200) -> str:
 
 def classify_journal(journal_name: str, use_easyscholar: bool = True) -> Dict[str, Any]:
     """
-    对期刊进行质量分级（增强版）。
+    Rank journal quality (enhanced version).
 
-    分级优先级：本地注册表 → easyScholar API → 默认规则
+    Ranking priority: local registry → easyScholar API → default rules
 
     Args:
-        journal_name: 期刊名称
-        use_easyscholar: 是否尝试easyScholar API查询
+        journal_name: Journal name
+        use_easyscholar: Whether to try easyScholar API query
 
     Returns:
         {"level": "S/A/B/C/D", "if_2026": float|None, "jcr": str, "note": str, "source": "local/api/fallback"}
@@ -43,7 +43,7 @@ def classify_journal(journal_name: str, use_easyscholar: bool = True) -> Dict[st
     except ImportError:
         pass
 
-    # Fallback: 精确匹配优先
+    # Fallback: exact match priority
     if journal_name in JOURNAL_QUALITY_REGISTRY:
         return {**JOURNAL_QUALITY_REGISTRY[journal_name], "source": "local"}
 
@@ -53,7 +53,7 @@ def classify_journal(journal_name: str, use_easyscholar: bool = True) -> Dict[st
         if normalized == key_norm:
             return {**val, "source": "local"}
 
-    # 子串匹配仅当长度比例>=80%
+    # Substring match only when length ratio >= 80%
     for key, val in JOURNAL_QUALITY_REGISTRY.items():
         key_norm = key.lower().strip().replace(".", "").replace(",", "")
         shorter = min(len(normalized), len(key_norm))
@@ -64,12 +64,12 @@ def classify_journal(journal_name: str, use_easyscholar: bool = True) -> Dict[st
             if normalized in key_norm or key_norm in normalized:
                 return {**val, "source": "local"}
 
-    return {"level": "C", "if_2026": None, "jcr": "未知", "note": "未在注册表中", "source": "fallback"}
+    return {"level": "C", "if_2026": None, "jcr": "Unknown", "note": "Not found in registry", "source": "fallback"}
 
 
 @dataclass
 class PaperCandidate:
-    """候选论文"""
+    """Paper candidate"""
     title: str = ""
     doi: str = ""
     authors: List[str] = field(default_factory=list)
@@ -80,9 +80,9 @@ class PaperCandidate:
     source: str = ""  # arxiv / semantic_scholar / openalex
     quality_level: str = "C"  # S/A/B/C/D
     quality_detail: Dict[str, Any] = field(default_factory=dict)
-    author_h_index: int = 0  # 第三道筛子使用
-    is_preprint: bool = False  # v4.4: 标记预印本
-    layer: str = ""  # v6.0: QC标注层 (core/method/background)
+    author_h_index: int = 0  # Used by third filter stage
+    is_preprint: bool = False  # v4.4: Mark preprints
+    layer: str = ""  # v6.0: QC annotation layer (core/method/background)
 
     def to_dict(self) -> dict:
         import dataclasses
@@ -91,13 +91,13 @@ class PaperCandidate:
 
 class AcademicSearchEngine:
     """
-    学术检索引擎
+    Academic search engine
 
-    支持：
-    1. 三线并行检索（arXiv/Semantic Scholar/OpenAlex）
-    2. 期刊质量过滤（四道筛子 + 保证数量回退）
-    3. 去重合并
-    4. arXiv预印本特殊处理（不直接丢弃，降级保留）
+    Supports:
+    1. Tri-source parallel retrieval (arXiv/Semantic Scholar/OpenAlex)
+    2. Journal quality filtering (four filter stages + guaranteed quantity fallback)
+    3. Deduplication and merging
+    4. arXiv preprint special handling (downgraded, not discarded)
     """
 
     def __init__(
@@ -106,19 +106,19 @@ class AcademicSearchEngine:
         min_citations: int = 5,
         min_yearly_citations: float = 2.0,
         recent_year_buffer: int = 3,
-        min_results: int = 20,  # v4.4: 保证最少产出论文数
-        include_preprints: bool = True,  # v4.4: 是否包含预印本
-        domain_config: Optional[Dict[str, Any]] = None,  # v6.0: 动态领域配置
+        min_results: int = 20,  # v4.4: Guarantee minimum output papers
+        include_preprints: bool = True,  # v4.4: Whether to include preprints
+        domain_config: Optional[Dict[str, Any]] = None,  # v6.0: Dynamic domain configuration
     ):
         """
         Args:
-            quality_levels: 保留的期刊等级，默认 ["S", "A", "B"]
-            min_citations: 最低总被引数
-            min_yearly_citations: 最低年均被引数
-            recent_year_buffer: 近N年论文放宽引用要求
-            min_results: 保证最少产出论文数（不足时自动放宽筛子）
-            include_preprints: 是否在最终结果中保留预印本（降级附录）
-            domain_config: v6.0动态领域配置（由domain_config_generator生成）
+            quality_levels: Journal levels to keep, default ["S", "A", "B"]
+            min_citations: Minimum total citations
+            min_yearly_citations: Minimum yearly citations
+            recent_year_buffer: Relax citation requirements for recent N years
+            min_results: Guarantee minimum output papers (auto-relax filters if insufficient)
+            include_preprints: Whether to keep preprints in final results (downgraded appendix)
+            domain_config: v6.0 dynamic domain config (generated by domain_config_generator)
         """
         self.quality_levels = quality_levels or ["S", "A", "B"]
         self.min_citations = min_citations
@@ -131,34 +131,34 @@ class AcademicSearchEngine:
     def search(
         self,
         query: str,
-        max_results_per_source: int = 50,  # v4.4: 默认从20提升到50
+        max_results_per_source: int = 50,  # v4.4: Default raised from 20 to 50
         sources: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
-        三线并行检索 + 质量过滤。
+        Tri-source parallel retrieval + quality filtering.
 
-        v4.4: 返回结构改为包含主列表+预印本附录+统计信息
+        v4.4: Return structure includes main list + preprint appendix + statistics
 
         Args:
-            query: 检索关键词
-            max_results_per_source: 每个检索源最大结果数（默认50）
-            sources: 检索源列表，默认全部
+            query: Search keywords
+            max_results_per_source: Max results per source (default 50)
+            sources: Search source list, default all
 
         Returns:
             {
-                "papers": List[PaperCandidate],  # 期刊论文（SAB级）
-                "preprints": List[PaperCandidate],  # 预印本（arXiv）
+                "papers": List[PaperCandidate],  # Journal papers (SAB level)
+                "preprints": List[PaperCandidate],  # Preprints (arXiv)
                 "stats": {
-                    "total_fetched": int,  # 原始获取数
-                    "after_dedup": int,    # 去重后
-                    "after_filter": int,   # 筛选后
-                    "preprint_count": int, # 预印本数
+                    "total_fetched": int,  # Raw fetched count
+                    "after_dedup": int,    # After deduplication
+                    "after_filter": int,   # After filtering
+                    "preprint_count": int, # Preprint count
                 }
             }
         """
         sources = sources or ["arxiv", "semantic_scholar", "openalex"]
 
-        # 并行检索
+        # Parallel retrieval
         all_results = []
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = {}
@@ -174,41 +174,41 @@ class AcademicSearchEngine:
                     results = future.result()
                     all_results.extend(results)
                 except Exception as e:
-                    print(f"检索源 {source} 失败: {e}")
+                    print(f"Search source {source} failed: {e}")
 
         total_fetched = len(all_results)
 
-        # 去重
+        # Deduplication
         deduped = self._deduplicate(all_results)
         after_dedup = len(deduped)
 
-        # 分离预印本和期刊论文
+        # Separate preprints from journal papers
         preprints = []
         journal_papers = []
         for paper in deduped:
             if paper.is_preprint or paper.journal == "arXiv":
                 paper.quality_level = "D"
-                paper.quality_detail = {"level": "D", "note": "预印本，未正式发表", "source": "preprint"}
+                paper.quality_detail = {"level": "D", "note": "Preprint, not formally published", "source": "preprint"}
                 preprints.append(paper)
             else:
-                # 期刊质量分级
+                # Journal quality ranking
                 detail = classify_journal(paper.journal)
                 paper.quality_level = detail["level"]
                 paper.quality_detail = detail
                 journal_papers.append(paper)
 
-        # 四道筛子过滤（仅期刊论文，v5.1: 传入query激活第四道相关性筛子）
+        # Four-stage filtering (journal papers only; v5.1: pass query to activate 4th relevance filter)
         filtered = self._apply_four_sieves(journal_papers, query=query)
 
-        # 保证数量回退：如果筛选后不足min_results，逐步放宽
+        # Quantity guarantee fallback: if filtered results < min_results, progressively relax filters
         if len(filtered) < self.min_results:
             filtered = self._ensure_minimum(journal_papers, filtered)
 
-        # 按等级排序
+        # Sort by level
         level_order = {"S": 0, "A": 1, "B": 2, "C": 3, "D": 4}
         filtered.sort(key=lambda p: (level_order.get(p.quality_level, 5), -p.citation_count))
 
-        # 预印本按引用排序，取top
+        # Sort preprints by citations, take top
         preprints.sort(key=lambda p: -p.citation_count)
 
         stats = {
@@ -230,7 +230,7 @@ class AcademicSearchEngine:
         max_results_per_source: int = 50,
         sources: Optional[List[str]] = None,
     ) -> List[PaperCandidate]:
-        """兼容旧接口：返回论文列表（不含预印本和统计）"""
+        """Backward-compatible interface: return paper list (excluding preprints and stats)"""
         result = self.search(query, max_results_per_source, sources)
         return result["papers"]
 
@@ -240,16 +240,16 @@ class AcademicSearchEngine:
         filtered: List[PaperCandidate],
     ) -> List[PaperCandidate]:
         """
-        保证最少产出论文数。逐步放宽筛子：
-        1. 放宽引用要求（减半）
-        2. 加入C级论文
-        3. 加入高引预印本
+        Guarantee minimum output papers. Progressively relax filters:
+        1. Relax citation requirement (halve)
+        2. Include C-level papers
+        3. Include highly-cited preprints
         """
         result = list(filtered)
         filtered_dois = {p.doi for p in result if p.doi}
         filtered_titles = {p.title[:30].lower() for p in result}
 
-        # 阶段1：放宽引用要求（S/A/C级全放行，B级引用减半）
+        # Stage 1: Relax citation (S/A/C pass through, B-level citations halved)
         if len(result) < self.min_results:
             relaxed = []
             for paper in all_papers:
@@ -258,16 +258,16 @@ class AcademicSearchEngine:
                 if paper.quality_level in ["S", "A"]:
                     relaxed.append(paper)
                 elif paper.quality_level == "B":
-                    # 引用要求减半
+                    # Citation requirement halved
                     if paper.citation_count >= self.min_citations // 2:
                         relaxed.append(paper)
                 elif paper.quality_level == "C":
-                    # 高引C级也加入
+                    # Highly-cited C-level also included
                     if paper.citation_count >= self.min_citations * 2:
                         relaxed.append(paper)
             result.extend(relaxed)
 
-        # 阶段2：如果还不够，加入C级论文（按引用排序取top）
+        # Stage 2: If still insufficient, add C-level papers (sorted by citations, take top)
         if len(result) < self.min_results:
             current_dois = {p.doi for p in result if p.doi}
             current_titles = {p.title[:30].lower() for p in result}
@@ -286,7 +286,7 @@ class AcademicSearchEngine:
     def _search_single_source(
         self, source: str, query: str, max_results: int
     ) -> List[PaperCandidate]:
-        """单源检索"""
+        """Single source search"""
         results = []
 
         if source == "arxiv":
@@ -299,7 +299,7 @@ class AcademicSearchEngine:
         return results
 
     def _search_arxiv(self, query: str, max_results: int) -> List[PaperCandidate]:
-        """arXiv检索（v4.4: 标记为预印本）"""
+        """arXiv search (v4.4: mark as preprint)"""
         try:
             import urllib.request
             import xml.etree.ElementTree as ET
@@ -329,17 +329,17 @@ class AcademicSearchEngine:
                     abstract=safe_truncate(summary, 500),
                     source="arxiv",
                     quality_level="D",
-                    is_preprint=True,  # v4.4: 标记预印本
+                    is_preprint=True,  # v4.4: Mark preprints
                 ))
 
             return results
 
         except Exception as e:
-            print(f"arXiv检索异常: {e}")
+            print(f"arXiv search error: {e}")
             return []
 
     def _search_semantic_scholar(self, query: str, max_results: int) -> List[PaperCandidate]:
-        """Semantic Scholar检索（v4.4: 尝试获取h-index）"""
+        """Semantic Scholar search (v4.4: try fetching h-index)"""
         try:
             import urllib.request
 
@@ -359,7 +359,7 @@ class AcademicSearchEngine:
                 for a in (paper.get("authors") or []):
                     if a.get("name"):
                         authors.append(a["name"])
-                    # 尝试获取作者h-index
+                    # Try to fetch author h-index
                     h = a.get("hIndex") or 0
                     if h and h > max_h_index:
                         max_h_index = h
@@ -379,11 +379,11 @@ class AcademicSearchEngine:
             return results
 
         except Exception as e:
-            print(f"Semantic Scholar检索异常: {e}")
+            print(f"Semantic Scholar search error: {e}")
             return []
 
     def _search_openalex(self, query: str, max_results: int) -> List[PaperCandidate]:
-        """OpenAlex检索（v4.4: 获取更多元数据）"""
+        """OpenAlex search (v4.4: fetch more metadata)"""
         try:
             import urllib.request
 
@@ -412,11 +412,11 @@ class AcademicSearchEngine:
 
                 is_preprint = work_type in ["preprint", "working_paper"]
 
-                # v5.1.7: 从abstract_inverted_index还原abstract文本
+                # v5.1.7: Reconstruct abstract text from abstract_inverted_index
                 abstract_text = ""
                 aii = work.get("abstract_inverted_index")
                 if aii and isinstance(aii, dict):
-                    # 将倒排索引还原为有序文本
+                    # Reconstruct ordered text from inverted index
                     word_positions = []
                     for word, positions in aii.items():
                         for pos in positions:
@@ -439,11 +439,11 @@ class AcademicSearchEngine:
             return results
 
         except Exception as e:
-            print(f"OpenAlex检索异常: {e}")
+            print(f"OpenAlex search error: {e}")
             return []
 
     def _deduplicate(self, papers: List[PaperCandidate]) -> List[PaperCandidate]:
-        """去重：按DOI精确去重 + 标题相似度去重"""
+        """Deduplication: exact DOI match + title similarity dedup"""
         seen_dois = set()
         seen_titles = set()
         result = []
@@ -474,12 +474,12 @@ class AcademicSearchEngine:
         relevance_threshold: float = 0.10,
     ) -> List[PaperCandidate]:
         """
-        四道筛子过滤（v5.1: 第四道筛子激活——内容相关性过滤）
+        Four-stage filtering (v5.1: 4th stage activated — content relevance filtering)
 
         Args:
-            papers: 候选论文
-            query: 原始检索词（用于相关性计算）
-            relevance_threshold: 相关性阈值（0~1），低于此值的论文被过滤
+            papers: Candidate papers
+            query: Original search query (for relevance calculation)
+            relevance_threshold: Relevance threshold (0~1), papers below this are filtered
         """
         import datetime
         current_year = datetime.datetime.now().year
@@ -487,17 +487,17 @@ class AcademicSearchEngine:
         b_accepted = 0
 
         for paper in papers:
-            # 第一道：来源分级
+            # Stage 1: Source ranking
             if paper.quality_level not in self.quality_levels:
                 continue
 
-            # B级只保留最多2篇代表
+            # B-level: keep at most 2 representatives
             if paper.quality_level == "B":
                 if b_accepted >= 2:
                     continue
                 b_accepted += 1
 
-            # 第二道：引用加权
+            # Stage 2: Citation weighting
             years_since_pub = current_year - paper.year if paper.year > 0 else 10
             is_recent = years_since_pub <= self.recent_year_buffer
 
@@ -510,12 +510,12 @@ class AcademicSearchEngine:
                 if yearly_avg < self.min_yearly_citations and paper.quality_level not in ["S", "A"]:
                     continue
 
-            # 第三道：作者h-index < 5 的非S级论文降权
+            # Stage 3: Downweight non-S papers with author h-index < 5
             if paper.author_h_index and paper.author_h_index < 5:
                 if paper.quality_level not in ["S"]:
                     continue
 
-            # 第四道：内容相关性筛选（v5.1激活，v6.0: 支持domain_config驱动）
+            # Stage 4: Content relevance filtering (v5.1 activated, v6.0: domain_config driven)
             if query:
                 relevance = self._compute_relevance(paper, query, domain_config=self.domain_config)
                 if relevance < relevance_threshold:
@@ -528,23 +528,23 @@ class AcademicSearchEngine:
     @staticmethod
     def _compute_relevance(paper: PaperCandidate, query: str, domain_config: Optional[Dict[str, Any]] = None) -> float:
         """
-        计算论文与检索词的相关性分数（0~1）。
+        Calculate relevance score (0~1) between paper and search query.
 
-        v6.0: 如果提供了domain_config，从中读取exclusion_signals和tier_definitions，
-        不再使用硬编码的领域关键词。命中exclusion_signals的论文直接返回0.0（不是penalty×0.2）。
+        v6.0: If domain_config provided, read exclusion_signals and tier_definitions from it,
+        instead of hardcoded domain keywords. Papers matching exclusion_signals return 0.0 directly (not penalty×0.0).
 
-        算法：检索词拆分为关键词，统计标题+摘要中命中的比例，
-        并对标题命中加权。如果核心领域词完全未出现，给予惩罚。
+        Algorithm: split query into keywords, count hit ratio in title+abstract,
+        with title hits weighted higher. Penalize if core domain words are completely absent.
 
         Args:
-            paper: 候选论文
-            query: 原始检索词
-            domain_config: v6.0动态领域配置（可选）
+            paper: Candidate paper
+            query: Original search query
+            domain_config: v6.0 dynamic domain config (optional)
 
         Returns:
-            相关性分数 0~1
+            Relevance score 0~1
         """
-        # 预处理：拆分检索词为关键词集合
+        # Preprocess: split query into keyword set
         stop_words = {
             "a", "an", "the", "in", "on", "of", "for", "and", "or",
             "to", "with", "by", "from", "at", "is", "are", "was",
@@ -555,32 +555,32 @@ class AcademicSearchEngine:
             "via", "through", "into", "over", "between", "among",
         }
 
-        # v6.0: 如果有domain_config，从中读取排除信号和层级定义
+        # v6.0: If domain_config exists, read exclusion signals and tier definitions
         if domain_config:
             exclusion_signals = domain_config.get("exclusion_signals", [])
             tier_defs = domain_config.get("tier_definitions", {})
 
-            # 从tier_definitions提取领域核心词和方法词
+            # Extract domain core words and method words from tier_definitions
             domain_must_have = set()
             ml_must_have = set()
             carbon_exclude = set()
 
-            # core层关键词 → domain_must_have
+            # core tier keywords → domain_must_have
             if "core" in tier_defs:
                 domain_must_have.update(kw.lower() for kw in tier_defs["core"].get("keywords", []))
-            # method层关键词 → ml_must_have
+            # method tier keywords → ml_must_have
             if "method" in tier_defs:
                 ml_must_have.update(kw.lower() for kw in tier_defs["method"].get("keywords", []))
-            # background层关键词也加入domain_must_have
+            # background tier keywords also added to domain_must_have
             if "background" in tier_defs:
                 domain_must_have.update(kw.lower() for kw in tier_defs["background"].get("keywords", []))
 
-            # exclusion_signals → carbon_exclude（命名延续，实际是所有排除信号）
+            # exclusion_signals → carbon_exclude (legacy name, actually all exclusion signals)
             carbon_exclude = set(s.lower() for s in exclusion_signals)
         else:
-            # 回退到v5.1.8-fix2的硬编码逻辑
-            # 领域核心词（必须至少命中一个，否则惩罚）
-            # v5.1.8-fix2: carbon需搭配市场/价格/排放语境才计为能源领域
+            # Fallback to v5.1.8-fix2 hardcoded logic
+            # Domain core words (must hit at least one, otherwise penalize)
+            # v5.1.8-fix2: carbon counts as energy only with market/price/emission context
             domain_must_have = {
                 "energy", "electricity", "power", "renewable",
                 "solar", "wind", "oil", "gas", "fuel", "climate",
@@ -590,7 +590,7 @@ class AcademicSearchEngine:
                 "carbon tax", "carbon capture", "carbon budget",
                 "能源", "电力", "碳", "电价", "负荷", "预测",
             }
-            # 含carbon但非能源语境的排除词
+            # Exclusion words: contain carbon but not in energy context
             carbon_exclude = {
                 "carbon nitride", "carbon nanotube", "carbon fiber",
                 "carbon dioxide reduction", "graphitic carbon", "activated carbon",
@@ -608,14 +608,14 @@ class AcademicSearchEngine:
             }
 
         query_lower = query.lower()
-        # 提取查询关键词
+        # Extract query keywords
         query_tokens = set()
         for token in query_lower.replace(",", " ").replace("/", " ").split():
             token = token.strip()
             if token and token not in stop_words and len(token) > 1:
                 query_tokens.add(token)
 
-        # 大粒度短语（如"machine learning"）
+        # Coarse-grained phrases (e.g., "machine learning")
         query_phrases = set()
         for phrase in [query_lower]:
             for sub in phrase.split(","):
@@ -624,25 +624,25 @@ class AcademicSearchEngine:
                     query_phrases.add(sub)
 
         if not query_tokens:
-            return 0.5  # 无有效关键词时不过滤
+            return 0.5  # No filtering when no valid keywords
 
-        # 论文文本
+        # Paper text
         title_lower = paper.title.lower()
         abstract_lower = (paper.abstract or "").lower()
         combined = title_lower + " " + abstract_lower
 
-        # v6.0: 命中exclusion_signals的论文直接返回0.0（不是penalty×0.2）
+        # v6.0: Papers matching exclusion_signals return 0.0 directly (not penalty×0.2)
         if domain_config and carbon_exclude:
-            # domain_config模式下，carbon_exclude = exclusion_signals
+            # In domain_config mode, carbon_exclude = exclusion_signals
             if any(ex in combined for ex in carbon_exclude):
-                return 0.0  # 直接踢出，不是惩罚
+                return 0.0  # Direct rejection, not penalty
 
-        # 命中计算
+        # Hit calculation
         title_hits = sum(1 for t in query_tokens if t in title_lower)
         abstract_hits = sum(1 for t in query_tokens if t in abstract_lower)
         phrase_hits = sum(1 for p in query_phrases if p in combined)
 
-        # 标题命中加权2x，短语命中加权3x
+        # Title hits weighted 2x, phrase hits weighted 3x
         raw_score = (title_hits * 2 + abstract_hits + phrase_hits * 3)
         max_score = len(query_tokens) * 2 + len(query_phrases) * 3  # 标题全命中的满分
 
@@ -651,17 +651,17 @@ class AcademicSearchEngine:
 
         base_score = min(raw_score / max_score, 1.0)
 
-        # 领域必须词检查：如果论文完全不涉及energy领域或ML领域，降权
+        # Domain must-have check: downweight if paper completely unrelated to energy or ML
         has_domain = any(w in combined for w in domain_must_have)
         has_ml = any(w in combined for w in ml_must_have)
 
         penalty = 1.0
         if not has_domain:
-            penalty *= 0.3  # 不涉及能源领域→大幅降权
+            penalty *= 0.3  # Unrelated to energy → heavy penalty
         if not has_ml:
-            penalty *= 0.5  # 不涉及ML→中等降权
-        # v5.1.8-fix2: 排除非能源语境的carbon词（纳米材料/化学等）
-        # v6.0: 如果没有domain_config（回退模式），保留旧逻辑
+            penalty *= 0.5  # Unrelated to ML → moderate penalty
+        # v5.1.8-fix2: Exclude non-energy carbon context (nanomaterials/chemistry etc.)
+        # v6.0: If no domain_config (fallback mode), keep legacy logic
         if not domain_config and any(ex in combined for ex in carbon_exclude):
             penalty *= 0.2
 
