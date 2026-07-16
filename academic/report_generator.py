@@ -1,11 +1,11 @@
 """
-报告生成器 — Consensus Pipeline v5.1
+Report Generator — Consensus Pipeline v5.1
 
-v5.1: 两套模板分离
-  - 最终交付报告（≤2000字，面向用户）：信息密度优先，分层呈现
-  - 内部工作文档（不限长度，面向开发者）：完整检索+辩论+校验记录
+v5.1: Dual template separation
+  - Final deliverable report (<=2000 words, user-facing): information-density-first, layered presentation
+  - Internal working document (unlimited length, developer-facing): complete search+debate+verification records
 
-v4.2: 修复多字节字符安全截断
+v4.2: Fix safe truncation for multi-byte characters
 """
 import json
 import os
@@ -18,7 +18,7 @@ from .visualizer import ChartConfig
 
 
 def _safe_truncate(text: str, max_chars: int) -> str:
-    """安全截断字符串，避免在多字节字符中间截断。"""
+    """Safely truncate string, avoiding splitting in the middle of multi-byte characters."""
     if len(text) <= max_chars:
         return text
     return text[:max_chars]
@@ -26,11 +26,11 @@ def _safe_truncate(text: str, max_chars: int) -> str:
 
 class ReportGenerator:
     """
-    报告整合组 — v5.1 双模板
+    Report integration group — v5.1 dual template
 
-    产出两份文档：
-    - final_report.md：最终交付报告，≤2000字，信息密度优先
-    - internal_doc.md：内部工作文档，完整过程记录
+    Produces two documents:
+    - final_report.md: Final deliverable report, <=2000 words, information-density-first
+    - internal_doc.md: Internal working document, complete process record
     """
 
     def __init__(self, output_dir: str = "./output", llm_call_fn=None):
@@ -76,14 +76,14 @@ class ReportGenerator:
         """
         os.makedirs(self.output_dir, exist_ok=True)
 
-        # 1. 最终交付报告
+        # 1. Final deliverable report
         final_content = self._build_final_report(
             topic, papers, clusters, consensus_points,
             fact_check_summary, methodology_reviews,
             debate_outputs,
         )
 
-        # AI精炼去废话（仅模板模式需要，综述模式由AI直接写）
+        # AI refinement to remove fluff (only needed in template mode; review mode is written by AI directly)
         # if self.llm_call_fn:
         #     final_content = self._ai_refine(final_content, topic)
 
@@ -91,7 +91,7 @@ class ReportGenerator:
         with open(final_path, "w", encoding="utf-8") as f:
             f.write(final_content)
 
-        # 2. 内部工作文档
+        # 2. Internal working document
         internal_content = self._build_internal_doc(
             topic, papers, clusters, validations, charts,
             consensus_points, fact_check_summary,
@@ -103,13 +103,13 @@ class ReportGenerator:
         with open(internal_path, "w", encoding="utf-8") as f:
             f.write(internal_content)
 
-        # 3. CSV 元数据表
+        # 3. CSV metadata table
         csv_content = self._build_csv(papers)
         csv_path = os.path.join(self.output_dir, "papers_metadata.csv")
         with open(csv_path, "w", encoding="utf-8") as f:
             f.write(csv_content)
 
-        # 4. 图表数据
+        # 4. Chart data
         charts_dir = os.path.join(self.output_dir, "charts")
         os.makedirs(charts_dir, exist_ok=True)
         for chart in charts:
@@ -126,7 +126,7 @@ class ReportGenerator:
         }
 
     # ================================================================
-    # 最终交付报告（≤2000字）
+    # Final deliverable report (<=2000 words)
     # ================================================================
 
     def _build_final_report(
@@ -139,7 +139,7 @@ class ReportGenerator:
         methodology_reviews: Optional[Dict[str, Any]],
         debate_outputs: Optional[Dict[str, str]] = None,
     ) -> str:
-        """构建最终交付报告。如果有llm_call_fn，用AI写综述；否则回退模板。"""
+        """Build final deliverable report. If llm_call_fn exists, use AI to write review; otherwise fallback to template."""
         now = datetime.now().strftime("%Y年%m月%d日")
 
         s_papers = [p for p in papers if p.quality_level == "S"]
@@ -149,7 +149,7 @@ class ReportGenerator:
         if self.llm_call_fn and s_papers:
             return self._build_review_by_ai(topic, papers, s_papers, a_papers, b_papers, consensus_points, now, fact_check_summary, debate_outputs)
 
-        # 回退：模板模式（无LLM时）
+        # Fallback: template mode (when no LLM)
         sections = []
         sections.append(self._build_final_title(topic, now))
         sections.append(self._build_final_summary(topic, papers, s_papers, a_papers))
@@ -175,8 +175,8 @@ class ReportGenerator:
         fact_check_summary: str,
         debate_outputs: Optional[Dict[str, str]] = None,
     ) -> str:
-        """用LLM基于论文元数据直接撰写学术综述报告"""
-        # 构建论文清单供AI参考——只传S/A/B级，C级不传
+        """Use LLM to write academic review report based on paper metadata"""
+        # Build paper list for AI reference — only pass S/A/B-tier, not C-tier
         qualified = [p for p in papers if p.quality_level in ("S", "A", "B")]
         paper_list = self._format_paper_list(qualified)
         year_dist = self._compute_year_distribution(qualified)
@@ -288,29 +288,29 @@ class ReportGenerator:
 （列出所有S级和A级论文，按S/A/B分组，GB/T 7714格式）"""
 
         try:
-            # 综述需要长输出，用专用调用
+            # Review needs long output, use dedicated call
             report = self._llm_call_long(system_prompt, user_prompt, temperature=0.25)
             if report and len(report) > 500:
-                # 用论文元数据重建参考文献，保证引用序号一一对应
+                # Rebuild references with paper metadata, ensure citation numbers match
                 report = self._rebuild_references(report, qualified)
 
-                # 校验引用描述是否与论文实际内容匹配
+                # Verify citation descriptions match actual paper content
                 report = self._verify_citation_content(report, qualified)
 
-                # 生成可视化图表并嵌入报告
+                # Generate visual charts and embed in report
                 chart_section = self._embed_charts(qualified, topic)
                 if chart_section:
-                    # 在"一、研究概况"章节后插入图表
+                    # Insert charts after "Research Overview" section
                     report = self._insert_charts_after_section(report, chart_section)
 
-                # 补充页脚
+                # Add footer
                 if fact_check_summary:
                     report += f"\n\n---\n\n> 📋 事实校验：{fact_check_summary}"
                 return report
         except Exception:
             pass
 
-        # LLM失败时回退模板
+        # Fallback to template when LLM fails
         sections = []
         sections.append(self._build_final_title(topic, now))
         sections.append(self._build_final_summary(topic, papers, s_papers, a_papers))
@@ -321,17 +321,17 @@ class ReportGenerator:
 
     @staticmethod
     def _rebuild_references(report: str, papers: List[PaperCandidate]) -> str:
-        """从AI综述中提取所有[N]引用，用论文元数据重建参考文献段，保证一一对应"""
+        """Extract all [N] citations from AI review, rebuild reference section with paper metadata, ensure one-to-one correspondence"""
         import re
-        # 1. 提取正文中所有引用序号
+        # 1. Extract all citation numbers from main text
         cited_indices = set()
         for m in re.finditer(r'\[(\d+)\]', report):
             idx = int(m.group(1))
             if 1 <= idx <= len(papers):
                 cited_indices.add(idx)
 
-        # 1.5 移除超出论文清单范围的引用（AI编造的序号）
-        # 把[68]、[79]等超出len(papers)的引用替换为空或注释
+        # 1.5 Remove citations exceeding paper list range (AI-fabricated numbers)
+        # Replace citations like [68], [79] that exceed len(papers) with empty or comment
         out_of_range = set()
         for m in re.finditer(r'\[(\d+)\]', report):
             idx = int(m.group(1))
@@ -339,12 +339,12 @@ class ReportGenerator:
                 out_of_range.add(idx)
 
         if out_of_range:
-            # v5.1.8: 超出范围的[N]直接删除，不再替换为"参见相关研究"
+            # v5.1.8: Delete out-of-range [N] directly, no longer replace with "see related research"
             for idx in sorted(out_of_range, reverse=True):
-                # 删除[N]及其紧邻的"参见"前缀
+                # Delete [N] and its adjacent "see" prefix
                 report = re.sub(r'参见\s*\[' + str(idx) + r'\]', '', report)
                 report = report.replace(f'[{idx}]', '')
-            # 重新提取有效引用
+            # Re-extract valid citations
             cited_indices = set()
             for m in re.finditer(r'\[(\d+)\]', report):
                 idx = int(m.group(1))
@@ -354,20 +354,20 @@ class ReportGenerator:
         if not cited_indices:
             return report  # 无引用则不改
 
-        # 2. 找到并移除所有"参考文献"section（v5.1.8-fix2: 防止重复段）
-        # AI可能生成"## 五、参考文献"或"## 参考文献"，全部移除后统一重建
+        # 2. Find and remove all "References" sections (v5.1.8-fix2: prevent duplicate sections)
+        # AI may generate "## References" variants, remove all and rebuild uniformly
         report = re.sub(r'\n#{1,3}\s*(?:[一二三四五六七八九十]+[、.．]\s*)?参考文献.*', '', report, flags=re.DOTALL)
         ref_section = "\n\n## 参考文献\n\n"
 
-        # 3. 用论文元数据生成参考文献列表——按等级分组
-        # v5.1.8-fix: 跳过C级论文（被降级=不相关，属于僵尸引用）
+        # 3. Generate reference list from paper metadata — grouped by tier
+        # v5.1.8-fix: Skip C-tier papers (downgraded = irrelevant, zombie citations)
         s_refs, a_refs, b_refs = [], [], []
         c_skipped = 0
         for idx in sorted(cited_indices):
             p = papers[idx - 1]  # 1-based to 0-based
             level = p.quality_level or "B"
             if level == "C":
-                # 从正文中移除该C级引用的[N]标记
+                # Remove [N] markers for C-tier citations from main text
                 report = re.sub(r'参见\s*\[' + str(idx) + r'\]', '', report)
                 report = report.replace(f'[{idx}]', '')
                 c_skipped += 1
@@ -391,7 +391,7 @@ class ReportGenerator:
             else:
                 b_refs.append(entry)
 
-        # 按等级分组输出
+        # Output grouped by tier
         if c_skipped > 0:
             import logging
             logging.info(f"[v5.1.8-fix] 移除{c_skipped}篇C级僵尸引用")
@@ -409,13 +409,13 @@ class ReportGenerator:
         ref_section += "\n".join(ref_section_parts)
         report = report + ref_section
 
-        # 4. 最终校验：移除正文中未被引用的参考文献条目
+        # 4. Final validation: remove uncited reference entries from main text
         report = ReportGenerator._validate_references(report)
         return report
 
     @staticmethod
     def _validate_references(report: str) -> str:
-        """校验引用一致性：正文[N] ↔ 参考文献列表 一一对应"""
+        """Validate citation consistency: main text [N] ↔ reference list one-to-one correspondence"""
         import re
         ref_split = report.split("## 参考文献")
         if len(ref_split) < 2:
@@ -424,10 +424,10 @@ class ReportGenerator:
         body = ref_split[0]
         ref_part = ref_split[-1]
 
-        # 提取正文中的所有[N]
+        # Extract all [N] from main text
         body_refs = set(int(m) for m in re.findall(r'\[(\d+)\]', body))
 
-        # 提取参考文献中的[N]
+        # Extract [N] from references
         ref_entries = {}
         current_subsection = ""
         subsections = []
@@ -446,11 +446,11 @@ class ReportGenerator:
                 if idx in body_refs:
                     ref_entries[idx] = line
                     cleaned_lines.append(line)
-                # else: 正文没有引用这个编号，移除
+                # else: main text does not cite this number, remove
             else:
                 cleaned_lines.append(line)
 
-        # 重建参考文献部分
+        # Rebuild references section
         new_ref = "\n".join(cleaned_lines)
         return ref_split[0] + "## 参考文献" + new_ref
 
@@ -465,11 +465,11 @@ class ReportGenerator:
         """
         import re
         
-        # 找到参考文献section的分界线，只处理正文部分
+        # Find reference section boundary, only process main text
         ref_split = report.split("## 参考文献")
         body = ref_split[0] if len(ref_split) >= 2 else report
         
-        # 对每个引用序号，提取其上下文并校验
+        # For each citation number, extract context and validate
         verified_body = body
         citation_contexts = {}  # idx -> list of context snippets
         
@@ -478,7 +478,7 @@ class ReportGenerator:
             if idx < 1 or idx > len(papers):
                 continue
             
-            # 提取[N]前后100字的上下文
+            # Extract ~100 chars context around [N]
             start = max(0, m.start() - 100)
             end = min(len(body), m.end() + 100)
             context = body[start:end]
@@ -487,13 +487,13 @@ class ReportGenerator:
                 citation_contexts[idx] = []
             citation_contexts[idx].append(context)
         
-        # 对每个引用检查描述是否与论文匹配
+        # For each citation, check if description matches paper
         mismatches = []
         for idx, contexts in citation_contexts.items():
             paper = papers[idx - 1]
             title = paper.title.lower()
             
-            # 从论文标题提取关键术语（去掉停用词后的核心名词/动词）
+            # Extract key terms from paper title (core nouns/verbs after removing stop words)
             title_words = set()
             stop_words = {"a", "an", "the", "of", "in", "on", "for", "and", "with", "to", 
                          "from", "by", "at", "is", "are", "was", "were", "using", "based",
@@ -504,67 +504,67 @@ class ReportGenerator:
                 if len(w) >= 3 and w not in stop_words:
                     title_words.add(w)
             
-            # 对每个出现位置，检查上下文是否与论文相关
+            # For each occurrence, check if context is relevant to paper
             all_mismatched = True
             for ctx in contexts:
                 ctx_lower = ctx.lower()
-                # 检查上下文中是否出现论文标题的关键词
+                # Check if paper title keywords appear in context
                 keyword_hits = sum(1 for w in title_words if w in ctx_lower)
                 keyword_ratio = keyword_hits / max(len(title_words), 1)
                 
                 if keyword_ratio >= 0.2:
-                    # 至少20%标题关键词出现在上下文中，认为匹配
+                    # At least 20% title keywords in context = match
                     all_mismatched = False
                     break
             
             if all_mismatched and len(title_words) >= 3:
                 mismatches.append(idx)
         
-        # 对不匹配的引用，直接删除该引用标记（而非替换为"参见[N]"）
-        # "参见[N]"占位符是导致报告质量恶化的主因，不如直接移除不确定的引用
+        # For mismatched citations, delete the citation marker directly (rather than replace with "see [N]")
+        # "see [N]" placeholders are the main cause of report quality degradation, better to remove uncertain citations
         if mismatches:
             for idx in mismatches:
                 paper = papers[idx - 1]
-                # 策略1：删除孤立的"参见[N]"或"参见[N]。"
+                # Strategy 1: Delete standalone "see [N]" or "see [N]." patterns
                 pattern1 = re.compile(r'\s*参见\[' + str(idx) + r'\]\。?\s*')
                 verified_body = pattern1.sub(' ', verified_body)
-                # 策略2：删除仅含引用的片段如"[N]。"或"参见[N]0%。"等不可读模式
+                # Strategy 2: Delete citation-only fragments like "[N]." or unreadable patterns
                 pattern2 = re.compile(r'\s*\[' + str(idx) + r'\]\s*[0-9]*%\s*\。?\s*')
                 verified_body = pattern2.sub(' ', verified_body)
-                # 策略3：对于描述性引用，保留引用但去掉可能编造的描述词
-                # 不做替换，保持原样——让读者自行判断
+                # Strategy 3: For descriptive citations, keep citation but remove potentially fabricated descriptions
+                # No replacement, keep as-is — let readers judge
 
-        # v5.1.7: 清理悬空引用模式 "[参见参考文献，论文清单中无具体编号]"
-        # 这类引用指向被降级/不在清单中的论文，属于不可验证的引用
+        # v5.1.7: Clean dangling citation patterns "[see references, no specific number in paper list]"
+        # These citations point to downgraded/missing papers, unverifiable
         verified_body = re.sub(
             r'\[参见参考文献[，,]?\s*论文清单中无具体编号\]',
             '',
             verified_body
         )
-        # 清理可能残留的 "参见参考文献" 后面的冗余文字
+        # Clean up redundant text after residual "see references"
         verified_body = re.sub(
             r'参见参考文献[，,]?\s*论文清单中无具体编号',
             '',
             verified_body
         )
-        # v5.1.8: 清理正文中的"参见[N]"前缀（保留[N]本身）
-        # 如"参见[10]综述"→"[10]综述"，"（参见[35]）"→"（[35]）"
+        # v5.1.8: Clean "see [N]" prefixes in text (keep [N] itself)
+        # e.g. "see [10] review" → "[10] review", "(see [35])" → "([35])"
         verified_body = re.sub(r'参见\s*\[(\d+)\]', r'[\1]', verified_body)
         
-        # 重新组合
+        # Reassemble
         if len(ref_split) >= 2:
             return verified_body + "## 参考文献" + ref_split[-1]
         return verified_body
 
     def _embed_charts(self, papers: List[PaperCandidate], topic: str) -> str:
-        """生成可视化图表并返回Markdown嵌入文本"""
+        """Generate visual charts and return Markdown embedded text"""
         try:
             from .report_visualizer import generate_report_charts
             chart_paths = generate_report_charts(papers, self.output_dir, topic)
 
             lines = []
             if chart_paths.get("year_trend"):
-                # 使用相对于output_dir的路径，避免硬编码本地绝对路径
+                # Use path relative to output_dir, avoid hardcoded local absolute paths
                 rel_path = os.path.relpath(chart_paths["year_trend"], self.output_dir)
                 lines.append(f"![年度发文量趋势]({rel_path})")
                 lines.append("")
@@ -592,19 +592,19 @@ class ReportGenerator:
 
     @staticmethod
     def _insert_charts_after_section(report: str, chart_section: str) -> str:
-        """在"研究概况"章节后插入图表。如果没找到该章节，在摘要后插入。"""
-        # 尝试在"一、研究概况"章节后插入
+        """Insert charts after Research Overview section. If section not found, insert after abstract."""
+        # Try inserting after "Research Overview" section
         import re
-        # 匹配 "## 一、研究概况" 到下一个 "## " 之间的内容
+        # Match content from "## Research Overview" to next "## "
         pattern = re.compile(r'(##\s*一[、．.]\s*研究概况.*?)(\n##\s)', re.DOTALL)
         match = pattern.search(report)
         if match:
-            # 在该章节末尾、下一个章节前插入
+            # Insert at end of this section, before next section
             insert_pos = match.end() - len('\n## ')
             report = report[:insert_pos] + "\n\n" + chart_section + "\n" + report[insert_pos:]
             return report
 
-        # 回退：在摘要后插入
+        # Fallback: insert after abstract
         pattern2 = re.compile(r'(##\s*摘要.*?)(\n##\s)', re.DOTALL)
         match2 = pattern2.search(report)
         if match2:
@@ -612,7 +612,7 @@ class ReportGenerator:
             report = report[:insert_pos] + "\n\n" + chart_section + "\n" + report[insert_pos:]
             return report
 
-        # 最终回退：追加到文末（参考文献前）
+        # Final fallback: append to end (before references)
         ref_pattern = re.compile(r'(\n#{1,3}\s*参考文献)', re.DOTALL)
         match3 = ref_pattern.search(report)
         if match3:
@@ -620,12 +620,12 @@ class ReportGenerator:
             report = report[:insert_pos] + "\n\n" + chart_section + "\n" + report[insert_pos:]
             return report
 
-        # 实在找不到，追加到末尾
+        # If nothing found, append to end
         return report + "\n\n" + chart_section
 
     @staticmethod
     def _format_debate_outputs(debate_outputs: Optional[Dict[str, str]], max_dept: int = 5, max_chars: int = 1500) -> str:
-        """将部门辩论产出格式化为综述AI可用的参考文本"""
+        """Format department debate output as reference text for review AI"""
         if not debate_outputs:
             return ""
         
@@ -663,12 +663,12 @@ class ReportGenerator:
             }
             dept_name = dept_name_map.get(dept_key, dept_key)
             
-            # 提取consensus部分
+            # Extract consensus part
             consensus_text = ""
             if isinstance(content, dict):
                 consensus_text = content.get("consensus", "")
                 if not consensus_text:
-                    # 尝试从debater_arguments中提取
+                    # Try extracting from debater_arguments
                     args = content.get("debater_arguments", [])
                     if isinstance(args, list):
                         parts = []
@@ -686,7 +686,7 @@ class ReportGenerator:
             if not consensus_text:
                 continue
             
-            # 截断避免token爆炸
+            # Truncate to avoid token explosion
             if len(consensus_text) > max_chars:
                 consensus_text = consensus_text[:max_chars] + "\n...(已截断)"
             
@@ -699,8 +699,8 @@ class ReportGenerator:
 
     @staticmethod
     def _format_paper_list(papers: List[PaperCandidate], max_papers: int = 80) -> str:
-        """格式化论文清单供AI参考（v5.1.7: 注入abstract，标注不相关论文）"""
-        # 不相关领域关键词
+        """Format paper list for AI reference (v5.1.7: inject abstract, mark irrelevant papers)"""
+        # Irrelevant domain keywords
         irrelevant_markers = [
             "plant survival", "drought mortality", "genomic", "gapseq", "bacterial metabolic",
             "rubisco", "carbon isotope", "soil respiration", "two-sided market",
@@ -719,11 +719,11 @@ class ReportGenerator:
             year = p.year or "n/a"
             level = p.quality_level
             cite = p.citation_count
-            # 检查相关性
+            # Check relevance
             text = (p.title + " " + (p.journal or "")).lower()
             is_irrelevant = any(kw in text for kw in irrelevant_markers)
             marker = " ⚠️可能不相关" if is_irrelevant else ""
-            # v5.1.7: 注入abstract，让综述AI能看到论文具体内容
+            # v5.1.7: Inject abstract so review AI can see paper content
             abstract_text = ""
             if p.abstract:
                 max_abs = 150 if level in ("S", "A") else 80
@@ -738,7 +738,7 @@ class ReportGenerator:
 
     @staticmethod
     def _compute_year_span(papers: List[PaperCandidate]) -> str:
-        """计算年份跨度"""
+        """Calculate year span"""
         years = [p.year for p in papers if p.year and p.year > 1990]
         if not years:
             return "N/A"
@@ -746,7 +746,7 @@ class ReportGenerator:
 
     @staticmethod
     def _compute_year_distribution(papers: List[PaperCandidate]) -> str:
-        """计算年份分布"""
+        """Calculate year distribution"""
         year_counts = {}
         for p in papers:
             if p.year and p.year > 1990:
@@ -761,7 +761,7 @@ class ReportGenerator:
 
     @staticmethod
     def _compute_method_distribution(papers: List[PaperCandidate]) -> str:
-        """从标题/摘要提取方法关键词分布"""
+        """Extract method keyword distribution from titles/abstracts"""
         method_keywords = {
             "LSTM/GRU": ["lstm", "gru", "rnn", "recurrent"],
             "Transformer": ["transformer", "attention", "bert", "gpt"],
@@ -775,7 +775,7 @@ class ReportGenerator:
             "优化算法": ["optimization", "pso", "genetic algorithm", "evolutionary"],
             "NLP/文本": ["nlp", "text mining", "sentiment", "word2vec", "topic model"],
             "联邦学习": ["federated", "federated learning"],
-            # v5.1.5: 能源经济学特有方法
+            # v5.1.5: Energy economics specific methods
             "分解-集成": ["emd", "ceemdan", "vmd", "wavelet", "decompos", "empirical mode", "eemd"],
             "混合模型": ["hybrid", "combined model", "ensemble deep", "multi-model", "fusion"],
             "物理信息融合": ["physics-informed", "pinns", "physics-guided", "mechanism", "domain knowledge"],
@@ -811,12 +811,12 @@ class ReportGenerator:
         s_papers: List[PaperCandidate],
         a_papers: List[PaperCandidate],
     ) -> str:
-        """摘要 ≤150字，一句话核心发现 + 关键数据"""
+        """Abstract <=150 chars, one-sentence core finding + key data"""
         total = len(papers)
         s_count = len(s_papers)
         a_count = len(a_papers)
 
-        # 提取方法关键词
+        # Extract method keywords
         method_keywords = self._extract_top_methods(papers)
 
         return f"""## 摘要
@@ -825,12 +825,12 @@ class ReportGenerator:
 
     @staticmethod
     def _compress_text(text: str, max_chars: int = 80) -> str:
-        """将长文本压缩为一句话摘要。跳过LLM寒暄语，提取实质结论。"""
+        """Compress long text to one-sentence summary. Skip LLM pleasantries, extract substantive conclusions."""
         if not text:
             return ""
-        # 去掉Markdown标记和常见LLM寒暄语
+        # Remove Markdown markup and common LLM pleasantries
         clean = text.replace("**", "").replace("###", "").replace("##", "").strip()
-        # 跳过寒暄语行
+        # Skip pleasantry lines
         skip_prefixes = [
             "好的", "好的，", "作为", "以下是", "根据", "基于",
             "我来", "我将", "经过", "通过", "针对",
@@ -850,13 +850,13 @@ class ReportGenerator:
                 substantive_lines.append(line)
 
         if not substantive_lines:
-            # 全是寒暄语，取最长的一行
+            # All pleasantries, take the longest line
             substantive_lines = sorted(lines, key=len, reverse=True)
 
         result = substantive_lines[0] if substantive_lines else clean[:max_chars]
 
         if len(result) > max_chars:
-            # 找第一个句号断点
+            # Find first sentence-ending period breakpoint
             for sep in ["。", ". "]:
                 idx = result.find(sep, 10)
                 if 10 < idx <= max_chars:
@@ -865,28 +865,28 @@ class ReportGenerator:
         return result
 
     def _llm_call_long(self, system_prompt: str, user_prompt: str, temperature: float = 0.25) -> str:
-        """长输出LLM调用（综述报告需要8K+ tokens），支持分段续写"""
+        """Long output LLM call (review report needs 8K+ tokens), supports segmented continuation"""
         import requests
-        # 从llm_call_fn的环境获取API配置
-        # 尝试直接调用，但把max_tokens调大
+        # Get API config from llm_call_fn environment
+        # Try direct call with larger max_tokens
         try:
-            # 如果llm_call_fn是run_pipeline.llm_call，我们无法直接改max_tokens
-            # 改为：分段请求——先写前半部分，再续写后半部分
+            # If llm_call_fn is run_pipeline.llm_call, we cannot directly change max_tokens
+            # Instead: segmented request — write first half, then continue second half
             result = self.llm_call_fn(system_prompt, user_prompt, temperature=temperature)
             if not result or len(result) < 500:
                 return result or ""
             
-            # 检查是否被截断（末尾不完整）
+            # Check if truncated (incomplete ending)
             last_line = result.strip().split("\n")[-1] if result.strip() else ""
             incomplete_markers = [
                 not result.rstrip().endswith(("。", ".", "】", ")", "\"", "》", "```")),
                 result.rstrip().endswith(("，", "、", "因为", "但是", "而且", "其", "在")),
             ]
-            # 如果输出看起来完整（有参考文献段），直接返回
+            # If output looks complete (has references section), return directly
             if "参考文献" in result or "五、" in result or "## 五" in result:
                 return result
             
-            # 否则续写
+            # Otherwise continue writing
             continue_prompt = f"""前文到此被截断了。请从截断处继续撰写，不要重复已有内容，直接接着写：
 
 {result[-200:]}
@@ -898,14 +898,14 @@ class ReportGenerator:
 
             continuation = self.llm_call_fn(system_prompt, continue_prompt, temperature=temperature)
             if continuation and len(continuation) > 100:
-                # 拼接：去掉重叠部分
+                # Concatenate: remove overlapping parts
                 return result + "\n\n" + continuation
             return result
         except Exception:
             return ""
 
     def _ai_refine(self, draft: str, topic: str) -> str:
-        """用LLM精炼报告：去废话、提信息密度、保留所有section"""
+        """Use LLM to refine report: remove fluff, increase info density, keep all sections"""
         system_prompt = """你是一位学术报告精炼编辑。你的任务：
 1. 删除所有寒暄语、角色扮演语（如"好的"、"作为XX专家"、"我来分析"等）
 2. 每句话必须承载可验证结论或具体数据，删除零信息量表述
@@ -936,12 +936,12 @@ class ReportGenerator:
         s_papers: List[PaperCandidate],
         consensus_points: Optional[List[str]],
     ) -> str:
-        """核心发现：3-5条，每条带置信度，从辩论共识压缩为一句话"""
+        """Core findings: 3-5 items, each with confidence, compressed from debate consensus to one sentence"""
         lines = ["## 一、核心发现", ""]
 
         findings = []
 
-        # 从共识结论压缩提取（每条≤80字）
+        # Compress from consensus conclusions (each <=80 chars)
         if consensus_points:
             for i, point in enumerate(consensus_points[:5]):
                 compressed = self._compress_text(point, max_chars=80)
@@ -951,9 +951,9 @@ class ReportGenerator:
                     "evidence": "",
                 })
 
-        # 从S级论文补充
+        # Supplement from S-tier papers
         if len(findings) < 3 and s_papers:
-            # 方法趋势发现
+            # Method trend findings
             methods = set()
             for p in s_papers:
                 for kw in ["LSTM", "Transformer", "XGBoost", "CNN", "GNN", "causal", "RL"]:
@@ -966,7 +966,7 @@ class ReportGenerator:
                     "evidence": f"基于{s_papers[0].title[:40] if s_papers else ''}等S级论文",
                 })
 
-        # 数据来源发现
+        # Data source findings
         if len(findings) < 5:
             findings.append({
                 "text": "高频时序数据（电力负荷、碳价格、天气）是多模态融合的主要数据基础",
@@ -988,8 +988,8 @@ class ReportGenerator:
         clusters: List[ClusterResult],
         methodology_reviews: Optional[Dict[str, Any]],
     ) -> str:
-        """方法论分布：有数据时才输出表格"""
-        # 收集方法分布
+        """Methodology distribution: output table only when data is available"""
+        # Collect method distribution
         method_items = []
         if methodology_reviews and "distribution" in methodology_reviews:
             dist = methodology_reviews["distribution"]
@@ -1012,7 +1012,7 @@ class ReportGenerator:
         return "\n".join(lines)
 
     def _build_final_trends(self, papers: List[PaperCandidate]) -> str:
-        """热点趋势：简洁3条"""
+        """Hot trends: concise 3 items"""
         lines = ["## 三、热点趋势", ""]
 
         year_counts = {}
@@ -1034,7 +1034,7 @@ class ReportGenerator:
         s_papers: List[PaperCandidate],
         a_papers: List[PaperCandidate],
     ) -> str:
-        """代表性论文 Top 5，仅标题+期刊+年份"""
+        """Representative papers Top 5, title+journal+year only"""
         lines = ["## 四、代表性论文", ""]
 
         top = (s_papers + a_papers)[:5]
@@ -1055,7 +1055,7 @@ class ReportGenerator:
         papers: List[PaperCandidate],
         consensus_points: Optional[List[str]],
     ) -> str:
-        """研究空白与机会"""
+        """Research gaps and opportunities"""
         lines = ["## 五、研究空白与机会", ""]
 
         gaps = [
@@ -1075,7 +1075,7 @@ class ReportGenerator:
         self,
         papers: List[PaperCandidate],
     ) -> str:
-        """v6.0: 检索边界与局限性章节"""
+        """v6.0: Search boundary and limitations section"""
         lines = ["## 检索边界与局限性", ""]
 
         total = len(papers)
@@ -1111,7 +1111,7 @@ class ReportGenerator:
         s_papers: List[PaperCandidate],
         a_papers: List[PaperCandidate],
     ) -> str:
-        """参考文献：S级+A级全量列出"""
+        """References: list all S-tier + A-tier papers"""
         lines = ["## 六、参考文献", ""]
 
         top = s_papers + a_papers
@@ -1142,7 +1142,7 @@ class ReportGenerator:
         return footer
 
     # ================================================================
-    # 内部工作文档（不限长度）
+    # Internal working document (unlimited length)
     # ================================================================
 
     def _build_internal_doc(
@@ -1161,7 +1161,7 @@ class ReportGenerator:
         tutorial_output: str,
         relevance_filter_log: Optional[Dict[str, Any]],
     ) -> str:
-        """构建内部工作文档。完整过程记录，不限长度。"""
+        """Build internal working document. Complete process record, unlimited length."""
         now = datetime.now().strftime("%Y年%m月%d日 %H:%M")
         sections = []
 
@@ -1172,31 +1172,31 @@ class ReportGenerator:
 
 ---""")
 
-        # 一、检索日志
+        # I. Search log
         sections.append(self._build_internal_search_log(papers, relevance_filter_log))
 
-        # 二、完整论文清单
+        # II. Complete paper list
         sections.append(self._build_internal_paper_list(papers))
 
-        # 三、方法论审查
+        # III. Methodology review
         sections.append(self._build_internal_methodology(methodology_reviews, clusters))
 
-        # 四、部门辩论全文
+        # IV. Department debate full text
         sections.append(self._build_internal_debates(debate_outputs))
 
-        # 五、交叉辩论
+        # V. Cross-debate
         sections.append(self._build_internal_cross_debate(cross_debate_results))
 
-        # 六、共识结论
+        # VI. Consensus conclusions
         sections.append(self._build_internal_consensus(consensus_points))
 
-        # 七、事实校验
+        # VII. Fact-check
         sections.append(self._build_internal_fact_check(fact_check_summary, validations))
 
-        # 八、程序与教程
+        # VIII. Programming and tutorial
         sections.append(self._build_internal_code_tutorial(programming_output, tutorial_output))
 
-        # 九、验证结果
+        # IX. Validation results
         sections.append(self._build_internal_validations(validations))
 
         return "\n\n".join(sections)
@@ -1206,9 +1206,9 @@ class ReportGenerator:
         papers: List[PaperCandidate],
         relevance_filter_log: Optional[Dict[str, Any]],
     ) -> str:
-        lines = ["## 一、检索日志", ""]
+        lines = ["## I. Search log", ""]
 
-        # 按来源统计
+        # Statistics by source
         source_counts = {}
         for p in papers:
             src = p.source or "unknown"
@@ -1222,7 +1222,7 @@ class ReportGenerator:
             lines.append(f"| {src} | {count} |")
         lines.append("")
 
-        # 相关性过滤日志
+        # Relevance filter log
         if relevance_filter_log:
             lines.append("### 相关性过滤")
             lines.append("")
@@ -1242,7 +1242,7 @@ class ReportGenerator:
         return "\n".join(lines)
 
     def _build_internal_paper_list(self, papers: List[PaperCandidate]) -> str:
-        lines = ["## 二、完整论文清单", ""]
+        lines = ["## II. Complete paper list", ""]
         lines.append("| # | 标题 | 期刊 | 年 | 等级 | 被引 | 来源 |")
         lines.append("|---|------|------|----|------|------|------|")
 
@@ -1269,7 +1269,7 @@ class ReportGenerator:
         methodology_reviews: Optional[Dict[str, Any]],
         clusters: List[ClusterResult],
     ) -> str:
-        lines = ["## 三、方法论审查", ""]
+        lines = ["## III. Methodology review", ""]
 
         if methodology_reviews:
             lines.append("### 审查结果")
@@ -1287,7 +1287,7 @@ class ReportGenerator:
     def _build_internal_debates(
         self, debate_outputs: Optional[Dict[str, str]]
     ) -> str:
-        lines = ["## 四、部门辩论全文", ""]
+        lines = ["## IV. Department debate full text", ""]
 
         if not debate_outputs:
             lines.append("*无辩论数据*")
@@ -1297,7 +1297,7 @@ class ReportGenerator:
             lines.append(f"### {dept_name}")
             lines.append("")
             if isinstance(content, dict):
-                # 结构化辩论输出：提取consensus + debater_arguments
+                # Structured debate output: extract consensus + debater_arguments
                 if content.get("consensus"):
                     lines.append(f"**共识：** {content['consensus']}")
                     lines.append("")
@@ -1323,7 +1323,7 @@ class ReportGenerator:
     def _build_internal_cross_debate(
         self, cross_debate_results: Optional[Dict[str, Any]]
     ) -> str:
-        lines = ["## 五、交叉辩论记录", ""]
+        lines = ["## V. Cross-debate记录", ""]
 
         if not cross_debate_results:
             lines.append("*无交叉辩论数据*")
@@ -1339,7 +1339,7 @@ class ReportGenerator:
     def _build_internal_consensus(
         self, consensus_points: Optional[List[str]]
     ) -> str:
-        lines = ["## 六、共识结论", ""]
+        lines = ["## VI. Consensus conclusions", ""]
 
         if not consensus_points:
             lines.append("*无共识结论*")
@@ -1354,7 +1354,7 @@ class ReportGenerator:
     def _build_internal_fact_check(
         self, fact_check_summary: str, validations: List[ValidationResult]
     ) -> str:
-        lines = ["## 七、事实校验", ""]
+        lines = ["## VII. Fact-check", ""]
 
         if fact_check_summary:
             lines.append(f"**摘要**：{fact_check_summary}")
@@ -1375,7 +1375,7 @@ class ReportGenerator:
     def _build_internal_code_tutorial(
         self, programming_output: str, tutorial_output: str
     ) -> str:
-        lines = ["## 八、程序与教程", ""]
+        lines = ["## VIII. Programming and tutorial", ""]
 
         if programming_output:
             lines.append("### 程序产出")
@@ -1397,7 +1397,7 @@ class ReportGenerator:
     def _build_internal_validations(
         self, validations: List[ValidationResult]
     ) -> str:
-        lines = ["## 九、验证结果", ""]
+        lines = ["## IX. Validation results", ""]
 
         if not validations:
             lines.append("*无验证数据*")
@@ -1412,11 +1412,11 @@ class ReportGenerator:
         return "\n".join(lines)
 
     # ================================================================
-    # 辅助方法
+    # Helper methods
     # ================================================================
 
     def _extract_top_methods(self, papers: List[PaperCandidate]) -> str:
-        """从论文中提取Top方法关键词"""
+        """Extract top method keywords from papers"""
         method_keywords = {
             "LSTM": 0, "Transformer": 0, "XGBoost": 0, "CNN": 0,
             "Random Forest": 0, "GNN": 0, "因果推断": 0, "强化学习": 0,
@@ -1432,7 +1432,7 @@ class ReportGenerator:
         return "、".join([kw for kw, cnt in top if cnt > 0])
 
     def _extract_significance(self, paper: PaperCandidate) -> str:
-        """提取论文的学术价值（一句话）"""
+        """Extract paper's academic value (one sentence)"""
         title_lower = (paper.title or "").lower()
 
         if "survey" in title_lower or "review" in title_lower:
@@ -1454,11 +1454,11 @@ class ReportGenerator:
         return "在方法论或应用场景上有重要贡献"
 
     # ================================================================
-    # CSV 元数据表
+    # CSV metadata table
     # ================================================================
 
     def _build_csv(self, papers: List[PaperCandidate]) -> str:
-        """构建CSV元数据表"""
+        """Build CSV metadata table"""
         lines = ["title,doi,authors,journal,year,citation_count,quality_level,source"]
 
         for p in papers:

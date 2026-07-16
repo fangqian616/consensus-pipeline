@@ -1,6 +1,6 @@
 """
-配置管理模块 — Consensus Pipeline v3.0
-管理预设（presets/）和用户配置（user_profiles/），支持导入导出和持久化。
+Configuration Manager — Consensus Pipeline v3.0
+Manages presets (presets/) and user profiles (user_profiles/), with import/export and persistence support.
 """
 import json
 import os
@@ -13,15 +13,15 @@ _LAST_USED_FILE = os.path.join(_PROFILES_DIR, ".last_used")
 
 
 def _ensure_dirs():
-    """确保目录存在"""
+    """Ensure required directories exist"""
     os.makedirs(_PRESETS_DIR, exist_ok=True)
     os.makedirs(_PROFILES_DIR, exist_ok=True)
 
 
-# ============ 预设管理 ============
+# ============ Preset Management ============
 
 def list_presets() -> List[str]:
-    """列出内置预设名称（不含.json后缀）"""
+    """List built-in preset names (without .json suffix)"""
     _ensure_dirs()
     names = []
     for f in sorted(os.listdir(_PRESETS_DIR)):
@@ -31,18 +31,18 @@ def list_presets() -> List[str]:
 
 
 def load_preset(name: str) -> dict:
-    """从presets/加载内置预设，返回PresetConfig格式dict"""
+    """Load a built-in preset from presets/, returning a PresetConfig-format dict"""
     path = os.path.join(_PRESETS_DIR, f"{name}.json")
     if not os.path.exists(path):
-        raise FileNotFoundError(f"预设不存在: {name}（查找路径: {path}）")
+        raise FileNotFoundError(f"Preset not found: {name} (searched path: {path})")
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
-# ============ 用户配置管理 ============
+# ============ User Profile Management ============
 
 def list_profiles() -> List[str]:
-    """列出用户保存的配置名称（不含.json后缀）"""
+    """List user-saved profile names (without .json suffix)"""
     _ensure_dirs()
     names = []
     for f in sorted(os.listdir(_PROFILES_DIR)):
@@ -52,9 +52,9 @@ def list_profiles() -> List[str]:
 
 
 def save_profile(name: str, config: dict):
-    """保存配置到user_profiles/"""
+    """Save configuration to user_profiles/"""
     _ensure_dirs()
-    # 确保配置中有名称
+    # Ensure the config has a name field
     config["name"] = name
     path = os.path.join(_PROFILES_DIR, f"{name}.json")
     with open(path, "w", encoding="utf-8") as f:
@@ -62,47 +62,47 @@ def save_profile(name: str, config: dict):
 
 
 def load_profile(name: str) -> dict:
-    """从user_profiles/加载用户配置"""
+    """Load a user profile from user_profiles/"""
     path = os.path.join(_PROFILES_DIR, f"{name}.json")
     if not os.path.exists(path):
-        raise FileNotFoundError(f"用户配置不存在: {name}（查找路径: {path}）")
+        raise FileNotFoundError(f"User profile not found: {name} (searched path: {path})")
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def delete_profile(name: str):
-    """删除用户配置"""
+    """Delete a user profile"""
     path = os.path.join(_PROFILES_DIR, f"{name}.json")
     if os.path.exists(path):
         os.remove(path)
-    # 如果删除的是上次使用的配置，也清除记录
+    # If deleting the last-used profile, clear the record too
     last = get_last_used()
     if last == name:
         set_last_used("")
 
 
-# ============ 导入导出 ============
+# ============ Import / Export ============
 
 def export_config(config: dict) -> str:
-    """导出配置为JSON字符串"""
+    """Export configuration as a JSON string"""
     return json.dumps(config, ensure_ascii=False, indent=2)
 
 
 def import_config(json_str: str) -> dict:
-    """从JSON字符串导入配置，做基本校验"""
+    """Import configuration from a JSON string, with basic validation"""
     config = json.loads(json_str)
-    # 基本校验：至少要有name和departments
+    # Basic validation: must have at least name and departments
     if "name" not in config:
-        raise ValueError("配置缺少 'name' 字段")
+        raise ValueError("Config missing 'name' field")
     if "departments" not in config:
-        raise ValueError("配置缺少 'departments' 字段")
+        raise ValueError("Config missing 'departments' field")
     return config
 
 
-# ============ 上次使用记录 ============
+# ============ Last-Used Record ============
 
 def get_last_used() -> str:
-    """获取上次使用的配置名称"""
+    """Get the name of the last-used configuration"""
     if os.path.exists(_LAST_USED_FILE):
         with open(_LAST_USED_FILE, "r", encoding="utf-8") as f:
             return f.read().strip()
@@ -110,59 +110,59 @@ def get_last_used() -> str:
 
 
 def set_last_used(name: str):
-    """记录上次使用的配置名称"""
+    """Record the name of the last-used configuration"""
     _ensure_dirs()
     with open(_LAST_USED_FILE, "w", encoding="utf-8") as f:
         f.write(name)
 
 
-# ============ 配置校验 ============
+# ============ Configuration Validation ============
 
 def validate_config(config: dict) -> List[str]:
     """
-    校验PresetConfig格式，返回错误列表（空=合法）。
-    不报错但可改进的项用warning形式返回。
+    Validate PresetConfig format, returning a list of errors (empty = valid).
+    Items that are not errors but could be improved are returned as warnings.
     """
     errors = []
     
     if "name" not in config:
-        errors.append("缺少 'name' 字段")
+        errors.append("Missing 'name' field")
     if "departments" not in config:
-        errors.append("缺少 'departments' 字段")
+        errors.append("Missing 'departments' field")
     elif not isinstance(config["departments"], dict):
-        errors.append("'departments' 必须是字典")
+        errors.append("'departments' must be a dict")
     else:
         for dept_key, dept in config["departments"].items():
             if "debaters" not in dept:
-                errors.append(f"部门 '{dept_key}' 缺少 'debaters' 字段")
+                errors.append(f"Department '{dept_key}' missing 'debaters' field")
             elif not isinstance(dept["debaters"], dict):
-                errors.append(f"部门 '{dept_key}' 的 'debaters' 必须是字典")
+                errors.append(f"Department '{dept_key}' 'debaters' must be a dict")
             else:
                 for debater_key, debater in dept["debaters"].items():
                     if "zh_style" not in debater and "en_style" not in debater:
-                        errors.append(f"部门 '{dept_key}' 辩手 '{debater_key}' 缺少风格描述")
+                        errors.append(f"Department '{dept_key}' debater '{debater_key}' missing style description")
     
     return errors
 
 
-# ============ 配置合并/补丁 ============
+# ============ Config Merge / Patch ============
 
 def merge_skill_injection(config: dict, skill_markdown: str, target_departments: List[str] = None) -> dict:
     """
-    将Skill注入的markdown内容追加到指定部门的所有辩手提示词末尾。
+    Append skill-injected markdown content to all debater prompts in specified departments.
     
     Args:
-        config: 原始PresetConfig
-        skill_markdown: 要注入的markdown内容
-        target_departments: 目标部门列表，None=所有部门
+        config: Original PresetConfig
+        skill_markdown: Markdown content to inject
+        target_departments: Target department list; None = all departments
     
     Returns:
-        修改后的PresetConfig（深拷贝）
+        Modified PresetConfig (deep copy)
     """
     import copy
     result = copy.deepcopy(config)
     
-    injection_zh = f"\n\n【Skill注入】\n{skill_markdown}"
+    injection_zh = f"\n\n[Skill Injection]\n{skill_markdown}"
     injection_en = f"\n\n[Skill Injection]\n{skill_markdown}"
     
     for dept_key, dept in result.get("departments", {}).items():

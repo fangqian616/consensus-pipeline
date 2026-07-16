@@ -1,8 +1,8 @@
 """
-部门配置推荐模块 — Consensus Pipeline v4.0
+Department Configuration Recommendation Module — Consensus Pipeline v4.0
 
-基于结构化需求 + 讨论组意见，推荐完整的部门配置（PresetConfig格式），
-全量呈现给用户审核。
+Recommends complete department configuration (PresetConfig format) based on structured requirements + discussion group input,
+presented in full for user review.
 """
 import json
 import os
@@ -13,14 +13,14 @@ from .structurer import StructuredRequirement
 from .discussion_group import DiscussionResult
 
 
-# ============ 部门模板库 ============
+# ============ Department Template Library ============
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _TEMPLATES_DIR = os.path.join(_BASE_DIR, "templates")
 
 
 def _load_template(name: str) -> dict:
-    """从 templates/ 加载部门模板"""
+    """Load department templates from templates/"""
     path = os.path.join(_TEMPLATES_DIR, f"{name}.json")
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
@@ -28,11 +28,11 @@ def _load_template(name: str) -> dict:
     return {}
 
 
-# ============ 学术调研部门模板（内嵌默认） ============
+# ============ Academic Research Department Template (embedded default) ============
 
 ACADEMIC_DEPARTMENT_TEMPLATE = {
-    "name": "学术调研",
-    "description": "基于多源检索的学术论文动向调研，交叉辩论+事实校验",
+    "name": "Academic Research",
+    "description": "Multi-source academic paper trend research with cross-debate and fact-checking",
     "departments": {
         "literature_search": {
             "zh_name": "文献检索组",
@@ -232,10 +232,10 @@ ACADEMIC_DEPARTMENT_TEMPLATE = {
 
 class ConfigRecommender:
     """
-    部门配置推荐
+    Department Configuration Recommendation
 
-    基于结构化需求 + 讨论组意见，推荐完整的部门配置。
-    输出格式与现有 PresetConfig 完全兼容。
+    Recommends complete department configuration based on structured requirements + discussion group input.
+    Output format is fully compatible with existing PresetConfig.
     """
 
     def __init__(self, llm_call_fn=None):
@@ -247,38 +247,38 @@ class ConfigRecommender:
         discussion: DiscussionResult,
     ) -> Dict[str, Any]:
         """
-        推荐部门配置。
+        Recommend department configuration.
 
         Args:
-            requirement: 结构化需求
-            discussion: 讨论组结果
+            requirement: Structured requirement
+            discussion: Discussion group result
 
         Returns:
-            dict: PresetConfig 格式的配置，全量呈现给用户审核
+            dict: PresetConfig-format configuration, presented in full for user review
         """
         domain_code = requirement.domain_code
 
-        # 选择基础模板
+        # Select base template
         if domain_code == "academic_research":
             base_config = self._deep_copy_config(ACADEMIC_DEPARTMENT_TEMPLATE)
         else:
-            # 尝试从模板文件加载
+            # Try loading from template file
             base_config = _load_template(f"{domain_code}_departments")
             if not base_config:
-                # 回退到Router生成的配置
+                # Fallback to Router-generated configuration
                 base_config = self._generate_default_config(requirement)
 
-        # 根据讨论组意见调整
+        # Adjust based on discussion group input
         config = self._adjust_with_discussion(base_config, requirement, discussion)
 
-        # 注入需求信息到配置描述
-        config["name"] = f"{requirement.topic} - {config.get('name', '自定义配置')}"
+        # Inject requirement info into configuration description
+        config["name"] = f"{requirement.topic} - {config.get('name', 'Custom Configuration')}"
         config["description"] = self._build_description(requirement, discussion)
 
         return config
 
     def _deep_copy_config(self, config: dict) -> dict:
-        """深拷贝配置"""
+        """Deep-copy configuration"""
         return json.loads(json.dumps(config))
 
     def _adjust_with_discussion(
@@ -287,10 +287,10 @@ class ConfigRecommender:
         requirement: StructuredRequirement,
         discussion: DiscussionResult,
     ) -> dict:
-        """根据讨论组意见调整配置"""
+        """Adjust configuration based on discussion group input"""
         config = self._deep_copy_config(base_config)
 
-        # 如果有LLM，进一步调整
+        # If LLM is available, refine further
         if self.llm_call_fn:
             config = self._adjust_with_llm(config, requirement, discussion)
 
@@ -302,21 +302,21 @@ class ConfigRecommender:
         requirement: StructuredRequirement,
         discussion: DiscussionResult,
     ) -> dict:
-        """使用LLM调整配置"""
-        system_prompt = """你是配置优化专家。根据需求文档和讨论组意见，调整部门配置。
-保持配置的PresetConfig格式不变，只调整内容和参数。
-输出完整的调整后配置JSON，不要输出其他文字。"""
+        """Adjust configuration using LLM"""
+        system_prompt = """You are a configuration optimization expert. Adjust the department configuration based on the requirement document and discussion group input.
+Keep the PresetConfig format unchanged; only adjust content and parameters.
+Output the complete adjusted configuration JSON, no other text."""
 
-        user_msg = f"""需求文档：
+        user_msg = f"""Requirement document:
 {requirement.to_json()}
 
-讨论组意见：
+Discussion group input:
 {discussion.to_json()}
 
-当前配置：
+Current configuration:
 {json.dumps(config, ensure_ascii=False)}
 
-请调整配置以更好匹配需求，重点关注讨论组提出的补充建议。"""
+Please adjust the configuration to better match the requirement, focusing on supplementary suggestions from the discussion group."""
 
         response = self.llm_call_fn(system_prompt, user_msg)
         try:
@@ -325,7 +325,7 @@ class ConfigRecommender:
             return config
 
     def _generate_default_config(self, requirement: StructuredRequirement) -> dict:
-        """生成默认配置（当没有匹配模板时）"""
+        """Generate default configuration (when no matching template exists)"""
         depts = {}
         dept_order = []
 
@@ -336,9 +336,9 @@ class ConfigRecommender:
                 "en_name": hint["type"].replace("_", " ").title(),
                 "debaters": {
                     "A": {
-                        "zh_name": f"{hint['description']}专家A",
+                        "zh_name": f"{hint['description']} Expert A",
                         "en_name": f"Expert A",
-                        "zh_style": f"你是{hint['description']}专家，从专业角度审视和分析。",
+                        "zh_style": f"You are a {hint['description']} expert, reviewing and analyzing from a professional perspective.",
                         "en_style": f"Expert in {hint['description']}"
                     }
                 }
@@ -346,7 +346,7 @@ class ConfigRecommender:
             dept_order.append(key)
 
         return {
-            "name": "自定义配置",
+            "name": "Custom Configuration",
             "description": requirement.topic,
             "departments": depts,
             "dept_order": dept_order,
@@ -362,12 +362,12 @@ class ConfigRecommender:
         requirement: StructuredRequirement,
         discussion: DiscussionResult,
     ) -> str:
-        """构建配置描述"""
-        parts = [f"主题：{requirement.topic}"]
+        """Build configuration description"""
+        parts = [f"Topic: {requirement.topic}"]
         if requirement.objectives:
-            parts.append(f"目标：{'；'.join(requirement.objectives[:3])}")
+            parts.append(f"Objectives: {'； '.join(requirement.objectives[:3])}")
         if requirement.deliverable_type:
-            parts.append(f"交付：{requirement.deliverable_type}")
+            parts.append(f"Deliverable: {requirement.deliverable_type}")
         if discussion.supplements:
-            parts.append(f"讨论补充：{'；'.join(discussion.supplements[:3])}")
+            parts.append(f"Discussion supplements: {'; '.join(discussion.supplements[:3])}")
         return " | ".join(parts)
