@@ -28,7 +28,7 @@ CLUSTERING_DIMENSIONS = [
 
 @dataclass
 class ClusterResult:
-    """聚类结果"""
+    """Clustering result"""
     dimension: str = ""
     clusters: Dict[str, List[str]] = field(default_factory=dict)  # cluster_name -> [paper_titles]
     distribution: Dict[str, int] = field(default_factory=dict)    # cluster_name -> count

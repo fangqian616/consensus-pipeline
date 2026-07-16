@@ -1,10 +1,10 @@
 """
-DOCX导出器 — Consensus Pipeline v5.1.5
+DOCX Exporter — Consensus Pipeline v5.1.5
 
-将Markdown综述报告转换为专业排版的Word文档(.docx)。
-替代fpdf2方案，解决中文字体/emoji/表格排版问题。
+Converts Markdown survey reports to professionally formatted Word documents (.docx).
+Replaces the fpdf2 approach, resolving CJK font / emoji / table layout issues.
 
-依赖: python-docx
+Dependency: python-docx
 """
 import os
 import re
@@ -17,34 +17,34 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
 
 
-# ── 样式常量 ──
-FONT_CN = "微软雅黑"        # 主字体（WPS默认有）
-FONT_CN_FALLBACK = "等线"   # 备选
-FONT_EN = "Calibri"         # 英文字体
-FONT_MONO = "Consolas"      # 代码字体
-COLOR_HEADING = RGBColor(0x1A, 0x1A, 0x2E)   # 深蓝黑
-COLOR_BODY = RGBColor(0x33, 0x33, 0x33)       # 正文深灰
-COLOR_S = RGBColor(0xC0, 0x39, 0x2B)          # S级-红
-COLOR_A = RGBColor(0xE6, 0x7E, 0x22)          # A级-橙
-COLOR_B = RGBColor(0x27, 0xAE, 0x60)          # B级-绿
-COLOR_LINK = RGBColor(0x29, 0x80, 0xB9)       # 链接蓝
+# ── Style Constants ──
+FONT_CN = "Microsoft YaHei"        # Primary font (available by default in WPS)
+FONT_CN_FALLBACK = "DengXian"   # Fallback
+FONT_EN = "Calibri"         # English font
+FONT_MONO = "Consolas"      # Code font
+COLOR_HEADING = RGBColor(0x1A, 0x1A, 0x2E)   # Dark blue-black
+COLOR_BODY = RGBColor(0x33, 0x33, 0x33)       # Body dark gray
+COLOR_S = RGBColor(0xC0, 0x39, 0x2B)          # S-tier red
+COLOR_A = RGBColor(0xE6, 0x7E, 0x22)          # A-tier orange
+COLOR_B = RGBColor(0x27, 0xAE, 0x60)          # B-tier green
+COLOR_LINK = RGBColor(0x29, 0x80, 0xB9)       # Link blue
 
 
 def _set_run_font(run, font_cn=FONT_CN, font_en=FONT_EN, size=Pt(10.5),
                   bold=False, italic=False, color=None):
-    """设置run的字体属性"""
+    """Set run font properties"""
     run.font.size = size
     run.font.bold = bold
     run.font.italic = italic
     run.font.name = font_en
-    # 中文字体
+    # CJK font
     run._element.rPr.rFonts.set(qn('w:eastAsia'), font_cn)
     if color:
         run.font.color.rgb = color
 
 
 def _add_heading(doc, text, level=1):
-    """添加标题"""
+    """Add a heading"""
     p = doc.add_heading(text, level=level)
     for run in p.runs:
         _set_run_font(run, font_cn=FONT_CN, size=Pt(16 - level * 2),
@@ -53,18 +53,18 @@ def _add_heading(doc, text, level=1):
 
 
 def _add_body(doc, text, bold=False, color=None, alignment=None):
-    """添加正文段落"""
+    """Add a body paragraph"""
     p = doc.add_paragraph()
     if alignment:
         p.alignment = alignment
-    # 解析行内格式: **bold** 和 [N]引用
+    # Parse inline format: **bold** and [N] references
     _parse_inline(p, text, bold=bold, color=color)
     return p
 
 
 def _parse_inline(paragraph, text, bold=False, italic=False, color=None):
-    """解析行内markdown格式，添加runs"""
-    # 分割: **bold** 和普通文本
+    """Parse inline Markdown format, add runs"""
+    # Split: **bold** and plain text
     parts = re.split(r'(\*\*[^*]+\*\*)', text)
     for part in parts:
         if part.startswith('**') and part.endswith('**'):
@@ -72,7 +72,7 @@ def _parse_inline(paragraph, text, bold=False, italic=False, color=None):
             run = paragraph.add_run(inner)
             _set_run_font(run, bold=True, italic=italic, color=color)
         else:
-            # 处理 [N] 引用
+            # Handle [N] references
             ref_parts = re.split(r'(\[\d+\])', part)
             for rp in ref_parts:
                 run = paragraph.add_run(rp)
@@ -83,14 +83,14 @@ def _parse_inline(paragraph, text, bold=False, italic=False, color=None):
 
 
 def _add_table(doc, headers, rows):
-    """添加表格"""
+    """Add a table"""
     if not headers or not rows:
         return
     table = doc.add_table(rows=1 + len(rows), cols=len(headers))
     table.style = 'Light Grid Accent 1'
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
 
-    # 表头
+    # Table header
     for i, h in enumerate(headers):
         cell = table.rows[0].cells[i]
         cell.text = ''
@@ -98,7 +98,7 @@ def _add_table(doc, headers, rows):
         run = p.add_run(h.strip())
         _set_run_font(run, bold=True, size=Pt(9.5), color=RGBColor(0xFF, 0xFF, 0xFF))
 
-    # 数据行
+    # Data rows
     for r_idx, row in enumerate(rows):
         for c_idx, val in enumerate(row):
             if c_idx < len(headers):
@@ -108,25 +108,25 @@ def _add_table(doc, headers, rows):
                 run = p.add_run(str(val).strip())
                 _set_run_font(run, size=Pt(9))
 
-    doc.add_paragraph()  # 表后空行
+    doc.add_paragraph()  # Blank line after table
 
 
 def _add_image(doc, image_path, width=Inches(5.5)):
-    """添加图片"""
+    """Add an image"""
     if os.path.exists(image_path):
         try:
             doc.add_picture(image_path, width=width)
             last_paragraph = doc.paragraphs[-1]
             last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         except Exception:
-            p = doc.add_paragraph(f'[图表: {os.path.basename(image_path)}]')
+            p = doc.add_paragraph(f'[Chart: {os.path.basename(image_path)}]')
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             for run in p.runs:
                 _set_run_font(run, italic=True, color=RGBColor(0x99, 0x99, 0x99))
 
 
 def _add_caption(doc, text):
-    """添加图注"""
+    """Add a figure caption"""
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = p.add_run(text)
@@ -134,13 +134,13 @@ def _add_caption(doc, text):
 
 
 def _add_code_block(doc, code_text):
-    """添加代码块（灰色底纹段落）"""
+    """Add a code block (gray-shaded paragraph)"""
     for line in code_text.split('\n'):
         p = doc.add_paragraph()
         run = p.add_run(line)
         _set_run_font(run, font_cn=FONT_MONO, font_en=FONT_MONO, size=Pt(8.5),
                       color=RGBColor(0x2C, 0x3E, 0x50))
-        # 添加底纹
+        # Add background shading
         shading = run._element.makeelement(qn('w:shd'), {
             qn('w:val'): 'clear',
             qn('w:color'): 'auto',
@@ -150,26 +150,26 @@ def _add_code_block(doc, code_text):
 
 
 def markdown_to_docx(md_path: str, docx_path: str,
-                     title: str = "学术综述报告",
+                     title: str = "Academic Survey Report",
                      charts_dir: str = None) -> str:
     """
-    将Markdown报告转换为专业排版的Word文档。
+    Convert a Markdown report to a professionally formatted Word document.
 
     Args:
-        md_path: Markdown文件路径
-        docx_path: 输出docx文件路径
-        title: 文档标题
-        charts_dir: 图表目录（相对于md_path的父目录）
+        md_path: Markdown file path
+        docx_path: Output docx file path
+        title: Document title
+        charts_dir: Charts directory (relative to md_path parent)
 
     Returns:
-        生成的docx文件路径
+        Generated docx file path
     """
     with open(md_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
     doc = Document()
 
-    # ── 全局样式 ──
+    # ── Global Styles ──
     style = doc.styles['Normal']
     style.font.name = FONT_EN
     style.font.size = Pt(10.5)
@@ -177,7 +177,7 @@ def markdown_to_docx(md_path: str, docx_path: str,
     style.paragraph_format.line_spacing = 1.35
     style.paragraph_format.space_after = Pt(4)
 
-    # 页边距
+    # Page margins
     for section in doc.sections:
         section.top_margin = Cm(2.5)
         section.bottom_margin = Cm(2.5)
@@ -188,7 +188,7 @@ def markdown_to_docx(md_path: str, docx_path: str,
     if charts_dir is None:
         charts_dir = os.path.join(base_dir, "charts")
 
-    # ── 逐行解析 ──
+    # ── Line-by-line Parsing ──
     lines = content.split('\n')
     i = 0
     in_code_block = False
@@ -199,7 +199,7 @@ def markdown_to_docx(md_path: str, docx_path: str,
     while i < len(lines):
         line = lines[i]
 
-        # 代码块
+        # Code block
         if line.strip().startswith('```'):
             if in_code_block:
                 _add_code_block(doc, '\n'.join(code_lines))
@@ -215,7 +215,7 @@ def markdown_to_docx(md_path: str, docx_path: str,
             i += 1
             continue
 
-        # 空行
+        # Empty line
         if not line.strip():
             if in_table and table_rows:
                 _flush_table(doc, table_rows)
@@ -224,10 +224,10 @@ def markdown_to_docx(md_path: str, docx_path: str,
             i += 1
             continue
 
-        # 表格行
+        # Table row
         if '|' in line and line.strip().startswith('|'):
             cells = [c.strip() for c in line.strip().split('|')[1:-1]]
-            # 分隔行跳过
+            # Skip separator row
             if all(set(c) <= set('-: ') for c in cells):
                 i += 1
                 continue
@@ -240,17 +240,17 @@ def markdown_to_docx(md_path: str, docx_path: str,
             table_rows = []
             in_table = False
 
-        # 标题
+        # Heading
         heading_match = re.match(r'^(#{1,4})\s+(.*)', line)
         if heading_match:
             level = len(heading_match.group(1))
             text = heading_match.group(2).strip()
-            # 去掉emoji前的空格
+            # Remove space before emoji
             _add_heading(doc, text, level=min(level, 4))
             i += 1
             continue
 
-        # 引用块
+        # Blockquote
         if line.strip().startswith('>'):
             text = line.strip().lstrip('>').strip()
             p = doc.add_paragraph()
@@ -259,16 +259,16 @@ def markdown_to_docx(md_path: str, docx_path: str,
             i += 1
             continue
 
-        # 图片
+        # Image
         img_match = re.match(r'!\[([^\]]*)\]\(([^)]+)\)', line.strip())
         if img_match:
             alt_text = img_match.group(1)
             img_path = img_match.group(2)
-            # 相对路径转绝对
+            # Convert relative path to absolute
             if not os.path.isabs(img_path):
                 img_path = os.path.join(base_dir, img_path)
             _add_image(doc, img_path)
-            # 下一行可能是图注（*斜体*）
+            # Next line may be a caption (*italic*)
             i += 1
             if i < len(lines) and lines[i].strip().startswith('*') and lines[i].strip().endswith('*'):
                 caption = lines[i].strip().strip('*')
@@ -276,30 +276,30 @@ def markdown_to_docx(md_path: str, docx_path: str,
                 i += 1
             continue
 
-        # 参考文献等级标题（### S级（顶刊）等）
-        ref_level_match = re.match(r'###\s+(S级|A级|B级)', line)
+        # Reference tier heading (### S-tier (top journal) etc.)
+        ref_level_match = re.match(r'###\s+(S级|A级|B级)', line)  # Matches Chinese tier labels in generated reports
         if ref_level_match:
             level_text = ref_level_match.group(1)
-            color_map = {'S级': COLOR_S, 'A级': COLOR_A, 'B级': COLOR_B}
+            color_map = {'S级': COLOR_S, 'A级': COLOR_A, 'B级': COLOR_B}  # Chinese tier labels — must match generated report headers
             p = doc.add_paragraph()
             run = p.add_run(line.strip().lstrip('#').strip())
             _set_run_font(run, bold=True, size=Pt(12), color=color_map.get(level_text, COLOR_BODY))
             i += 1
             continue
 
-        # 普通段落
+        # Normal paragraph
         _add_body(doc, line.strip())
         i += 1
 
-    # 刷出剩余表格
+    # Flush remaining table rows
     if in_table and table_rows:
         _flush_table(doc, table_rows)
 
-    # ── 页脚 ──
+    # ── Footer ──
     doc.add_paragraph()
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = p.add_run("— Consensus Pipeline 生成 —")
+    run = p.add_run("— Generated by Consensus Pipeline —")
     _set_run_font(run, italic=True, size=Pt(8), color=RGBColor(0xAA, 0xAA, 0xAA))
 
     doc.save(docx_path)
@@ -307,7 +307,7 @@ def markdown_to_docx(md_path: str, docx_path: str,
 
 
 def _flush_table(doc, rows):
-    """将累积的表格行写入文档"""
+    """Flush accumulated table rows into document"""
     if not rows:
         return
     headers = rows[0]
@@ -318,6 +318,6 @@ def _flush_table(doc, rows):
 def generate_department_docx(md_path: str, docx_path: str,
                              dept_name: str = "") -> str:
     """
-    将部门产出（程序部/教程部）转为docx
+    Convert department output (Program / Tutorial) to docx
     """
-    return markdown_to_docx(md_path, docx_path, title=dept_name or "部门产出")
+    return markdown_to_docx(md_path, docx_path, title=dept_name or "Department Output")

@@ -18,30 +18,30 @@ import time
 import requests
 from datetime import datetime
 
-# 确保模块路径
+# Ensure module path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# 加载.env文件（密钥管理）
+# Load .env file (secret management)
 from dotenv import load_dotenv
 _env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 if os.path.exists(_env_path):
     load_dotenv(_env_path)
 
-# ============ 配置 ============
+# ============ Configuration ============
 API_URL = "https://api.deepseek.com/v1/chat/completions"
 API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 MODEL = "deepseek-v4-pro"
 TOPIC = ""  # Set via --topic argument or DEEPSEEK_TOPIC env var
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_output")
 
-# easyScholar API密钥（v5.0：实时期刊分级）— 从环境变量读取
-# 如需使用，请设置环境变量 EASYSCHOLAR_SECRET_KEY
+# easyScholar API key (v5.0: real-time journal grading) — read from env var
+# To use, set env var EASYSCHOLAR_SECRET_KEY
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 def llm_call(system_prompt: str, user_message: str, temperature: float = 0.3) -> str:
-    """统一的LLM调用函数"""
+    """Unified LLM call function"""
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {API_KEY}",
@@ -86,10 +86,10 @@ def save_text(text, filename):
     return path
 
 
-# ============ Phase 0: 需求调研 ============
+# ============ Phase 0: Requirement Interview ============
 def phase0_interview():
-    """模拟需求调研访谈"""
-    log("Phase0", "开始需求调研访谈")
+    """Simulate requirement interview"""
+    log("Phase0", "Starting requirement interview")
     from requirement.interviewer import RequirementInterviewer
 
     interviewer = RequirementInterviewer(
@@ -98,10 +98,10 @@ def phase0_interview():
         max_rounds=8,
     )
 
-    # 开始
+    # Start
     result = interviewer.start(f"I want to research {TOPIC}")
-    log("Phase0", f"领域识别: {result['domain_name']}")
-    log("Phase0", f"AI提问: {result['question']}")
+    log("Phase0", f"Domain identified: {result['domain_name']}")
+    log("Phase0", f"AI question: {result['question']}")
 
     # Simulated user answers (replace with real input in production)
     answers = [
@@ -118,69 +118,69 @@ def phase0_interview():
         log("Phase0", f"Round {result['round']}: is_complete={result['is_complete']}")
 
         if result["is_complete"]:
-            log("Phase0", "需求调研完成！")
+            log("Phase0", "Requirement interview complete!")
             break
         elif result.get("question"):
-            log("Phase0", f"AI追问: {result['question'][:80]}...")
+            log("Phase0", f"AI follow-up: {result['question'][:80]}...")
 
-    # 获取需求文档
+    # Get requirement document
     doc = interviewer.force_complete()
     save_json(doc.to_dict(), "phase0_requirement_doc.json")
-    log("Phase0", f"需求文档: topic={doc.topic}, domain={doc.domain}")
+    log("Phase0", f"Requirement doc: topic={doc.topic}, domain={doc.domain}")
     return doc
 
 
-# ============ Phase 1: 需求结构化 ============
+# ============ Phase 1: Requirement Structuring ============
 def phase1_structure(doc):
-    """结构化需求"""
-    log("Phase1", "开始需求结构化")
+    """Structure requirements"""
+    log("Phase1", "Starting requirement structuring")
     from requirement.structurer import RequirementStructurer
 
     structurer = RequirementStructurer(llm_call_fn=llm_call)
     structured = structurer.structure(doc)
 
     save_json(structured.to_dict(), "phase1_structured_requirement.json")
-    log("Phase1", f"结构化完成: domain_code={structured.domain_code}, "
+    log("Phase1", f"Structuring complete: domain_code={structured.domain_code}, "
          f"roles={len(structured.suggested_roles)}, "
          f"dept_hints={len(structured.department_hints)}")
     return structured
 
 
-# ============ Phase 2: 讨论组 ============
+# ============ Phase 2: Discussion Group ============
 def phase2_discussion(structured):
-    """需求讨论"""
-    log("Phase2", "开始需求讨论")
+    """Requirement discussion"""
+    log("Phase2", "Starting requirement discussion")
     from requirement.discussion_group import DiscussionGroup
 
     group = DiscussionGroup(llm_call_fn=llm_call)
     result = group.discuss(structured)
 
     save_json(result.to_dict(), "phase2_discussion_result.json")
-    log("Phase2", f"讨论完成: opinions={len(result.opinions)}, "
+    log("Phase2", f"Discussion complete: opinions={len(result.opinions)}, "
          f"consensus={len(result.consensus_points)}, "
          f"supplements={len(result.supplements)}")
     return result
 
 
-# ============ Phase 3: 配置推荐 ============
+# ============ Phase 3: Configuration Recommendation ============
 def phase3_config(structured, discussion):
-    """推荐部门配置"""
-    log("Phase3", "开始配置推荐")
+    """Recommend department configuration"""
+    log("Phase3", "Starting configuration recommendation")
     from requirement.config_recommender import ConfigRecommender
 
     recommender = ConfigRecommender(llm_call_fn=llm_call)
     config = recommender.recommend(structured, discussion)
 
     save_json(config, "phase3_recommended_config.json")
-    log("Phase3", f"配置推荐完成: name={config.get('name','?')}, "
+    log("Phase3", f"Config recommendation complete: name={config.get('name','?')}, "
          f"departments={len(config.get('departments',{}))}")
     return config
 
 
-# ============ Phase 4: 学术检索 ============
+# ============ Phase 4: Academic Search ============
 def phase4_search():
-    """执行学术检索"""
-    log("Phase4", "开始学术检索")
+    """Execute academic search"""
+    log("Phase4", "Starting academic search")
     from academic.search_engine import AcademicSearchEngine
 
     engine = AcademicSearchEngine(
@@ -190,7 +190,7 @@ def phase4_search():
         include_preprints=True,
     )
 
-    # 多关键词检索
+    # Multi-keyword search
     queries = [
         "machine learning energy economics",
         "ML carbon price prediction",
@@ -202,15 +202,15 @@ def phase4_search():
     seen_titles = set()
 
     for q in queries:
-        log("Phase4", f"检索: {q}")
+        log("Phase4", f"Searching: {q}")
         try:
             result = engine.search(q, max_results_per_source=30)
             papers = result["papers"]
             preprints = result["preprints"]
             stats = result["stats"]
 
-            log("Phase4", f"  原始={stats['total_fetched']}, 去重={stats['after_dedup']}, "
-                 f"筛选={stats['after_filter']}, 预印本={stats['preprint_count']}")
+            log("Phase4", f"  raw={stats['total_fetched']}, dedup={stats['after_dedup']}, "
+                 f"filtered={stats['after_filter']}, preprints={stats['preprint_count']}")
 
             for p in papers:
                 title_key = p.title[:30].lower()
@@ -225,28 +225,28 @@ def phase4_search():
                     all_preprints.append(p)
 
         except Exception as e:
-            log("Phase4", f"  检索异常: {e}")
+            log("Phase4", f"  Search exception: {e}")
         
-        # 每个query间隔3秒，避免SS限流
+        # Wait 3s between queries to avoid SS rate limiting
         time.sleep(3)
 
-    log("Phase4", f"总论文={len(all_papers)}, 总预印本={len(all_preprints)}")
+    log("Phase4", f"Total papers={len(all_papers)}, total preprints={len(all_preprints)}")
 
-    # 等级统计
+    # Level statistics
     level_counts = {}
     for p in all_papers:
         level_counts[p.quality_level] = level_counts.get(p.quality_level, 0) + 1
-    log("Phase4", f"等级分布: {level_counts}")
+    log("Phase4", f"Level distribution: {level_counts}")
 
-    # 保存
+    # Save
     papers_data = [p.to_dict() for p in all_papers]
     preprints_data = [p.to_dict() for p in all_preprints]
     save_json({"papers": papers_data, "preprints": preprints_data, "level_counts": level_counts},
               "phase4_search_results.json")
 
-    # v5.1: 记录相关性过滤日志（用于报告生成）
+    # v5.1: Record relevance filter log (for report generation)
     relevance_log = {
-        "total_before": len(all_papers),  # 去重后的数量（已在engine内部过滤了不相关论文）
+        "total_before": len(all_papers),  # Count after dedup (irrelevant papers already filtered inside engine)
         "total_after": len(all_papers),
         "filtered_out": [],
     }
@@ -254,53 +254,53 @@ def phase4_search():
     return all_papers, all_preprints, relevance_log
 
 
-# ============ Phase 4 v6.0: 配置驱动的学术检索 ============
+# ============ Phase 4 v6.0: Config-Driven Academic Search ============
 def phase4_search_v6(domain_config=None):
     """
-    v6.0: 执行学术检索，使用domain_config驱动搜索词和过滤逻辑。
+    v6.0: Execute academic search using domain_config to drive queries and filter logic.
 
-    如果domain_config提供了query_rotation，使用动态搜索词；
-    否则回退到硬编码搜索词。
+    If domain_config provides query_rotation, use dynamic search queries;
+    Otherwise fallback to hardcoded search queries.
     """
-    log("Phase4", "开始学术检索（v6.0: 配置驱动）")
+    log("Phase4", "Starting academic search (v6.0: config-driven)")
     from academic.search_engine import AcademicSearchEngine
 
-    # v6.0: 如果有domain_config，传入search_engine以启用配置驱动的相关性过滤
+    # v6.0: Pass domain_config to search_engine to enable config-driven relevance filtering
     engine = AcademicSearchEngine(
         quality_levels=["S", "A", "B"],
         min_citations=5,
         min_results=20,
         include_preprints=True,
-        domain_config=domain_config,  # v6.0: 传入domain_config
+        domain_config=domain_config,  # v6.0: Pass domain_config
     )
 
-    # v6.0: 使用domain_config中的query_rotation作为搜索词
+    # v6.0: Use query_rotation from domain_config as search queries
     if domain_config and domain_config.get("query_rotation"):
         queries = domain_config["query_rotation"]
-        log("Phase4", f"使用domain_config的query_rotation: {queries[:3]}...")
+        log("Phase4", f"Using domain_config query_rotation: {queries[:3]}...")
     else:
-        # 回退到硬编码搜索词
+        # Fallback to hardcoded search queries
         queries = [
             "machine learning energy economics",
             "ML carbon price prediction",
             "deep learning energy demand forecasting",
         ]
-        log("Phase4", "无domain_config，使用硬编码搜索词")
+        log("Phase4", "No domain_config, using hardcoded search queries")
 
     all_papers = []
     all_preprints = []
     seen_titles = set()
 
     for q in queries:
-        log("Phase4", f"检索: {q}")
+        log("Phase4", f"Searching: {q}")
         try:
             result = engine.search(q, max_results_per_source=30)
             papers = result["papers"]
             preprints = result["preprints"]
             stats = result["stats"]
 
-            log("Phase4", f"  原始={stats['total_fetched']}, 去重={stats['after_dedup']}, "
-                 f"筛选={stats['after_filter']}, 预印本={stats['preprint_count']}")
+            log("Phase4", f"  raw={stats['total_fetched']}, dedup={stats['after_dedup']}, "
+                 f"filtered={stats['after_filter']}, preprints={stats['preprint_count']}")
 
             for p in papers:
                 title_key = p.title[:30].lower()
@@ -315,26 +315,26 @@ def phase4_search_v6(domain_config=None):
                     all_preprints.append(p)
 
         except Exception as e:
-            log("Phase4", f"  检索异常: {e}")
+            log("Phase4", f"  Search exception: {e}")
         
-        # 每个query间隔3秒，避免SS限流
+        # Wait 3s between queries to avoid SS rate limiting
         time.sleep(3)
 
-    log("Phase4", f"总论文={len(all_papers)}, 总预印本={len(all_preprints)}")
+    log("Phase4", f"Total papers={len(all_papers)}, total preprints={len(all_preprints)}")
 
-    # 等级统计
+    # Level statistics
     level_counts = {}
     for p in all_papers:
         level_counts[p.quality_level] = level_counts.get(p.quality_level, 0) + 1
-    log("Phase4", f"等级分布: {level_counts}")
+    log("Phase4", f"Level distribution: {level_counts}")
 
-    # 保存
+    # Save
     papers_data = [p.to_dict() for p in all_papers]
     preprints_data = [p.to_dict() for p in all_preprints]
     save_json({"papers": papers_data, "preprints": preprints_data, "level_counts": level_counts},
               "phase4_search_results.json")
 
-    # v6.0: 相关性过滤日志（domain_config驱动的排除已在内完成）
+    # v6.0: Relevance filter log (domain_config-driven exclusions already applied)
     relevance_log = {
         "total_before": len(all_papers),
         "total_after": len(all_papers),
@@ -345,12 +345,12 @@ def phase4_search_v6(domain_config=None):
     return all_papers, all_preprints, relevance_log
 
 
-# ============ Phase 5: 部门辩论 ============
+# ============ Phase 5: Department Debate ============
 
-# 部门→论文筛选关键词映射（v5.1.5: 按部门分配相关论文）
+# Department → paper filter keyword mapping (v5.1.5: assign relevant papers by department)
 DEPT_PAPER_FILTERS = {
     "literature_search": {"any": ["review", "survey", "overview", "systematic"]},
-    "metadata_inspector": None,  # 全量
+    "metadata_inspector": None,  # Full set
     "citation_network": {"any": ["citation", "impact", "influential", "network"]},
     "methodology_review": {"any": ["lstm", "transformer", "xgboost", "cnn", "svm", "ensemble",
                                      "reinforcement", "bayesian", "decompos", "hybrid", "forecast",
@@ -360,9 +360,9 @@ DEPT_PAPER_FILTERS = {
                                  "empirical", "dataset", "sample"]},
     "counter_evidence": {"any": ["limitation", "failure", "challenge", "comparison", "versus",
                                   "against", "outperform", "superior", "robust", "sensitivity"]},
-    "topic_clustering": None,  # 全量
-    "visualization": None,  # 全量
-    "report_integration": None,  # 全量
+    "topic_clustering": None,  # Full set
+    "visualization": None,  # Full set
+    "report_integration": None,  # Full set
     "programming": {"any": ["python", "code", "implementation", "framework", "open-source",
                              "pytorch", "tensorflow", "scikit", "pipeline", "algorithm"]},
     "tutorial": {"any": ["tutorial", "guide", "beginner", "introduction", "step", "practical"]},
@@ -370,10 +370,10 @@ DEPT_PAPER_FILTERS = {
 
 
 def _filter_papers_for_dept(dept_key, papers, top_n=40):
-    """按部门关键词筛选相关论文，返回按相关性排序的子集"""
+    """Filter relevant papers by department keywords, return relevance-sorted subset"""
     filters = DEPT_PAPER_FILTERS.get(dept_key)
     if filters is None:
-        # 全量，但限制数量
+        # Full set, but limit count
         return papers[:top_n]
 
     keywords = filters.get("any", [])
@@ -381,7 +381,7 @@ def _filter_papers_for_dept(dept_key, papers, top_n=40):
     for p in papers:
         text = (p.title + " " + (p.abstract or "")).lower()
         score = sum(1 for kw in keywords if kw in text)
-        # 质量加权：S级+2, A级+1
+        # Quality weighted: S-tier +2, A-tier +1
         if p.quality_level == 'S':
             score += 2
         elif p.quality_level == 'A':
@@ -390,7 +390,7 @@ def _filter_papers_for_dept(dept_key, papers, top_n=40):
 
     scored.sort(key=lambda x: (-x[0], -x[1].citation_count))
     result = [p for s, p in scored if s > 0]
-    # 至少保留15篇，不足则补充高质量论文
+    # Keep at least 15 papers, supplement with high-quality if insufficient
     if len(result) < 15:
         existing_ids = {id(p) for p in result}
         for p in papers:
@@ -403,7 +403,7 @@ def _filter_papers_for_dept(dept_key, papers, top_n=40):
 
 
 def _build_papers_summary(papers, max_abstract=300):
-    """构建论文摘要文本供辩论使用"""
+    """Build paper summary text for debate use"""
     lines = []
     for i, p in enumerate(papers, 1):
         authors = ", ".join(p.authors[:3])
@@ -420,8 +420,8 @@ def _build_papers_summary(papers, max_abstract=300):
 
 
 def phase5_debate(config, papers, preprints):
-    """各部门辩论产出（v5.1.5: 按部门筛选论文+注入abstract）"""
-    log("Phase5", "开始部门辩论")
+    """Department debate outputs (v5.1.5: filter papers by dept + inject abstracts)"""
+    log("Phase5", "Starting department debate")
 
     departments = config.get("departments", {})
     dept_order = config.get("dept_order", list(departments.keys()))
@@ -434,14 +434,14 @@ def phase5_debate(config, papers, preprints):
         dept_name = dept_info.get("zh_name", dept_key)
         debaters = dept_info.get("debaters", {})
 
-        # v5.1.5: 按部门筛选相关论文
+        # v5.1.5: Filter relevant papers by department
         dept_papers = _filter_papers_for_dept(dept_key, papers, top_n=40)
         papers_summary = _build_papers_summary(dept_papers, max_abstract=400)
 
-        log("Phase5", f"部门: {dept_name} ({dept_key}), 辩手: {list(debaters.keys())}, "
-            f"论文: {len(dept_papers)}/{len(papers)}")
+        log("Phase5", f"Department: {dept_name} ({dept_key}), debaters: {list(debaters.keys())}, "
+            f"papers: {len(dept_papers)}/{len(papers)}")
 
-        # 为每个部门生成辩论产出
+        # Generate debate output for each department
         output = _debate_department(dept_key, dept_name, debaters, papers_summary, debate_rounds)
         dept_outputs[dept_key] = output
         save_json(output, f"phase5_dept_{dept_key}.json")
@@ -451,7 +451,7 @@ def phase5_debate(config, papers, preprints):
 
 
 def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
-    """单个部门辩论"""
+    """Single department debate"""
     debater_list = []
     for key, info in debaters.items():
         debater_list.append({
@@ -460,7 +460,7 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
             "style": info.get("zh_style", ""),
         })
 
-    # 构建部门辩论prompt
+    # Build department debate prompt
     dept_prompt_map = {
         "literature_search": "请基于以下论文列表，分析文献检索的覆盖度和质量分布，指出检索策略的优缺点，提出补充建议。",
         "metadata_inspector": "请基于以下论文列表，审查元数据完整性，指出DOI缺失、作者信息不全等问题。",
@@ -509,7 +509,7 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
 
     arguments = []
 
-    # 每位辩手独立发言
+    # Each debater speaks independently
     for debater in debater_list:
         system_prompt = f"""你是Consensus Pipeline的{dept_name}辩手「{debater['name']}」。
 你的专业视角：{debater['style']}
@@ -532,7 +532,7 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
 
         user_msg = f"论文列表：\n{papers_summary[:12000]}"
 
-        log("Phase5", f"  辩手 {debater['name']} 发言中...")
+        log("Phase5", f"  Debater {debater['name']} speaking...")
         response = llm_call(system_prompt, user_msg, temperature=0.4)
 
         arguments.append({
@@ -541,7 +541,7 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
             "argument": response,
         })
 
-    # 共识整合
+    # Consensus integration
     if len(arguments) > 1:
         consensus_prompt = f"""你是{dept_name}的共识整合专家。以下是该部门各辩手的观点：
 
@@ -554,7 +554,7 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
 
 中文输出，结构化格式。"""
 
-        log("Phase5", f"  {dept_name} 共识整合中...")
+        log("Phase5", f"  {dept_name} consensus integration...")
         consensus = llm_call(consensus_prompt, "请整合以上观点", temperature=0.2)
     else:
         consensus = arguments[0]["argument"] if arguments else ""
@@ -567,9 +567,9 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
     }
 
 
-# ============ Phase 6: 交叉辩论 ============
+# ============ Phase 6: Cross-Debate ============
 def phase6_cross_debate(config, dept_outputs):
-    """交叉辩论"""
+    """Cross-debate"""
     log("Phase6", "开始交叉辩论")
 
     p2_debates = config.get("p2_cross_debates", [])
@@ -688,7 +688,7 @@ def backfill_abstracts(papers):
                 with urllib.request.urlopen(oa_req, timeout=15) as resp:
                     oa_data = json.loads(resp.read())
 
-                # 从abstract_inverted_index还原
+                # Reconstruct from abstract_inverted_index
                 aii = None
                 if "abstract_inverted_index" in oa_data and oa_data["abstract_inverted_index"]:
                     aii = oa_data["abstract_inverted_index"]
@@ -711,11 +711,11 @@ def backfill_abstracts(papers):
             except urllib.error.HTTPError as e:
                 log("Phase4.7", f"  OpenAlex HTTP {e.code} for: {p.title[:40]}...")
             except Exception as e:
-                log("Phase4.7", f"  OpenAlex异常: {p.title[:30]}... ({e})")
+                log("Phase4.7", f"  OpenAlex exception: {p.title[:30]}... ({e})")
 
-            time.sleep(0.15)  # OpenAlex礼貌池：~6-7次/秒
+            time.sleep(0.15)  # OpenAlex polite pool: ~6-7 req/s
 
-        # 策略2: Semantic Scholar（回退，限流严格）
+        # Strategy 2: Semantic Scholar (fallback, strict rate limiting)
         if not abstract:
             try:
                 if p.doi:
@@ -740,42 +740,42 @@ def backfill_abstracts(papers):
 
             except urllib.error.HTTPError as e:
                 if e.code == 429:
-                    log("Phase4.7", f"  ⚠️ SS 429限流，后续仅用OpenAlex")
-                    # 一旦429就不再尝试SS，避免卡死
+                    log("Phase4.7", f"  ⚠️ SS 429 rate limited, using OpenAlex only from now")
+                    # Once 429 received, stop trying SS to avoid hanging
                 else:
                     log("Phase4.7", f"  SS HTTP {e.code}: {p.title[:40]}...")
             except Exception as e:
-                log("Phase4.7", f"  SS异常: {p.title[:30]}... ({e})")
+                log("Phase4.7", f"  SS exception: {p.title[:30]}... ({e})")
 
-            time.sleep(1.5)  # SS限流间隔
+            time.sleep(1.5)  # SS rate limit interval
 
-        # 写入结果
+        # Write results
         if abstract:
             p.abstract = abstract[:500]
             filled += 1
-            log("Phase4.7", f"  ✓ 回填({i+1}/{len(to_fill)}) [{source}]: {p.title[:50]}...")
+            log("Phase4.7", f"  ✓ Backfilled({i+1}/{len(to_fill)}) [{source}]: {p.title[:50]}...")
         else:
-            log("Phase4.7", f"  ✗ 无abstract({i+1}/{len(to_fill)}): {p.title[:50]}...")
+            log("Phase4.7", f"  ✗ No abstract({i+1}/{len(to_fill)}): {p.title[:50]}...")
 
-    log("Phase4.7", f"abstract回填完成: {filled}/{len(to_fill)}篇成功 (OpenAlex={oa_success}, SemanticScholar={ss_success})")
+    log("Phase4.7", f"Abstract backfill complete: {filled}/{len(to_fill)} successful (OpenAlex={oa_success}, SemanticScholar={ss_success})")
 
-    # 统计最终abstract覆盖率
+    # Calculate final abstract coverage
     total_sa = sum(1 for p in papers if p.quality_level in ("S", "A"))
     with_abs = sum(1 for p in papers if p.quality_level in ("S", "A") and p.abstract)
-    log("Phase4.7", f"S/A级abstract覆盖率: {with_abs}/{total_sa} ({with_abs*100//max(total_sa,1)}%)")
+    log("Phase4.7", f"S/A-tier abstract coverage: {with_abs}/{total_sa} ({with_abs*100//max(total_sa,1)}%)")
 
     return papers
 
 
 def filter_by_content_relevance(papers):
     """
-    v5.1.7: 内容相关性过滤——S级论文也不能仅凭期刊名入选。
-    检查每篇论文的标题+abstract是否与主题（能源+ML）相关，
-    不相关的论文降级为C（不删除，但不进入综述引用池）。
+    v5.1.7: Content relevance filter — S-tier papers cannot pass on journal name alone.
+    Check if each paper's title+abstract is relevant to topic (energy+ML),
+    Irrelevant papers are downgraded to C (not deleted, but excluded from review citation pool).
     """
-    log("Phase4.6", "内容相关性过滤（标题+abstract vs 主题关键词）...")
+    log("Phase4.6", "Content relevance filter (title+abstract vs topic keywords)...")
 
-    # 能源领域核心词
+    # Energy domain core keywords
     energy_keywords = {
         "energy", "electricity", "carbon", "power", "renewable",
         "solar", "wind", "oil", "gas", "fuel", "climate",
@@ -787,7 +787,7 @@ def filter_by_content_relevance(papers):
         "coal", "petroleum", "lng", "cng", "thermal",
     }
 
-    # ML/AI核心词
+    # ML/AI core keywords
     ml_keywords = {
         "machine learning", "deep learning", "neural network",
         "lstm", "gru", "xgboost", "random forest", "transformer",
@@ -804,7 +804,7 @@ def filter_by_content_relevance(papers):
     demoted = 0
     for p in papers:
         if p.quality_level not in ("S", "A"):
-            continue  # B/C级不过滤，本来引用概率低
+            continue  # B/C-tier not filtered, already low citation probability
 
         text = (p.title + " " + (p.abstract or "")).lower()
 
@@ -812,45 +812,45 @@ def filter_by_content_relevance(papers):
         has_ml = any(kw in text for kw in ml_keywords)
 
         if not has_energy and not has_ml:
-            # 完全不相关（化学/生物/纯社科等）
+            # Completely irrelevant (chemistry/biology/pure social science, etc.)
             old = p.quality_level
             p.quality_level = "C"
-            log("Phase4.6", f"  降级 [{old}→C] 无能源无ML: {p.title[:50]}... ({p.journal})")
+            log("Phase4.6", f"  Downgraded [{old}→C] no energy no ML: {p.title[:50]}... ({p.journal})")
             demoted += 1
         elif has_ml and not has_energy:
-            # ML论文但不涉及能源领域（网络安全/医学/自然语言等）
+            # ML paper but not in energy domain (cybersecurity/medicine/NLP, etc.)
             old = p.quality_level
             p.quality_level = "C"
-            log("Phase4.6", f"  降级 [{old}→C] 有ML无能源: {p.title[:50]}... ({p.journal})")
+            log("Phase4.6", f"  Downgraded [{old}→C] has ML no energy: {p.title[:50]}... ({p.journal})")
             demoted += 1
         elif has_energy and not has_ml:
-            # 能源论文但无ML——保留但标注（可作为领域背景引用）
+            # Energy paper without ML — keep but note (can serve as domain background citation)
             pass
 
     from collections import Counter
     level_counts = Counter(p.quality_level for p in papers)
-    log("Phase4.6", f"内容相关性过滤完成: {demoted}篇降级, 分级分布: {dict(level_counts)}")
+    log("Phase4.6", f"Content relevance filter complete: {demoted} downgraded, level distribution: {dict(level_counts)}")
 
     return papers
 
 
-# ============ Phase 7: 最终报告 + PDF（v5.1: 双模板 ReportGenerator） ============
+# ============ Phase 7: Final Report + PDF (v5.1: dual-template ReportGenerator) ============
 def phase7_final_report(papers, preprints, dept_outputs, cross_results,
                         prog_output="", tut_output="", relevance_log=None):
     """
-    生成最终报告（v5.1: 调用 ReportGenerator 双模板）
+    Generate final report (v5.1: dual-template ReportGenerator)
 
-    产出两份文档：
-    - final_report.md：最终交付报告（≤2000字）
-    - internal_doc.md：内部工作文档（完整记录）
+    Produces two documents:
+    - final_report.md: Final deliverable report (<=2000 words)
+    - internal_doc.md: Internal working document (complete record)
     """
-    log("Phase7", "生成最终报告（v5.1 双模板 ReportGenerator）")
+    log("Phase7", "Generating final report (v5.1 dual-template ReportGenerator)")
 
     from academic.report_generator import ReportGenerator
 
     rg = ReportGenerator(output_dir=OUTPUT_DIR, llm_call_fn=llm_call)
 
-    # 提取共识结论
+    # Extract consensus conclusions
     consensus_points = []
     for dept_key, output in dept_outputs.items():
         if isinstance(output, dict):
@@ -858,49 +858,49 @@ def phase7_final_report(papers, preprints, dept_outputs, cross_results,
             if c:
                 consensus_points.append(f"[{dept_key}] {c}")
 
-    # 提取事实校验摘要
+    # Extract fact-check summary
     fact_check_output = dept_outputs.get("fact_check", {})
     fact_check_summary = ""
     if isinstance(fact_check_output, dict):
         fact_check_summary = fact_check_output.get("consensus", "")
 
-    # 构建 debate_outputs（部门名→辩论内容）
+    # Build debate_outputs (dept_name -> debate content)
     debate_outputs = {}
     for dept_key, output in dept_outputs.items():
         if isinstance(output, dict):
             dept_name = output.get("department", output.get("dept_name", dept_key))
-            # 提取该部门所有辩手发言 + 共识
+            # Extract all debater statements + consensus for this department
             parts = []
-            # 1) 辩手论点（list of dict）
+            # 1) Debater arguments (list of dict)
             debater_args = output.get("debater_arguments", [])
             if isinstance(debater_args, list):
                 for arg in debater_args:
                     if isinstance(arg, dict):
-                        name = arg.get("name", arg.get("debater", "辩手"))
+                        name = arg.get("name", arg.get("debater", "Debater"))
                         argument = arg.get("argument", "")
                         if argument:
                             parts.append(f"**{name}**: {argument}")
                     elif isinstance(arg, str):
-                        parts.append(f"**辩手**: {arg}")
-            # 2) 共识结论
+                        parts.append(f"**Debater**: {arg}")
+            # 2) Consensus conclusion
             consensus = output.get("consensus", "")
             if consensus:
-                parts.append(f"**共识**: {consensus}")
+                parts.append(f"**Consensus**: {consensus}")
             debate_outputs[dept_name] = "\n\n".join(parts) if parts else ""
 
-    # 方法论审查数据
+    # Methodology review data
     method_output = dept_outputs.get("methodology_review", {})
     methodology_reviews = None
     if isinstance(method_output, dict) and method_output.get("consensus"):
         methodology_reviews = {"distribution": {}, "review_text": method_output.get("consensus", "")}
 
-    # 调用 ReportGenerator
+    # Call ReportGenerator
     result = rg.generate(
         topic=TOPIC,
         papers=papers,
-        clusters=[],       # v5.1暂无ClusterResult对象
-        validations=[],    # v5.1暂无ValidationResult对象
-        charts=[],         # v5.1暂无ChartConfig对象
+        clusters=[],       # v5.1: no ClusterResult objects yet
+        validations=[],    # v5.1: no ValidationResult objects yet
+        charts=[],         # v5.1: no ChartConfig objects yet
         consensus_points=consensus_points or None,
         fact_check_summary=fact_check_summary,
         debate_outputs=debate_outputs or None,
@@ -911,42 +911,42 @@ def phase7_final_report(papers, preprints, dept_outputs, cross_results,
         relevance_filter_log=relevance_log,
     )
 
-    log("Phase7", f"报告生成完成:")
-    log("Phase7", f"  交付报告: {result['final_report']}")
-    log("Phase7", f"  内部文档: {result['internal_doc']}")
+    log("Phase7", f"Report generation complete:")
+    log("Phase7", f"  Final report: {result['final_report']}")
+    log("Phase7", f"  Internal doc: {result['internal_doc']}")
     log("Phase7", f"  CSV: {result['csv']}")
 
-    # 交付报告生成PDF
+    # Generate PDF for deliverable report
     try:
         with open(result["final_report"], "r", encoding="utf-8") as f:
             final_md = f.read()
         from pdf_exporter import markdown_to_pdf
         pdf_path = os.path.join(OUTPUT_DIR, "final_report.pdf")
         markdown_to_pdf(final_md, pdf_path, title=TOPIC)
-        log("Phase7", f"交付报告PDF已生成: {pdf_path}")
+        log("Phase7", f"Final report PDF generated: {pdf_path}")
     except Exception as e:
-        log("Phase7", f"PDF生成失败: {e}")
+        log("Phase7", f"PDF generation failed: {e}")
 
-    # 内部文档也生成PDF
+    # Also generate PDF for internal document
     try:
         with open(result["internal_doc"], "r", encoding="utf-8") as f:
             internal_md = f.read()
         from pdf_exporter import markdown_to_pdf
         internal_pdf_path = os.path.join(OUTPUT_DIR, "internal_doc.pdf")
-        markdown_to_pdf(internal_md, internal_pdf_path, title=f"{TOPIC} - 内部工作文档")
-        log("Phase7", f"内部文档PDF已生成: {internal_pdf_path}")
+        markdown_to_pdf(internal_md, internal_pdf_path, title=f"{TOPIC} - Internal Working Document")
+        log("Phase7", f"Internal doc PDF generated: {internal_pdf_path}")
     except Exception as e:
-        log("Phase7", f"内部文档PDF生成失败: {e}")
+        log("Phase7", f"Internal doc PDF generation failed: {e}")
 
-    # 读取交付报告返回（兼容旧逻辑）
+    # Read deliverable report for return (backward compat)
     with open(result["final_report"], "r", encoding="utf-8") as f:
         return f.read()
 
 
-# ============ 程序部独立输出 ============
+# ============ Programming Department Standalone Output ============
 def generate_programming_output(papers):
-    """生成程序部完整产出"""
-    log("Programming", "生成程序部完整产出")
+    """Generate complete programming department output"""
+    log("Programming", "Generating complete programming department output")
 
     prompt = f"""你是能源经济学机器学习领域的技术专家。基于以下论文，完成三大任务：
 
@@ -977,10 +977,10 @@ def generate_programming_output(papers):
     return result
 
 
-# ============ 教程部独立输出 ============
+# ============ Tutorial Department Standalone Output ============
 def generate_tutorial_output(papers):
-    """生成教程部完整产出"""
-    log("Tutorial", "生成教程部完整产出")
+    """Generate complete tutorial department output"""
+    log("Tutorial", "Generating complete tutorial department output")
 
     prompt = f"""你是能源经济学机器学习领域的教学专家。基于以下论文，完成三大教程：
 
@@ -1015,32 +1015,32 @@ def generate_tutorial_output(papers):
     return result
 
 
-# ============ 补充搜索（v6.0） ============
+# ============ Supplemental Search (v6.0) ============
 def supplement_search(domain_config, dedup_registry, round_num):
     """
-    补充搜索：用query_rotation中不同的query，排除已见论文。
+    Supplemental search: use different queries from query_rotation, excluding seen papers.
 
-    v6.0: 当QC审校后有效论文不足15篇时，用domain_config中的
-    query_rotation进行补充搜索，避免检索枯竭。
+    v6.0: When QC-reviewed valid papers < 15, use query_rotation from domain_config
+    for supplemental search to avoid search exhaustion.
 
     Args:
-        domain_config: 领域配置（含query_rotation）
-        dedup_registry: 去重注册表（seen + excluded）
-        round_num: 补充搜索轮次
+        domain_config: Domain config (with query_rotation)
+        dedup_registry: Dedup registry (seen + excluded)
+        round_num: Supplemental search round
 
     Returns:
-        新论文列表
+        List of new papers
     """
     queries = domain_config.get("query_rotation", [])
     if not queries:
-        log("Supplement", "query_rotation为空，无法补充搜索")
+        log("Supplement", "query_rotation is empty, cannot supplement search")
         return []
 
-    # 第round_num轮用第round_num组query（循环使用）
+    # Round round_num uses query group round_num (cyclic)
     query = queries[round_num % len(queries)]
-    log("Supplement", f"第{round_num}轮补充搜索，使用query: {query}")
+    log("Supplement", f"Round {round_num} supplemental search, using query: {query}")
 
-    # 构建已见论文标题集合，用于排除
+    # Build set of seen paper titles for exclusion
     seen_titles = set()
     for entry in dedup_registry.get("seen", []):
         title = entry.get("title", "")[:30].lower() if isinstance(entry, dict) else str(entry)[:30].lower()
@@ -1049,47 +1049,47 @@ def supplement_search(domain_config, dedup_registry, round_num):
         title = entry.get("title", "")[:30].lower() if isinstance(entry, dict) else str(entry)[:30].lower()
         seen_titles.add(title)
 
-    # 执行搜索
+    # Execute search
     from academic.search_engine import AcademicSearchEngine
     engine = AcademicSearchEngine(
         quality_levels=["S", "A", "B"],
-        min_citations=3,  # 补充搜索放宽引用要求
+        min_citations=3,  # Supplemental search relaxes citation requirements
         min_results=10,
         include_preprints=True,
-        domain_config=domain_config,  # v6.0: 传入domain_config
+        domain_config=domain_config,  # v6.0: Pass domain_config
     )
 
     try:
         result = engine.search(query, max_results_per_source=20)
         new_papers = result["papers"]
 
-        # 排除已见论文
+        # Exclude seen papers
         filtered = []
         for p in new_papers:
             title_key = p.title[:30].lower()
             if title_key not in seen_titles:
                 filtered.append(p)
 
-        log("Supplement", f"搜索到{len(new_papers)}篇，去重后{len(filtered)}篇新论文")
+        log("Supplement", f"Found {len(new_papers)} papers, {len(filtered)} new after dedup")
         return filtered
 
     except Exception as e:
-        log("Supplement", f"补充搜索异常: {e}")
+        log("Supplement", f"Supplemental search exception: {e}")
         return []
 
 
-# ============ 自我评估 ============
+# ============ Self-Evaluation ============
 def self_evaluation(report, papers, dept_outputs):
-    """自我评估不足"""
-    log("Eval", "进行自我评估")
+    """Self-evaluation of shortcomings"""
+    log("Eval", "Performing self-evaluation")
 
-    papers_info = f"论文数={len(papers)}, "
+    papers_info = f"Papers={len(papers)}, "
     level_counts = {}
     for p in papers:
         level_counts[p.quality_level] = level_counts.get(p.quality_level, 0) + 1
-    papers_info += f"等级分布={level_counts}"
+    papers_info += f"Level distribution={level_counts}"
 
-    depts_info = ", ".join(f"{k}:{len(v.get('debater_arguments',[]))}辩手"
+    depts_info = ", ".join(f"{k}:{len(v.get('debater_arguments',[]))} debaters"
                            for k, v in dept_outputs.items())
 
     prompt = f"""请对以下学术调研进行客观的自我评估，指出不足和改进方向：
@@ -1117,140 +1117,140 @@ def self_evaluation(report, papers, dept_outputs):
     return result
 
 
-# ============ 主流程 ============
+# ============ Main Flow ============
 def main():
     start_time = time.time()
-    log("MAIN", f"========== 共识管线 v6.0 端到端运行 ==========")
-    log("MAIN", f"主题: {TOPIC}")
-    log("MAIN", f"模型: {MODEL}")
-    log("MAIN", f"输出目录: {OUTPUT_DIR}")
+    log("MAIN", f"========== Consensus Pipeline v6.0 End-to-End Run ==========")
+    log("MAIN", f"Topic: {TOPIC}")
+    log("MAIN", f"Model: {MODEL}")
+    log("MAIN", f"Output directory: {OUTPUT_DIR}")
 
-    # v6.0: 领域配置，初始为空，Phase 0.5后填充
+    # v6.0: Domain config, initially empty, populated after Phase 0.5
     domain_config = None
 
     try:
-        # Phase 0: 需求调研
+        # Phase 0: Requirement interview
         doc = phase0_interview()
 
-        # Phase 0.5: 动态生成领域配置（v6.0新增）
-        log("Phase0.5", "动态生成领域配置...")
+        # Phase 0.5: Dynamic domain config generation (new in v6.0)
+        log("Phase0.5", "Dynamically generating domain config...")
         from domain_config_generator import generate_domain_config
         domain_config = generate_domain_config(TOPIC, llm_call, output_dir=OUTPUT_DIR)
         save_json(domain_config, "phase0.5_domain_config.json")
-        log("Phase0.5", f"领域配置生成完成: exclusion_signals={len(domain_config.get('exclusion_signals', []))}, "
+        log("Phase0.5", f"Domain config generation complete: exclusion_signals={len(domain_config.get('exclusion_signals', []))}, "
              f"query_rotation={len(domain_config.get('query_rotation', []))}, "
              f"tier_layers={list(domain_config.get('tier_definitions', {}).keys())}")
 
-        # Phase 1: 结构化
+        # Phase 1: Structuring
         structured = phase1_structure(doc)
 
-        # Phase 2: 讨论
+        # Phase 2: Discussion
         discussion = phase2_discussion(structured)
 
-        # Phase 3: 配置推荐
+        # Phase 3: Configuration recommendation
         config = phase3_config(structured, discussion)
 
-        # Phase 4: 学术检索（v6.0: 传入domain_config）
-        # 修改phase4_search以使用domain_config
+        # Phase 4: Academic search (v6.0: pass domain_config)
+        # Modified phase4_search to use domain_config
         papers, preprints, relevance_log = phase4_search_v6(domain_config)
 
         if not papers:
-            log("MAIN", "⚠️ 未检索到论文，使用回退数据")
+            log("MAIN", "⚠️ No papers retrieved, using fallback data")
             papers = []
 
-        # Phase 4.5: 用最新注册表重新分级论文（v5.1.3）
+        # Phase 4.5: Reclassify papers with latest registry (v5.1.3)
         papers = reclassify_papers(papers)
 
-        # Phase 4.6: 内容相关性过滤（v5.1.7，保留作为双保险）
+        # Phase 4.6: Content relevance filter (v5.1.7, kept as double insurance)
         papers = filter_by_content_relevance(papers)
 
-        # Phase 4.7: 回填S/A级论文abstract（v5.1.7）
+        # Phase 4.7: Backfill S/A-tier paper abstracts (v5.1.7)
         papers = backfill_abstracts(papers)
 
-        # Phase 3.5: QC审校（v6.0新增，在检索+分级+过滤之后、部门辩论之前）
-        log("Phase3.5", "开始QC审校...")
+        # Phase 3.5: QC review (new in v6.0, after search+grading+filter, before department debate)
+        log("Phase3.5", "Starting QC review...")
         from quality_controller import QualityController
         qc = QualityController(llm_call_fn=llm_call, domain_config=domain_config, output_dir=OUTPUT_DIR)
 
-        # 第一轮审校
+        # First QC round
         papers, excluded_ids, qc_stats = qc.run_qc(papers)
-        log("Phase3.5", f"QC第一轮: 通过={len(papers)}, 排除={len(excluded_ids)}, "
-            f"hard_filter排除={qc_stats['hard_filter_excluded']}, "
-            f"llm分类排除={qc_stats['llm_classify_rejected']}")
+        log("Phase3.5", f"QC round 1: passed={len(papers)}, excluded={len(excluded_ids)}, "
+            f"hard_filter_excluded={qc_stats['hard_filter_excluded']}, "
+            f"llm_classify_rejected={qc_stats['llm_classify_rejected']}")
 
-        # 如果有效<15，补充搜索（最多3轮）
+        # If valid < 15, supplemental search (max 3 rounds)
         supplement_round = 0
         while len(papers) < 15 and supplement_round < 3:
             supplement_round += 1
-            log("Phase3.5", f"有效论文不足15篇（当前{len(papers)}篇），启动第{supplement_round}轮补充搜索")
-            # 用query_rotation中不同的query
-            # 排除已见论文（dedup_registry）
-            # 新论文过QC
+            log("Phase3.5", f"Valid papers < 15 (current {len(papers)}), starting supplemental search round {supplement_round}")
+            # Use different queries from query_rotation
+            # Exclude seen papers（dedup_registry）
+            # New papers go through QC
             new_papers = supplement_search(domain_config, qc.dedup_registry, supplement_round)
             if len(new_papers) < 5:
-                log("Phase3.5", "搜索枯竭，停止补充")
+                log("Phase3.5", "Search exhausted, stopping supplementation")
                 break
 
-            # 新论文也过一遍QC
+            # New papers also go through QC
             new_papers, new_excluded, new_stats = qc.run_qc(new_papers)
-            log("Phase3.5", f"新论文QC: 通过={len(new_papers)}, 排除={len(new_excluded)}")
+            log("Phase3.5", f"New papers QC: passed={len(new_papers)}, excluded={len(new_excluded)}")
 
             papers.extend(new_papers)
-            # 对合并后的论文再做一轮完整QC（去重+过滤）
+            # Run full QC on merged papers (dedup + filter)
             papers, excluded_ids, qc_stats = qc.run_qc(papers)
-            log("Phase3.5", f"第{supplement_round}轮后: 有效={len(papers)}")
+            log("Phase3.5", f"After round {supplement_round}: valid={len(papers)}")
 
-            # 避免API限流
+            # Avoid API rate limiting
             time.sleep(3)
 
-        log("Phase3.5", f"QC完成: 最终有效论文={len(papers)}")
+        log("Phase3.5", f"QC complete: final valid papers={len(papers)}")
         save_json(qc_stats, "phase3.5_qc_stats.json")
 
-        # 保存QC后的论文（供下游使用）
+        # Save QC-filtered papers (for downstream use)
         papers_data = [p.to_dict() for p in papers]
         save_json(papers_data, "phase3.5_qc_papers.json")
 
-        # Phase 5: 部门辩论
+        # Phase 5: Department debate
         dept_outputs = phase5_debate(config, papers, preprints)
 
-        # Phase 6: 交叉辩论
+        # Phase 6: Cross-debate
         cross_results = phase6_cross_debate(config, dept_outputs)
 
-        # 程序部独立输出
+        # Programming department standalone output
         prog_output = generate_programming_output(papers)
 
-        # 教程部独立输出
+        # Tutorial department standalone output
         tut_output = generate_tutorial_output(papers)
 
-        # Phase 7: 最终报告（v5.1: 双模板 + 程序教程接入 + 相关性日志）
+        # Phase 7: Final report (v5.1: dual template + programming/tutorial + relevance log)
         report = phase7_final_report(papers, preprints, dept_outputs, cross_results,
                                      prog_output=prog_output, tut_output=tut_output,
                                      relevance_log=relevance_log)
 
-        # v6.0: 引用校验（报告生成后，比对CSV删除无效引用）
-        log("Phase7.5", "引用校验...")
+        # v6.0: Citation validation (after report generation, compare CSV to remove invalid citations)
+        log("Phase7.5", "Citation validation...")
         from quality_controller import QualityController
         qc_validate = QualityController(llm_call_fn=llm_call, domain_config=domain_config, output_dir=OUTPUT_DIR)
         csv_path = os.path.join(OUTPUT_DIR, "papers_metadata.csv")
         report = qc_validate.validate_citations(report, csv_path)
-        # 保存校验后的报告
+        # Save validated report
         save_text(report, "final_report_validated.md")
-        log("Phase7.5", "引用校验完成")
+        log("Phase7.5", "Citation validation complete")
 
-        # 自我评估
+        # Self-evaluation
         evaluation = self_evaluation(report, papers, dept_outputs)
 
         elapsed = time.time() - start_time
-        log("MAIN", f"========== 全流程完成！耗时 {elapsed:.1f}s ==========")
-        log("MAIN", f"产出文件目录: {OUTPUT_DIR}")
+        log("MAIN", f"========== Full pipeline complete! Elapsed {elapsed:.1f}s ==========")
+        log("MAIN", f"Output file directory: {OUTPUT_DIR}")
 
-        # 打印文件清单
+        # Print file manifest
         for f in sorted(os.listdir(OUTPUT_DIR)):
             size = os.path.getsize(os.path.join(OUTPUT_DIR, f))
             log("MAIN", f"  📄 {f} ({size:,} bytes)")
 
     except Exception as e:
-        log("ERROR", f"流程异常: {e}")
+        log("ERROR", f"Pipeline exception: {e}")
         import traceback
         traceback.print_exc()
 
