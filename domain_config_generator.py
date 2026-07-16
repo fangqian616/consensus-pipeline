@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-领域配置生成器 — Consensus Pipeline v6.0
+Domain Configuration Generator — Consensus Pipeline v6.0
 
-根据研究主题动态生成领域配置，保证管线通用性。
+Dynamically generates domain configuration based on research topic, ensuring pipeline generality.
 No more hardcoded domain-specific keywords (e.g., exclusion signals, energy keywords).
 Instead, the LLM dynamically generates exclusion_signals, query_rotation, tier_definitions, etc.
 """
@@ -13,92 +13,92 @@ from typing import Dict, Any, Callable
 
 def generate_domain_config(topic: str, llm_call_fn: Callable, output_dir: str = "") -> Dict[str, Any]:
     """
-    根据研究主题动态生成领域配置。
+    Dynamically generate domain configuration based on research topic.
 
-    调用LLM，输入主题，输出包含以下字段的JSON：
-    - domain_definition: 领域边界描述
-    - exclusion_signals: 排除信号词列表
-    - query_rotation: 搜索词轮换列表
-    - tier_definitions: core/method/background三层定义
-    - llm_classify_prompt: LLM二分类prompt模板
+    Calls the LLM with the topic, returning a JSON containing:
+    - domain_definition: Domain boundary description
+    - exclusion_signals: Exclusion signal word list
+    - query_rotation: Search query rotation list
+    - tier_definitions: core/method/background tier definitions
+    - llm_classify_prompt: LLM binary classification prompt template
 
     Args:
         topic: Research topic (e.g., "Machine Learning in Energy Economics")
-        llm_call_fn: LLM调用函数 (system_prompt, user_message, temperature) -> str
-        output_dir: 输出目录，用于保存domain_config.json
+        llm_call_fn: LLM call function (system_prompt, user_message, temperature) -> str
+        output_dir: Output directory for saving domain_config.json
 
     Returns:
-        领域配置字典
+        Domain configuration dict
     """
-    system_prompt = """你是一个学术领域分析专家。你的任务是根据给定的研究主题，生成一个精确的领域配置JSON。
+    system_prompt = """You are an academic domain analysis expert. Your task is to generate a precise domain configuration JSON based on the given research topic.
 
-这个配置将用于学术文献调研管线的自动过滤，必须足够精确以排除不相关论文，同时足够宽泛以不遗漏相关论文。
+This configuration will be used for automatic filtering in an academic literature research pipeline. It must be precise enough to exclude irrelevant papers, yet broad enough not to miss relevant ones.
 
-你必须输出一个合法的JSON对象，包含以下字段：
+You must output a valid JSON object containing the following fields:
 
-1. "domain_definition": 一段100字以内的领域边界描述，明确该领域的核心研究对象和方法论范围
+1. "domain_definition": A domain boundary description within 100 words, clarifying the core research objects and methodological scope of this domain.
 
-2. "exclusion_signals": 一个字符串列表（15-25个），包含不属于该领域的排除信号词。
-   这些词出现时，论文大概率不属于目标领域。例如：
-   - 如果研究ML在能源经济学中的应用，排除信号应包含：nanotube, nanowire, plant growth, 
+2. "exclusion_signals": A list of strings (15-25 items) containing exclusion signal words that do not belong to this domain.
+   When these words appear, the paper is likely outside the target domain. For example:
+   - If researching ML applications in energy economics, exclusion signals should include: nanotube, nanowire, plant growth, 
      bacterial, photosynthesis, drug discovery, clinical trial, genetic, 
-     semiconductor device, quantum computing, astrophysics 等
-   - 必须覆盖常见的跨领域噪声源：材料科学、生物学、医学、纯化学、纯物理等
+     semiconductor device, quantum computing, astrophysics, etc.
+   - Must cover common cross-domain noise sources: materials science, biology, medicine, pure chemistry, pure physics, etc.
 
-3. "query_rotation": 一个字符串列表（6-10个），用于搜索词轮换。
-   每个搜索词应覆盖不同的检索角度：
-   - 核心方法+领域组合（如"machine learning energy price forecasting"）
-   - 具体子领域（如"deep learning carbon market prediction"）
-   - 近义词变体（如"artificial intelligence electricity demand"）
-   - 方法论角度（如"neural network load forecasting"）
+3. "query_rotation": A list of strings (6-10 items) for search query rotation.
+   Each search term should cover a different retrieval angle:
+   - Core method + domain combination (e.g., "machine learning energy price forecasting")
+   - Specific sub-domain (e.g., "deep learning carbon market prediction")
+   - Synonym variants (e.g., "artificial intelligence electricity demand")
+   - Methodological angle (e.g., "neural network load forecasting")
 
-4. "tier_definitions": 一个对象，包含三个层级定义：
-   - "core": 该领域最核心的论文（直接研究主题+方法论）
-     - "keywords": 关键词列表（10-15个）
-     - "description": 层级描述
-   - "method": 方法论补充层（研究的方法在目标领域有应用，但论文本身可能是其他领域的）
-     - "keywords": 关键词列表（8-12个）
-     - "description": 层级描述
-   - "background": 机制背景层（提供领域背景知识，但不直接涉及方法论创新）
-     - "keywords": 关键词列表（8-12个）
-     - "description": 层级描述
+4. "tier_definitions": An object containing three tier definitions:
+   - "core": The most central papers in this domain (directly researching the topic + methodology)
+     - "keywords": Keyword list (10-15 items)
+     - "description": Tier description
+   - "method": Methodology supplement tier (the researched methods have applications in the target domain, but the paper itself may be from other domains)
+     - "keywords": Keyword list (8-12 items)
+     - "description": Tier description
+   - "background": Mechanism background tier (provides domain background knowledge, but does not directly involve methodological innovation)
+     - "keywords": Keyword list (8-12 items)
+     - "description": Tier description
 
-5. "llm_classify_prompt": 一个字符串，是LLM二分类的system prompt模板。
-   其中用{domain_definition}作为占位符，运行时会被替换为实际的domain_definition。
-   prompt要求LLM对每篇论文回答"是"或"否"——这篇论文是否属于目标领域。
-   格式要求：对每篇论文输出"论文N：是/否"，并附简短理由。
+5. "llm_classify_prompt": A string that is the system prompt template for LLM binary classification.
+   Use {domain_definition} as a placeholder, which will be replaced with the actual domain_definition at runtime.
+   The prompt asks the LLM to answer "yes" or "no" for each paper — does this paper belong to the target domain?
+   Format requirement: output "Paper N: Yes/No" for each paper, with a brief reason.
 
-重要：
-- 只输出JSON，不要输出任何其他文字
-- 确保JSON合法可解析
-- 关键词用英文小写
-- 排除信号要覆盖常见的噪声领域"""
+Important:
+- Output only JSON, no other text
+- Ensure the JSON is valid and parseable
+- Use English lowercase for keywords
+- Exclusion signals should cover common noise domains"""
 
-    user_msg = f"研究主题：{topic}\n\n请生成该领域的精确配置JSON。"
+    user_msg = f"Research topic: {topic}\n\nPlease generate the precise domain configuration JSON."
 
     try:
         response = llm_call_fn(system_prompt, user_msg, temperature=0.2)
     except Exception as e:
-        # LLM调用失败，返回默认配置
+        # LLM call failed, return default config
         return _default_domain_config(topic)
 
     if not response:
         return _default_domain_config(topic)
 
-    # 从响应中提取JSON
+    # Extract JSON from response
     config = _extract_json(response)
 
     if not config:
         return _default_domain_config(topic)
 
-    # 校验必要字段
+    # Validate required fields
     required_fields = ["domain_definition", "exclusion_signals", "query_rotation",
                        "tier_definitions", "llm_classify_prompt"]
     for field in required_fields:
         if field not in config:
             config[field] = _default_domain_config(topic).get(field, "")
 
-    # 确保tier_definitions结构完整
+    # Ensure tier_definitions structure is complete
     if "tier_definitions" in config:
         for tier in ["core", "method", "background"]:
             if tier not in config["tier_definitions"]:
@@ -109,7 +109,7 @@ def generate_domain_config(topic: str, llm_call_fn: Callable, output_dir: str = 
             elif "keywords" not in config["tier_definitions"][tier]:
                 config["tier_definitions"][tier]["keywords"] = []
 
-    # 保存到文件
+    # Save to file
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
         config_path = os.path.join(output_dir, "domain_config.json")
@@ -120,17 +120,17 @@ def generate_domain_config(topic: str, llm_call_fn: Callable, output_dir: str = 
 
 
 def _extract_json(text: str) -> Dict[str, Any]:
-    """从文本中提取JSON对象"""
+    """Extract JSON object from text"""
     import re
 
-    # 尝试1: 整体解析
+    # Attempt 1: parse as-is
     text = text.strip()
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
 
-    # 尝试2: 提取```json ... ```代码块
+    # Attempt 2: extract ```json ... ``` code block
     pattern = r'```(?:json)?\s*\n?(.*?)\n?\s*```'
     match = re.search(pattern, text, re.DOTALL)
     if match:
@@ -139,7 +139,7 @@ def _extract_json(text: str) -> Dict[str, Any]:
         except json.JSONDecodeError:
             pass
 
-    # 尝试3: 找第一个{到最后一个}
+    # Attempt 3: find first { to last }
     start = text.find('{')
     end = text.rfind('}')
     if start != -1 and end != -1 and end > start:
@@ -152,9 +152,9 @@ def _extract_json(text: str) -> Dict[str, Any]:
 
 
 def _default_domain_config(topic: str) -> Dict[str, Any]:
-    """默认领域配置（LLM调用失败时的回退方案）"""
+    """Default domain configuration (fallback when LLM call fails)"""
     return {
-        "domain_definition": f"关于{topic}的学术研究",
+        "domain_definition": f"Academic research on {topic}",
         "exclusion_signals": [
             "nanotube", "nanowire", "photosynthesis", "bacterial",
             "drug discovery", "clinical trial", "genetic mutation",
@@ -171,25 +171,25 @@ def _default_domain_config(topic: str) -> Dict[str, Any]:
         "tier_definitions": {
             "core": {
                 "keywords": [],
-                "description": f"直接研究{topic}的论文"
+                "description": f"Papers directly researching {topic}"
             },
             "method": {
                 "keywords": [],
-                "description": "方法论相关但可能不在目标领域的论文"
+                "description": "Methodology-related but possibly outside the target domain"
             },
             "background": {
                 "keywords": [],
-                "description": "领域背景知识论文"
+                "description": "Domain background knowledge papers"
             }
         },
-        "llm_classify_prompt": f"""你是一个学术领域分类专家。你的任务是判断论文是否属于以下研究领域：{topic}
+        "llm_classify_prompt": f"""You are an academic domain classification expert. Your task is to determine whether papers belong to the following research domain: {topic}
 
-对每篇论文，请判断它是否属于该领域，输出格式：
-论文N：是/否 — 简短理由
+For each paper, determine whether it belongs to this domain. Output format:
+Paper N: Yes/No — Brief reason
 
-判定标准：
-- "是"：论文的研究主题或方法论直接与"{topic}"相关
-- "否"：论文完全不涉及该领域（如属于材料科学、生物学、医学等不相关领域）
+Criteria:
+- "Yes": The paper's research topic or methodology is directly related to "{topic}"
+- "No": The paper does not involve this domain at all (e.g., belongs to unrelated fields like materials science, biology, medicine, etc.)
 
-请严格按照格式输出。"""
+Please strictly follow the output format."""
     }

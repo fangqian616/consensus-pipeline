@@ -1,8 +1,8 @@
 """
-需求调研 AI — Consensus Pipeline v4.0
+Requirement Research AI — Consensus Pipeline v4.0
 
-产品经理式访谈，把模糊想法变成结构化需求。
-独立模块，输出结构化需求文档，作为后续所有流程的输入。
+Product-manager-style interviews, turning vague ideas into structured requirements.
+Standalone module that outputs a structured requirement document as input for all downstream processes.
 """
 import json
 from typing import Optional, List, Dict, Any
@@ -11,7 +11,7 @@ from dataclasses import dataclass, field, asdict
 
 @dataclass
 class RequirementDocument:
-    """结构化需求文档 — interviewer 的输出，后续所有模块的输入"""
+    """Structured requirement document — output of interviewer, input for all downstream modules"""
     topic: str = ""
     domain: str = ""
     objectives: List[str] = field(default_factory=list)
@@ -19,9 +19,9 @@ class RequirementDocument:
     key_questions: List[str] = field(default_factory=list)
     deliverable_type: str = ""
     quality_criteria: str = ""
-    # 元信息
+    # Metadata
     interview_history: List[Dict[str, str]] = field(default_factory=list)
-    domain_specific: Dict[str, Any] = field(default_factory=dict)  # 领域特化字段
+    domain_specific: Dict[str, Any] = field(default_factory=dict)  # Domain-specific fields
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -34,44 +34,44 @@ class RequirementDocument:
         return cls(**{k: v for k, v in d.items() if k in cls.__dataclass_fields__})
 
 
-# ============ 领域调研模板 ============
+# ============ Domain Interview Templates ============
 
 DOMAIN_INTERVIEW_TEMPLATES = {
     "academic_research": {
-        "domain_name": "学术调研",
+        "domain_name": "Academic Research",
         "required_dimensions": [
-            "研究主题与核心问题",
-            "学科领域与交叉范围",
-            "时间范围（近3年/5年/10年）",
-            "方法论偏好（计量/ML/混合）",
-            "论文质量标准（CSSCI/SCI分区）",
-            "预期交付物（组会汇报/综述论文/研究计划）",
+            "Research topic and core questions",
+            "Discipline and interdisciplinary scope",
+            "Time range (recent 3/5/10 years)",
+            "Methodology preference (econometrics/ML/hybrid)",
+            "Paper quality standard (CSSCI/SCI tier)",
+            "Expected deliverable (group meeting report/survey paper/research plan)",
         ],
         "follow_up_questions": [
-            "你关注的是现象描述还是因果机制？",
-            "需要覆盖哪些检索源？arXiv/Semantic Scholar/OpenAlex？",
-            "是否需要引用网络分析？",
-            "最终受众是谁？导师/同门/评审？",
+            "Are you focused on phenomenon description or causal mechanisms?",
+            "Which search sources to cover? arXiv/Semantic Scholar/OpenAlex?",
+            "Do you need citation network analysis?",
+            "Who is the final audience? Advisor/peers/reviewers?",
         ],
         "domain_specific_fields": {
             "search_sources": ["arxiv", "semantic_scholar", "openalex"],
-            "quality_level": "CSSCI及以上",
-            "time_range": "近5年",
+            "quality_level": "CSSCI and above",
+            "time_range": "Recent 5 years",
         },
     },
     "animation": {
-        "domain_name": "动画创作",
+        "domain_name": "Animation",
         "required_dimensions": [
-            "创作目标（短片/分镜/视频Prompt）",
-            "视觉风格与参考",
-            "叙事结构（线性/非线性/实验）",
-            "技术约束（3D/2D/混合）",
-            "目标平台与受众",
+            "Creative goal (short film/storyboard/video prompt)",
+            "Visual style and references",
+            "Narrative structure (linear/nonlinear/experimental)",
+            "Technical constraints (3D/2D/hybrid)",
+            "Target platform and audience",
         ],
         "follow_up_questions": [
-            "有没有参考作品或视觉风格？",
-            "时长预期是多少？",
-            "需要音效和配乐吗？",
+            "Any reference works or visual styles?",
+            "What is the expected duration?",
+            "Need sound effects and music?",
         ],
         "domain_specific_fields": {
             "visual_style": "",
@@ -80,13 +80,13 @@ DOMAIN_INTERVIEW_TEMPLATES = {
         },
     },
     "general": {
-        "domain_name": "通用",
+        "domain_name": "General",
         "required_dimensions": [
-            "核心目标",
-            "领域范围",
-            "约束条件",
-            "预期交付",
-            "质量标准",
+            "Core objectives",
+            "Domain scope",
+            "Constraints",
+            "Expected deliverable",
+            "Quality criteria",
         ],
         "follow_up_questions": [],
         "domain_specific_fields": {},
@@ -96,22 +96,22 @@ DOMAIN_INTERVIEW_TEMPLATES = {
 
 class RequirementInterviewer:
     """
-    需求调研 AI
+    Requirement Research AI
 
-    职责：产品经理式访谈，通过多轮对话深挖用户需求，
-    输出结构化需求文档。
+    Role: Product-manager-style interviews, digging into user needs through multi-round dialogue,
+    outputting a structured requirement document.
 
-    使用方式：
+    Usage:
         interviewer = RequirementInterviewer()
-        # 第一步：从用户的一句话初始化
+        # Step 1: Initialize from a single user sentence
         result = interviewer.start("I want to research ML applications in energy economics")
-        # result 包含：领域识别 + 首轮追问
+        # result contains: domain identification + first follow-up question
 
-        # 后续：逐轮对话
-        result = interviewer.chat("I focus on carbon price forecasting, methodology偏向ML")
-        # result 包含：追问或完成判断
+        # Subsequent: round-by-round dialogue
+        result = interviewer.chat("I focus on carbon price forecasting, methodology偏向ML")  # Example with Chinese term
+        # result contains: follow-up question or completion judgment
 
-        # 完成：获取结构化需求文档
+        # Complete: get structured requirement document
         doc = interviewer.get_requirement_document()
     """
 
@@ -123,10 +123,10 @@ class RequirementInterviewer:
     ):
         """
         Args:
-            llm_call_fn: LLM调用函数，签名为 fn(system_prompt, user_message) -> str
-                         如果为None，使用内置规则引擎（不依赖外部LLM）
-            domain_hint: 领域提示，如 "academic_research", "animation"
-            max_rounds: 最大对话轮数
+            llm_call_fn: LLM call function with signature fn(system_prompt, user_message) -> str
+                         If None, uses built-in rule engine (no external LLM dependency)
+            domain_hint: Domain hint, e.g. "academic_research", "animation"
+            max_rounds: Maximum dialogue rounds
         """
         self.llm_call_fn = llm_call_fn
         self.max_rounds = max_rounds
@@ -140,12 +140,12 @@ class RequirementInterviewer:
 
     def start(self, user_input: str) -> Dict[str, Any]:
         """
-        开始需求调研，从用户的一句话初始化。
+        Start requirement research, initializing from a single user sentence.
 
         Returns:
             {
-                "domain": "识别的领域",
-                "question": "首轮追问",
+                "domain": "Identified domain",
+                "question": "First follow-up question",
                 "round": 1,
                 "is_complete": False,
             }
@@ -153,7 +153,7 @@ class RequirementInterviewer:
         self.doc.topic = user_input
         self.history.append({"role": "user", "content": user_input})
 
-        # 领域识别
+        # Domain identification
         if self._detected_domain is None:
             self._detected_domain = self._detect_domain(user_input)
 
@@ -162,11 +162,11 @@ class RequirementInterviewer:
         )
         self.doc.domain = self._domain_template["domain_name"]
 
-        # 初始化领域特化字段
+        # Initialize domain-specific fields
         if self._domain_template.get("domain_specific_fields"):
             self.doc.domain_specific = dict(self._domain_template["domain_specific_fields"])
 
-        # 生成首轮追问
+        # Generate first follow-up question
         question = self._generate_next_question()
         self.history.append({"role": "assistant", "content": question})
         self._current_round = 1
@@ -181,23 +181,23 @@ class RequirementInterviewer:
 
     def chat(self, user_message: str) -> Dict[str, Any]:
         """
-        用户回复后，生成下一轮追问或判断完成。
+        After user replies, generate the next follow-up question or determine completion.
 
         Returns:
             {
-                "question": "下一轮追问（如果未完成）",
-                "round": 当前轮次,
-                "is_complete": 是否完成,
-                "requirement_doc": RequirementDocument（如果完成）,
+                "question": "Next follow-up question (if not complete)",
+                "round": Current round number,
+                "is_complete": Whether complete,
+                "requirement_doc": RequirementDocument (if complete),
             }
         """
         self.history.append({"role": "user", "content": user_message})
         self._current_round += 1
 
-        # 从用户回复中提取信息，更新需求文档
+        # Extract info from user reply, update requirement doc
         self._extract_info(user_message)
 
-        # 判断是否完成
+        # Check if complete
         is_complete = self._check_completion()
 
         if is_complete:
@@ -210,7 +210,7 @@ class RequirementInterviewer:
                 "requirement_doc": self.doc,
             }
 
-        # 生成下一轮追问
+        # Generate next follow-up question
         question = self._generate_next_question()
         self.history.append({"role": "assistant", "content": question})
 
@@ -221,32 +221,32 @@ class RequirementInterviewer:
         }
 
     def get_requirement_document(self) -> RequirementDocument:
-        """获取当前需求文档（无论是否完成）"""
+        """Get the current requirement document (whether complete or not)"""
         self.doc.interview_history = self.history
         return self.doc
 
     def force_complete(self) -> RequirementDocument:
-        """强制完成，用已有信息生成需求文档"""
+        """Force completion, generating requirement document from available information"""
         self._is_complete = True
         self.doc.interview_history = self.history
         return self.doc
 
-    # ============ 内部方法 ============
+    # ============ Internal Methods ============
 
     def _detect_domain(self, text: str) -> str:
-        """从用户输入识别领域（v4.3: '方法'需与学术关键词共现）"""
+        """Identify domain from user input (v4.3: 'method' requires co-occurrence with academic keywords)"""
         text_lower = text.lower()
-        # 强学术信号关键词（单独即可判定学术领域）
+        # Strong academic signal keywords (sufficient alone to classify as academic)
         academic_strong = [
-            "调研", "研究", "论文", "学术", "文献", "期刊",
+            "调研", "研究", "论文", "学术", "文献", "期刊",  # Chinese academic keywords
             "综述", "检索", "引用", "cssci", "sci", "ssci",
             "arxiv", "实证", "计量",
         ]
-        # 弱学术信号（需与强信号共现才计分）
+        # Weak academic signals (only score when co-occurring with strong signals)
         academic_weak = ["方法", "模型", "数据"]
         
         academic_score = sum(1 for kw in academic_strong if kw in text_lower)
-        # 弱信号仅在强信号存在时才计分
+        # Weak signals only score when strong signals are present
         if academic_score > 0:
             academic_score += sum(1 for kw in academic_weak if kw in text_lower)
         
@@ -264,18 +264,18 @@ class RequirementInterviewer:
             return "general"
 
     def _generate_next_question(self) -> str:
-        """生成下一轮追问"""
+        """Generate the next follow-up question"""
         if self.llm_call_fn:
             return self._generate_question_with_llm()
         return self._generate_question_rule_based()
 
     def _generate_question_rule_based(self) -> str:
-        """基于规则的追问生成（不依赖外部LLM）"""
+        """Rule-based question generation (no external LLM dependency)"""
         template = self._domain_template
         required = template.get("required_dimensions", [])
         follow_ups = template.get("follow_up_questions", [])
 
-        # 找出还没问到的维度
+        # Find dimensions not yet asked about
         unasked = []
         for dim in required:
             dim_key = dim.split("（")[0].split("(")[0].strip()
@@ -285,35 +285,35 @@ class RequirementInterviewer:
         if unasked:
             next_q = unasked[0]
             self._asked_questions.append(next_q.split("（")[0].split("(")[0].strip())
-            return f"请告诉我：{next_q}？"
+            return f"Please tell me: {next_q}?"
 
-        # 必要维度问完了，用follow_up深挖
+        # Required dimensions covered; use follow_ups for deeper probing
         if follow_ups and self._current_round < self.max_rounds:
             idx = min(self._current_round - len(required), len(follow_ups) - 1)
             idx = max(0, idx)
             return follow_ups[idx]
 
-        return "还有其他补充吗？如果没有，我们可以开始生成配置了。"
+        return "Anything else to add? If not, we can start generating the configuration."
 
     def _generate_question_with_llm(self) -> str:
-        """使用LLM生成追问"""
-        system_prompt = f"""你是Consensus Pipeline的需求调研AI，正在进行{self._domain_template['domain_name']}领域的需求调研。
+        """Generate follow-up question using LLM"""
+        system_prompt = f"""You are the Consensus Pipeline requirement research AI, conducting requirement research in the {self._domain_template['domain_name']} domain.
 
-你的任务是通过追问，帮助用户把模糊想法变成结构化需求。像导师一样追问，不是简单填表。
+Your task is to help users transform vague ideas into structured requirements through follow-up questions. Probe like an advisor, not a form-filler.
 
-当前已获取的信息：
+Currently gathered information:
 {self.doc.to_json()}
 
-还需要了解的维度：
+Dimensions still needed:
 {json.dumps(self._domain_template.get('required_dimensions', []), ensure_ascii=False)}
 
-追问建议方向：
+Suggested follow-up directions:
 {json.dumps(self._domain_template.get('follow_up_questions', []), ensure_ascii=False)}
 
-请生成一个简短的追问（1-2句话），聚焦最需要澄清的维度。不要重复已经了解的信息。"""
+Generate a brief follow-up question (1-2 sentences), focusing on the dimension most needing clarification. Do not repeat already known information."""
 
-        user_msg = f"当前对话历史：\n" + "\n".join(
-            f"{'用户' if h['role']=='user' else 'AI'}：{h['content']}"
+        user_msg = f"Current dialogue history:\n" + "\n".join(
+            f"{'User' if h['role']=='user' else 'AI'}: {h['content']}"
             for h in self.history[-4:]
         )
 
@@ -321,53 +321,53 @@ class RequirementInterviewer:
         return response
 
     def _extract_info(self, user_message: str):
-        """从用户回复中提取信息，更新需求文档"""
+        """Extract information from user reply, update requirement document"""
         if self.llm_call_fn:
             self._extract_info_with_llm(user_message)
         else:
             self._extract_info_rule_based(user_message)
 
     def _extract_info_rule_based(self, user_message: str):
-        """基于规则的信息提取（v4.3: 正则拆解时间/方法/等级，不再整段存objective）"""
+        """Rule-based info extraction (v4.3: regex parsing for time/method/tier, no longer storing entire text as objective)"""
         import re
         msg = user_message.strip()
         extracted_something = False
 
-        # 时间范围提取
+        # Time range extraction
         time_match = re.search(r'近(\d+)\s*年|(\d{4})\s*[-–—]\s*(\d{4})\s*年', msg)
         if time_match:
             if time_match.group(1):
-                self.doc.constraints["time_range"] = f"近{time_match.group(1)}年"
+                self.doc.constraints["time_range"] = f"Recent {time_match.group(1)} years"
             elif time_match.group(2):
                 self.doc.constraints["time_range"] = f"{time_match.group(2)}-{time_match.group(3)}"
             extracted_something = True
 
-        # 方法提取
-        method_keywords = ["机器学习", "深度学习", "强化学习", "计量", "面板数据",
+        # Method extraction
+        method_keywords = ["机器学习", "深度学习", "强化学习", "计量", "面板数据",  # Chinese method keywords for matching
                            "ML", "神经网络", "因果推断", "混合方法", "定性", "定量"]
         methods = [kw for kw in method_keywords if kw in msg]
         if methods:
-            self.doc.constraints["methodology"] = "、".join(methods)
+            self.doc.constraints["methodology"] = ", ".join(methods)
             extracted_something = True
 
-        # 等级提取
+        # Quality level extraction
         level_match = re.search(r'(CSSCI|SCI|SSCI|Q1|Q2|核心|CSCD)', msg, re.IGNORECASE)
         if level_match:
             self.doc.constraints["quality_level"] = level_match.group(1).upper()
             extracted_something = True
 
-        # 交付物提取
+        # Deliverable extraction
         deliverable_match = re.search(r'(PDF|汇报|综述|论文|报告|组会|答辩)', msg)
         if deliverable_match:
             self.doc.deliverable_type = deliverable_match.group(1)
             extracted_something = True
 
-        # 如果第一轮且没提取到结构化字段，存为objective
+        # If first round and no structured fields extracted, store as objective
         if self._current_round == 1 and not self.doc.objectives:
             self.doc.objectives.append(msg)
             extracted_something = True
         
-        # 兜底：如果没匹配到任何字段，存为key_question
+        # Fallback: if no field matched, store as key_question
         if not extracted_something:
             if not self.doc.key_questions:
                 self.doc.key_questions.append(msg)
@@ -375,13 +375,13 @@ class RequirementInterviewer:
                 self.doc.objectives.append(msg)
 
     def _extract_info_with_llm(self, user_message: str):
-        """使用LLM的信息提取"""
-        system_prompt = f"""你是信息提取助手。从用户的回复中提取关键信息，更新需求文档。
+        """Extract information using LLM"""
+        system_prompt = f"""You are an information extraction assistant. Extract key information from the user's reply and update the requirement document.
 
-当前需求文档：
+Current requirement document:
 {self.doc.to_json()}
 
-请输出更新后的完整需求文档JSON，只输出JSON，不要其他文字。"""
+Output the updated complete requirement document JSON. Output only JSON, no other text."""
 
         response = self.llm_call_fn(system_prompt, user_message)
         try:
@@ -390,15 +390,15 @@ class RequirementInterviewer:
                 if key in RequirementDocument.__dataclass_fields__:
                     setattr(self.doc, key, value)
         except json.JSONDecodeError:
-            pass  # LLM输出格式不对，保持原样
+            pass  # LLM output format incorrect, keep as-is
 
     def _check_completion(self) -> bool:
-        """判断调研是否完成"""
-        # 达到最大轮数
+        """Determine whether the research interview is complete"""
+        # Reached maximum rounds
         if self._current_round >= self.max_rounds:
             return True
 
-        # 必要维度都已收集
+        # All required dimensions collected
         template = self._domain_template
         required = template.get("required_dimensions", [])
 
@@ -408,7 +408,7 @@ class RequirementInterviewer:
             if dim_key in self._asked_questions:
                 filled_count += 1
 
-        # 至少回答了80%的必要维度 + 有目标 + 有交付物
+        # At least 80% of required dimensions answered + has objectives + has deliverable
         completion_ratio = filled_count / max(len(required), 1)
         has_objectives = len(self.doc.objectives) > 0
         has_deliverable = bool(self.doc.deliverable_type)

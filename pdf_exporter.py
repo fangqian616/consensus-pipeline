@@ -1,10 +1,8 @@
 """
-PDF导出器 — Consensus Pipeline v4.3
+PDF Exporter — Consensus Pipeline v4.3
 
-将Markdown内容转换为PDF，支持中英文混排。
-支持：学术报告、程序部产出、教程部产出、事实校验报告。
-
-v4.3: 字体路径改用__file__相对定位，修复多字节字符截断问题
+Converts Markdown content to PDF, supporting mixed Chinese-English text.
+Supports: academic reports, program department output, tutorial department output, fact-check reports.
 """
 import os
 import re
@@ -14,12 +12,12 @@ from typing import Optional, List, Dict, Any
 from fpdf import FPDF
 
 
-# 字体路径 — 优先项目内fonts目录，备选系统字体
+# Font paths — prefer project-local fonts/ dir, fallback to system fonts
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _FONT_CANDIDATES = [
     os.path.join(_THIS_DIR, "fonts", "LXGWWenKai-Regular.ttf"),
     os.path.join(_THIS_DIR, "v4-run", "fonts", "LXGWWenKai-Regular.ttf"),
-    "CJK_FONT_PATH_PLACEHOLDER",
+    "CJK_FONT_PATH_PLACEHOLDER",  # Chinese path — system-specific, do not translate
     "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
 ]
@@ -39,7 +37,7 @@ def _find_font(candidates: List[str]) -> Optional[str]:
 
 
 def safe_truncate(text: str, max_chars: int = 200) -> str:
-    """字符级安全截断，避免UTF-8多字节字符边界问题。"""
+    """Character-level safe truncation, avoiding UTF-8 multi-byte boundary issues."""
     if not text:
         return ""
     if len(text) <= max_chars:
@@ -48,7 +46,7 @@ def safe_truncate(text: str, max_chars: int = 200) -> str:
 
 
 class PipelinePDF(FPDF):
-    """支持中文的PDF生成器"""
+    """PDF generator with CJK font support"""
 
     def __init__(self, title: str = "Consensus Pipeline Report", *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -92,15 +90,15 @@ def markdown_to_pdf(
     title: str = "Consensus Pipeline Report",
 ) -> str:
     """
-    将Markdown内容转换为PDF。
+    Convert Markdown content to PDF.
 
     Args:
-        markdown_content: Markdown格式内容
-        output_path: PDF输出路径
-        title: PDF标题
+        markdown_content: Markdown-format content
+        output_path: PDF output path
+        title: PDF title
 
     Returns:
-        PDF文件路径
+        PDF file path
     """
     pdf = PipelinePDF(title=title)
     pdf.alias_nb_pages()
@@ -113,15 +111,15 @@ def markdown_to_pdf(
     table_rows = []
 
     for line in lines:
-        # 代码块处理
+        # Code block handling
         if line.strip().startswith("```"):
             if in_code_block:
-                # 结束代码块
+                # End code block
                 _render_code_block(pdf, code_buffer)
                 code_buffer = []
                 in_code_block = False
             else:
-                # 开始代码块
+                # Start code block
                 if in_table:
                     _render_table(pdf, table_rows)
                     table_rows = []
@@ -133,9 +131,9 @@ def markdown_to_pdf(
             code_buffer.append(line)
             continue
 
-        # 表格处理
+        # Table handling
         if "|" in line and line.strip().startswith("|"):
-            # 分隔行跳过
+            # Skip separator row
             if re.match(r'^\|[\s\-:|]+\|$', line.strip()):
                 continue
             cells = [c.strip() for c in line.strip().split("|")[1:-1]]
@@ -147,12 +145,12 @@ def markdown_to_pdf(
             table_rows = []
             in_table = False
 
-        # 空行
+        # Empty line
         if not line.strip():
             pdf.ln(3)
             continue
 
-        # 标题
+        # Headings
         if line.startswith("# "):
             pdf.set_font("zh", "B", 18)
             pdf.set_text_color(30, 30, 30)
@@ -173,7 +171,7 @@ def markdown_to_pdf(
             pdf.set_text_color(60, 60, 60)
             _write_line(pdf, line[5:].strip())
             pdf.ln(3)
-        # 引用块
+        # Blockquote
         elif line.strip().startswith(">"):
             pdf.set_font("zh", "", 10)
             pdf.set_text_color(100, 100, 100)
@@ -181,7 +179,7 @@ def markdown_to_pdf(
             pdf.set_x(20)
             _write_line(pdf, quote_text, max_width=170)
             pdf.ln(2)
-        # 列表项
+        # List items
         elif re.match(r'^(\d+)\.\s', line.strip()):
             pdf.set_font("zh", "", 10)
             pdf.set_text_color(30, 30, 30)
@@ -198,20 +196,20 @@ def markdown_to_pdf(
             pdf.set_x(20)
             _write_line(pdf, bullet_text, max_width=175)
             pdf.ln(1)
-        # 水平线
+        # Horizontal rule
         elif line.strip() == "---":
             pdf.ln(3)
             pdf.set_draw_color(180, 180, 180)
             pdf.line(10, pdf.get_y(), 200, pdf.get_y())
             pdf.ln(5)
-        # 普通段落
+        # Normal paragraph
         else:
             pdf.set_font("zh", "", 10)
             pdf.set_text_color(30, 30, 30)
             _write_line(pdf, line.strip())
             pdf.ln(2)
 
-    # 处理未闭合的表格或代码块
+    # Handle unclosed tables or code blocks
     if in_table and table_rows:
         _render_table(pdf, table_rows)
     if in_code_block and code_buffer:
@@ -223,8 +221,8 @@ def markdown_to_pdf(
 
 
 def _write_line(pdf: PipelinePDF, text: str, max_width: int = 190):
-    """写入一行文本，处理自动换行"""
-    # 简单处理粗体标记
+    """Write a line of text with auto-wrap handling"""
+    # Strip bold/italic/code markers
     text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
     text = re.sub(r'\*(.+?)\*', r'\1', text)
     text = re.sub(r'`(.+?)`', r'\1', text)
@@ -235,19 +233,19 @@ def _write_line(pdf: PipelinePDF, text: str, max_width: int = 190):
     try:
         pdf.multi_cell(max_width, 6, text)
     except Exception:
-        # 降级处理：安全截断
+        # Fallback: safe truncation
         pdf.multi_cell(max_width, 6, safe_truncate(text, 200))
 
 
 def _render_code_block(pdf: PipelinePDF, lines: List[str]):
-    """渲染代码块"""
+    """Render a code block"""
     pdf.ln(2)
     pdf.set_fill_color(245, 245, 245)
     pdf.set_font("zh", "", 8)
     pdf.set_text_color(50, 50, 50)
 
     code_text = "\n".join(lines)
-    # 限制代码块长度（安全截断）
+    # Limit code block length (safe truncation)
     if len(code_text) > 3000:
         code_text = safe_truncate(code_text, 3000) + "\n... (truncated)"
 
@@ -261,7 +259,7 @@ def _render_code_block(pdf: PipelinePDF, lines: List[str]):
 
 
 def _render_table(pdf: PipelinePDF, rows: List[List[str]]):
-    """渲染表格"""
+    """Render a table"""
     if not rows:
         return
 
@@ -298,22 +296,22 @@ def generate_academic_pdf(
     output_dir: str = "./output",
 ) -> str:
     """
-    生成学术调研PDF报告。
+    Generate an academic research PDF report.
 
     Args:
-        topic: 研究主题
-        papers: 候选论文列表
-        clusters: 聚类结果
-        validations: 验证结果
-        charts: 图表配置
-        consensus_points: 共识结论
-        fact_check_summary: 事实校验摘要
-        output_dir: 输出目录
+        topic: Research topic
+        papers: List of candidate papers
+        clusters: Clustering results
+        validations: Validation results
+        charts: Chart configurations
+        consensus_points: Consensus conclusions
+        fact_check_summary: Fact-check summary
+        output_dir: Output directory
 
     Returns:
-        PDF文件路径
+        PDF file path
     """
-    # 先用report_generator生成Markdown
+    # First generate Markdown via report_generator
     from academic.report_generator import ReportGenerator
     gen = ReportGenerator(output_dir=output_dir)
     result = gen.generate(
@@ -326,14 +324,14 @@ def generate_academic_pdf(
         fact_check_summary=fact_check_summary,
     )
 
-    # 读取Markdown转PDF
+    # Read Markdown and convert to PDF
     md_path = result["markdown"]
     with open(md_path, "r", encoding="utf-8") as f:
         md_content = f.read()
 
     safe_topic = topic.replace("/", "_").replace("\\", "_").replace(" ", "_")[:50]
     pdf_path = os.path.join(output_dir, f"{safe_topic}_academic_report.pdf")
-    return markdown_to_pdf(md_content, pdf_path, title=f"学术调研 — {topic}")
+    return markdown_to_pdf(md_content, pdf_path, title=f"Academic Research — {topic}")
 
 
 def generate_department_pdf(
@@ -342,22 +340,22 @@ def generate_department_pdf(
     output_dir: str = "./output",
 ) -> str:
     """
-    将部门辩论输出转为PDF。
+    Convert department debate output to PDF.
 
     Args:
-        department_name: 部门名称（如"程序部"/"教程部"）
-        debate_output: 辩论输出内容（Markdown格式）
-        output_dir: 输出目录
+        department_name: Department name (e.g. "Program" / "Tutorial")
+        debate_output: Debate output content (Markdown format)
+        output_dir: Output directory
 
     Returns:
-        PDF文件路径
+        PDF file path
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    # 包装成完整报告
+    # Wrap into a complete report
     from datetime import datetime
-    now = datetime.now().strftime("%Y年%m月%d日")
-    full_md = f"# {department_name} 辩论产出报告\n\n> Consensus Pipeline v4.3 | 生成日期：{now}\n\n---\n\n{debate_output}"
+    now = datetime.now().strftime("%Y-%m-%d")
+    full_md = f"# {department_name} Debate Output Report\n\n> Consensus Pipeline v4.3 | Generated: {now}\n\n---\n\n{debate_output}"
     safe_name = department_name.replace("/", "_").replace("\\", "_")
     pdf_path = os.path.join(output_dir, f"{safe_name}_debate_report.pdf")
-    return markdown_to_pdf(full_md, pdf_path, title=f"{department_name} 辩论产出")
+    return markdown_to_pdf(full_md, pdf_path, title=f"{department_name} Debate Output")

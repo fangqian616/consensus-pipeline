@@ -1,72 +1,16 @@
 """
-AI 3D动画辩论引擎 v3.0 - Consensus Pipeline Edition
-8个部门 × N位辩手 × N轮辩论 → P2空间交叉审核 → P5精简交叉辩论 → P7校对 → 总结
-
-v3.0 更新（Consensus Pipeline）:
-- 新增 apply_config(): 运行时切换工作组配置，将PresetConfig应用到全局变量
-- 新增 get_current_config(): 返回当前生效的配置
-- 新增 get_current_config_name(): 返回当前配置名称
-- 支持config_manager加载预设和用户配置
-- 支持router.py AI自动配组
-- 原有动画辩论配置保留为默认值，通过apply_config可切换为任意工作组
-
-v2.4 更新（Market Edition）:
-
-v2.3 更新（Harness Engineering Edition）:
-- 新增 MODEL_PROFILES：模型选择器（DeepSeek Chat / DeepSeek Reasoner / 自定义）
-- 新增 ARCHITECTURE_MODES：架构模式切换（Pipeline of Consensus / Single Agent / Expert Pool）
-- 新增 run_single_agent：单Agent基线模式，一次LLM调用直接生成
-- 新增 run_expert_pool_debate：专家池模式，场景分析→精选2辩手/部门→精简辩论
-- call_api 新增 stats 参数：token统计累加器
-- run_department_debate 新增 debater_filter 和 stats 参数
-- 所有辩论函数新增 stats 参数传递
-
-v2.2 更新（三连修复：编剧架构师+摄影切换动机+分镜表表格化）：
-- 编剧部新增D辩手"叙事架构师"（Narrative Architect），负责出场角色清单、叙事节拍拆解、完整性校验
-- 编剧部共识模板新增"出场角色与元素清单"和"叙事节拍"段落（位于微表情/肢体/情绪之前）
-- 编剧部补充说明新增架构师完整性提示
-- 摄影部三辩手风格重写：镜头切分必须以叙事节拍为依据，每个镜头切换必须标注切换动机（动作/信息/情绪/节奏驱动）
-- 摄影部共识模板每Shot新增"叙事节拍"和"切换动机"字段，末尾新增"镜头连贯性说明"
-- 分镜表每Shot新增"叙事节拍""切换动机""出场角色"三个字段，明确标注数据来源部门
-- 分镜表新增规则9-11：字段必须从对应部门共识提取、出场角色与清单一致、镜头间必须有切换动机
-- 视频提示词每SHOT新增"叙事节拍""切换动机""出场角色"三个字段
-- 视频提示词[动态衔接]新增"切换依据"字段
-- 承上文档"故事状态"新增"出场角色清单"和"叙事节拍"
-- P7校对新增screenwriter部门，storyboard和dp新增检查项
-- PROOFREAD_DEPARTMENTS从[spatial,storyboard,dp,editing]改为[screenwriter,spatial,storyboard,dp,editing]
-- 产出回炉编辑函数同步提及叙事节拍/切换动机/出场角色字段
-- 辩手循环从硬编码["A","B","C"]改为遍历dept["debaters"]键，支持D辩手
-- 共识prompt"三位辩手"改为动态辩手数量
-
-v2.1 更新（空间定位重构）：
-- 空间板块辩手从"环境架构派/动线规划派/空间叙事派"改为"场景测量师/走位调度师/空间逻辑师"
-- 空间共识模板从坐标系+锚点定位改为物品定位+画面位置双层结构
-- 分镜表站位从@锚点(X,Y)改为"物品参照位置 / 画面位置 / 垂直状态"三层
-- 视频提示词站位同步改为物品定位风格
-- 承上文档从"角色当前锚点"改为"角色当前物品参照位置"
-- P2空间交叉审核、P7校对、产出回炉编辑等全链路删除坐标/锚点引用
-- 空间示意图从坐标网格改为物品布局俯视图
-- 删除所有坐标系定义、锚点坐标、X轴Y轴原点等功能性引用
-
-v1.5 更新：
-- 编剧部重写为"细节填充器"，禁止加戏加情节加对话
-- 新增空间板块（第8部门）：环境架构/动线规划/空间叙事
-- P2新增空间×分镜/摄影/剪辑交叉审核
-- 分镜表改为纯静态关键帧格式，引用空间锚点
-- 视频提示词改为[关键帧]+[动态衔接]双层结构
-- P5交叉辩论精简为3组
-- 新增P7校对环节（空间/分镜/摄影/剪辑四部门审查最终产出）
-- 九宫格归属分镜表产物
+AI 3D Animation Debate Engine v3.0 — Consensus Pipeline Edition
+8 departments × N debaters × N rounds → P2 spatial cross-review → P5 cross-debate → P7 proofread → Summary
 """
 import json
 import time
 import requests
 from typing import List, Dict, Optional, Callable
 
-# ============ 部门执行顺序 ============
+# ============ Department Execution Order ============
 DEPT_ORDER = ["screenwriter", "spatial", "storyboard", "dp", "lighting", "vfx", "sound", "editing"]
 
-# ============ 日漫视觉基因 ============
+# ============ Anime Visual DNA ============
 ANIME_VISUAL_DIRECTIVE = {
     "zh": """【日漫视觉基因——全局指令，所有部门必须遵守】
 本动画的视觉语言以日式动画的分镜冲击力为核心风格：
@@ -90,7 +34,7 @@ This animation's visual language is rooted in anime-style storyboard impact:
 Every department's output MUST embody these visual genes. This is MANDATORY, not optional.""",
 }
 
-# ============ 模型配置 ============
+# ============ Model Configuration ============
 MODEL_PROFILES = {
     "deepseek-v4-flash": {
         "zh_name": "DeepSeek V4 Flash",
@@ -112,7 +56,7 @@ MODEL_PROFILES = {
     },
 }
 
-# ============ 架构模式 ============
+# ============ Architecture Modes ============
 ARCHITECTURE_MODES = {
     "pipeline_of_consensus": {
         "zh_name": "共识管线 (Pipeline of Consensus)",
@@ -134,7 +78,7 @@ ARCHITECTURE_MODES = {
     },
 }
 
-# ============ 市场模式配置 ============
+# ============ Market Mode Configuration ============
 MARKET_CONFIG = {
     "default_candidates": 3,
     "default_questions_per_debater": 7,
@@ -151,7 +95,7 @@ MARKET_CONFIG = {
     },
 }
 
-# ============ 部门与辩手定义 ============
+# ============ Department and Debater Definitions ============
 
 DEPARTMENTS = {
     "screenwriter": {
@@ -354,7 +298,7 @@ DEPARTMENTS = {
     }
 }
 
-# P2交叉辩论：空间板块初版后与分镜/摄影/剪辑交叉审核
+# P2 cross-debate: spatial dept cross-review with storyboard/dp/editing
 P2_CROSS_DEBATES = [
     {"side_a": "spatial", "side_b": "storyboard",
      "zh_topic": "空间布局 vs 镜头取景可行性",
@@ -367,7 +311,7 @@ P2_CROSS_DEBATES = [
      "en_topic": "Spatial Continuity vs Shot Splitting and Transitions"},
 ]
 
-# P5精简交叉辩论
+# P5 streamlined cross-debate
 P5_CROSS_DEBATES = [
     {"side_a": "screenwriter", "side_b": "storyboard",
      "zh_topic": "动作细节 vs 镜头语言表达力",
@@ -380,10 +324,10 @@ P5_CROSS_DEBATES = [
      "en_topic": "Sound Rhythm vs Visual Rhythm"},
 ]
 
-# 兼容旧名
+# Backward compatible alias
 CROSS_DEBATES = P5_CROSS_DEBATES
 
-# ============ 结构化共识模板 ============
+# ============ Structured Consensus Templates ============
 
 STRUCTURED_TEMPLATES = {
     "screenwriter": {
@@ -798,8 +742,8 @@ Output consensus strictly in this structure:
     },
 }
 
-# ============ Consensus Pipeline v3.0: 动态配置 ============
-# 追踪当前生效的配置名称
+# ============ Consensus Pipeline v3.0: Dynamic Configuration ============
+# Track currently active config name
 _current_config_name = "动画辩论（默认）"
 
 def apply_config(config: dict):
@@ -824,7 +768,7 @@ def apply_config(config: dict):
         P2_CROSS_DEBATES[:] = config["p2_cross_debates"]
     if "p5_cross_debates" in config:
         P5_CROSS_DEBATES[:] = config["p5_cross_debates"]
-        CROSS_DEBATES[:] = P5_CROSS_DEBATES  # 兼容旧名
+        CROSS_DEBATES[:] = P5_CROSS_DEBATES  # Backward compatible alias
     if "structured_templates" in config:
         STRUCTURED_TEMPLATES.clear()
         STRUCTURED_TEMPLATES.update(config["structured_templates"])
@@ -886,34 +830,34 @@ def get_screenwriter_reminder(lang: str = "zh") -> str:
     else:
         return "\n[Reminder] Screenwriter hard constraints still apply: NO new characters, NO new relationships, NO new sublines, NO new dialogue. Only fill micro-expression/body language/emotional pacing details. Point out if other debaters violated constraints.\n"
 
-# ============ API调用 ============
+# ============ API Calls ============
 
 def clean_spatial_coordinates(text: str) -> str:
     """清除空间共识中残留的坐标描述和罗盘方向"""
     import re
-    # 清除 (x, y) / (x,y) / (x, y, z) 格式
+    # Remove (x, y) / (x,y) / (x, y, z) format
     text = re.sub(r'\([-\d.]+\s*,\s*[-\d.]+(?:\s*,\s*[-\d.]+)*\)', '', text)
-    # 清除 "X轴"/"Y轴"/"Z轴" 及其英文 "X-axis"/"Y-axis"/"Z-axis"
+    # Remove "X-axis"/"Y-axis"/"Z-axis" variants
     text = re.sub(r'[XYZxyz][\-—\s]?轴', '', text)
     text = re.sub(r'[XYZxyz][\-—\s]?axis', '', text, flags=re.IGNORECASE)
-    # 清除 "坐标系"/"coordinate system" 
+    # Remove "coordinate system" references 
     text = re.sub(r'坐标系', '定位参照', text)
     text = re.sub(r'coordinate\s+system', 'reference system', text, flags=re.IGNORECASE)
-    # 清除 "原点"/"origin point"
+    # Remove "origin point" references
     text = re.sub(r'原点\s*[是为在]?\s*', '', text)
     text = re.sub(r'origin\s+point\s*(is|at)?\s*', '', text, flags=re.IGNORECASE)
-    # 清除 "锚点坐标"/"anchor coordinate" 
+    # Remove "anchor coordinate" references 
     text = re.sub(r'锚点坐标', '物品参照位置', text)
     text = re.sub(r'anchor\s+coordinate', 'object reference position', text, flags=re.IGNORECASE)
-    # 清除罗盘方向（中文）：东南/西南/东北/西北/正东/正西/正南/正北/东面/西面/南面/北面
-    # 保留"画面左方""画面右方"等有效描述，只清罗盘方向
-    # 匹配"面朝东南""面向西南方向""朝正东方""往西北走""背向北方"等模式，整体替换
-    # 前缀(面朝/面向/朝向/朝/向/往/至/背向/背朝) + 正? + 罗盘方向 + 尾缀(方/面/侧/走/步/方向等)
+    # Remove compass directions (Chinese): SE/SW/NE/NW/E/W/S/N
+    # Keep valid descriptions like "frame left/right", only remove compass directions
+    # Match facing-direction patterns, replace entirely
+    # Prefix(facing/toward) + compass direction + suffix
     text = re.sub(r'(?:面朝|面向|朝向|朝|向|往|至|背向|背朝)[正]?(东南|西南|东北|西北|东|西|南|北)(?:方[向]?|面|侧|走[去来]?|步|方向)?', lambda m: _compass_to_camera(m.group()), text)
-    # 清除罗盘方向（英文）：NE/SW/NW/SE/N/S/E/W + northeast/southwest等
+    # Remove compass directions (English)
     text = re.sub(r'\b(north|south|east|west|northeast|northwest|southeast|southwest|NE|NW|SE|SW)\b', 
                   lambda m: _compass_en_to_camera(m.group()), text, flags=re.IGNORECASE)
-    # 清除残留的空白行
+    # Remove residual blank lines
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text
 
@@ -924,10 +868,10 @@ def _compass_to_camera(match: str) -> str:
     """
     m = match
     
-    # 先判断是"背向"还是"面向"类（影响映射反转）
+    # First determine "facing away" vs "facing toward" (affects mapping)
     is_back = m.startswith('背向') or m.startswith('背朝')
     
-    # 罗盘→镜头方向映射表（面向类）
+    # Compass to camera direction mapping (facing toward)
     facing_mapping = {
         '正东南': '面朝画面右方侧面向镜头45度',
         '正东北': '面朝画面右方侧向镜头45度（背向镜头方向）',
@@ -947,7 +891,7 @@ def _compass_to_camera(match: str) -> str:
         '北': '背向镜头',
     }
     
-    # 背向类映射（反转：背向南=面朝北=背向镜头不对→背向南=朝北走=背向镜头）
+    # Facing away mapping (inverted logic)
     back_mapping = {
         '东南': '背向镜头侧面向画面左方45度',
         '东北': '背向镜头侧面向画面右方45度',
@@ -965,7 +909,7 @@ def _compass_to_camera(match: str) -> str:
         if key in m:
             return val
     
-    # 兜底：如果没匹配到具体方向，给提示
+    # Fallback: if no specific direction matched, give hint
     return '面朝镜头（⚠️原文为罗盘方向，已默认替换，请确认）'
 
 def _compass_en_to_camera(match: str) -> str:
@@ -994,7 +938,7 @@ def _compass_en_to_camera(match: str) -> str:
         if m.lower() == key.lower():
             return val
     
-    # 兜底
+    # Fallback
     return 'facing camera (⚠️compass direction replaced, please verify)'
 
 def call_api(
@@ -1009,7 +953,7 @@ def call_api(
     max_continuations: int = 3,
     max_retries: int = 2,
     retry_delay: int = 5,
-    stats: dict = None,  # Token统计累加器
+    stats: dict = None,  # Token statistics累加器
 ) -> Optional[str]:
     """调用兼容API，支持自动续写截断回复 + 失败重试"""
     if not api_key:
@@ -1038,7 +982,7 @@ def call_api(
                 else:
                     last_error = f"ERROR: API限流429(已达最大重试次数)"
                     break
-            # 5xx 服务器错误重试（503/502/500等）
+            # Retry on 5xx server errors (503/502/500 etc.)
             if resp.status_code >= 500:
                 if attempt < max_retries:
                     wait_time = retry_delay * (2 ** attempt)
@@ -1050,7 +994,7 @@ def call_api(
                     break
             resp.raise_for_status()
             data = resp.json()
-            # Token统计
+            # Token statistics
             if stats is not None:
                 usage = data.get("usage", {})
                 stats["prompt_tokens"] = stats.get("prompt_tokens", 0) + usage.get("prompt_tokens", 0)
@@ -1061,7 +1005,7 @@ def call_api(
             content = choice["message"]["content"]
             finish_reason = choice.get("finish_reason", "stop")
             
-            # 如果回复被截断，自动续写
+            # Auto-continue if response was truncated
             if auto_continue and finish_reason == "length" and max_continuations > 0:
                 continued_messages = messages + [{"role": "assistant", "content": content}, {"role": "user", "content": "继续"}]
                 continuation = call_api(
@@ -1090,12 +1034,12 @@ def call_api(
                 time.sleep(retry_delay * attempt)
         except Exception as e:
             last_error = f"ERROR: {e}"
-            # 非网络错误不重试
+            # Don't retry on non-network errors
             break
     
     return last_error
 
-# ============ 单部门辩论 ============
+# ============ Single Department Debate ============
 
 def run_department_debate(
     department_key: str,
@@ -1109,7 +1053,7 @@ def run_department_debate(
     progress_callback: Callable = None,
     carry_forward: str = "",
     debater_filter: list = None,  # 只激活这些辩手，None=全部
-    stats: dict = None,  # Token统计累加器
+    stats: dict = None,  # Token statistics累加器
 ) -> Dict:
     """
     运行单个部门的辩论
@@ -1128,7 +1072,7 @@ def run_department_debate(
     
     for round_num in range(1, rounds + 1):
         for debater_key in dept["debaters"]:
-            # Expert Pool过滤
+            # Expert Pool filter
             if debater_filter is not None and debater_key not in debater_filter:
                 continue
             debater = dept["debaters"][debater_key]
@@ -1217,7 +1161,7 @@ This is Round {round_num}. Respond to other debaters—what do you agree with? D
             if progress_callback:
                 progress_callback(department_key, round_num, rounds, debater_key)
     
-    # 最终共识
+    # Final consensus
     all_args_text = "\n\n---\n\n".join(all_arguments)
     template = STRUCTURED_TEMPLATES.get(department_key, {}).get(lang, "")
     
@@ -1263,18 +1207,18 @@ Synthesize a final consensus. Requirements:
     
     messages = [{"role": "user", "content": consensus_prompt}]
     
-    # 共识生成：通知UI进入总结阶段
+    # Consensus generation: notify UI to enter summary phase
     if progress_callback:
         progress_callback(department_key, rounds + 1, rounds, "consensus")
     
     consensus = call_api(messages, api_url, api_key, model, temperature=0.3, timeout=240, stats=stats)
     
-    # 空间部门：清除残留坐标系
+    # Spatial dept: remove residual coordinate system
     if department_key == "spatial" and consensus and not consensus.startswith("⚠️"):
         consensus = clean_spatial_coordinates(consensus)
     
     if consensus and consensus.startswith("ERROR:"):
-        # 共识生成失败，返回错误信息以便UI显示
+        # Consensus generation failed, return error for UI display
         return {
             "department": department_key,
             "debate_log": debate_log,
@@ -1287,7 +1231,7 @@ Synthesize a final consensus. Requirements:
         "consensus": consensus or "辩论未能达成共识",
     }
 
-# ============ 新架构模式函数 ============
+# ============ New Architecture Mode Functions ============
 
 def run_single_agent(
     user_script: str,
@@ -1339,13 +1283,13 @@ Output directly, do not explain your thinking process."""
     response = call_api(messages, api_url, api_key, model, temperature=0.7, stats=stats)
     
     if response and not response.startswith("ERROR:"):
-        # 尝试分割分镜表和视频提示词
+        # Try splitting storyboard and video prompts
         parts = response.split("逐镜视频提示词" if is_zh else "Per-Shot Video Prompt")
         if len(parts) >= 2:
             storyboard = parts[0].strip()
             video_prompt = parts[1].strip()
         else:
-            # 备用分割
+            # Fallback split
             parts2 = response.split("2." if not is_zh else "2.")
             if len(parts2) >= 2:
                 storyboard = parts2[0].strip()
@@ -1386,7 +1330,7 @@ def run_expert_pool_debate(
     """
     is_zh = lang == "zh"
     
-    # 第一步：场景分析，确定每个部门应该选哪些辩手
+    # Step 1: Scene analysis, determine debaters per department
     dept_debater_names = {}
     for dk, dept in DEPARTMENTS.items():
         names = [dept["debaters"][bk]["zh_name"] if is_zh else dept["debaters"][bk]["en_name"] for bk in dept["debaters"]]
@@ -1438,11 +1382,11 @@ Output JSON only, no other text."""
     analysis_messages = [{"role": "user", "content": analysis_prompt}]
     analysis_response = call_api(analysis_messages, api_url, api_key, model, temperature=0.3, stats=stats)
     
-    # 解析场景分析结果，得到每部门的debater_filter
+    # Parse scene analysis results, get debater_filter per dept
     debater_filters = {}
     if analysis_response and not analysis_response.startswith("ERROR:"):
         try:
-            # 提取JSON部分
+            # Extract JSON part
             json_text = analysis_response
             if "```" in json_text:
                 json_text = json_text.split("```")[1]
@@ -1458,19 +1402,19 @@ Output JSON only, no other text."""
                     bd_name = bd["zh_name"] if is_zh else bd["en_name"]
                     if bd_name in selected_names:
                         filter_keys.append(bk)
-                # 如果没选到，默认选前2个
+                # If none selected, default to first 2
                 if not filter_keys:
                     filter_keys = list(dept["debaters"].keys())[:2]
                 debater_filters[dk] = filter_keys
         except (json.JSONDecodeError, KeyError):
-            # 解析失败，每部门默认前2个辩手
+            # Parse failed, default to first 2 debaters per dept
             for dk in DEPT_ORDER:
                 debater_filters[dk] = list(DEPARTMENTS[dk]["debaters"].keys())[:2]
     else:
         for dk in DEPT_ORDER:
             debater_filters[dk] = list(DEPARTMENTS[dk]["debaters"].keys())[:2]
     
-    # 第二步：用筛选后的辩手跑Pipeline of Consensus流程
+    # Step 2: Run Pipeline of Consensus with filtered debaters
     dept_results = {}
     for dept_key in DEPT_ORDER:
         dept = DEPARTMENTS[dept_key]
@@ -1513,7 +1457,7 @@ def _build_dept_input_simple(dept_key, dept_results, script, positive, chars, la
 
 
 
-# ============ 市场模式 ============
+# ============ Market Mode ============
 
 def _run_single_candidate(
     candidate_idx: int,
@@ -1538,10 +1482,10 @@ def _run_single_candidate(
     label = chr(65 + candidate_idx)  # A, B, C...
     total_depts = len(DEPT_ORDER)
 
-    # 跑完整Pipeline（8部门辩论+空间审核+交叉辩论+总结）
+    # Run full Pipeline (8 dept debates + spatial review + cross-debate + summary)
     dept_results = {}
     for di, dept_key in enumerate(DEPT_ORDER):
-        # 报告：正在跑哪个部门
+        # Report: which department is running
         if progress_callback:
             progress_callback("dept_start", candidate_idx, dept_key, di, total_depts)
 
@@ -1558,11 +1502,11 @@ def _run_single_candidate(
         )
         dept_results[dept_key] = result
 
-        # 报告：部门完成
+        # Report: department complete
         if progress_callback:
             progress_callback("dept_done", candidate_idx, dept_key, di + 1, total_depts)
 
-    # 空间审核
+    # Spatial review
     if progress_callback:
         progress_callback("phase", candidate_idx, "spatial_review", 0, 0)
     spatial_consensus = dept_results.get("spatial", {}).get("consensus", "")
@@ -1575,7 +1519,7 @@ def _run_single_candidate(
         )
         dept_results["spatial"]["consensus"] = clean_spatial_coordinates(spatial_review["revised_consensus"])
 
-    # 交叉辩论
+    # Cross-debate
     if progress_callback:
         progress_callback("phase", candidate_idx, "cross_debate", 0, 0)
     cross_results = []
@@ -1591,7 +1535,7 @@ def _run_single_candidate(
             )
             cross_results.append(cr)
 
-    # 总结
+    # Summary
     if progress_callback:
         progress_callback("phase", candidate_idx, "summary", 0, 0)
     final = run_summary(
@@ -1678,10 +1622,10 @@ def generate_candidates(
             )
             futures[future] = i
 
-        # 主线程轮询：收集进度+等待完成
+        # Main thread polling: collect progress + wait for completion
         done_set = set()
         while len(done_set) < len(futures):
-            # 处理队列中的进度消息（主线程调用Streamlit安全）
+            # Process queued progress messages (main thread, Streamlit-safe)
             while not progress_queue.empty():
                 try:
                     msg = progress_queue.get_nowait()
@@ -1690,7 +1634,7 @@ def generate_candidates(
                 except queue.Empty:
                     break
             
-            # 检查已完成的future
+            # Check completed futures
             for future in list(futures.keys()):
                 if future in done_set:
                     continue
@@ -1711,14 +1655,14 @@ def generate_candidates(
                     done_set.add(future)
                     if progress_callback:
                         progress_callback("candidate_done", idx, "done", 0, 0)
-                    # 累加stats
+                    # Accumulate stats
                     if stats is not None and candidates[idx] is not None:
                         for k in ["prompt_tokens", "completion_tokens", "total_tokens", "api_calls"]:
                             stats[k] = stats.get(k, 0) + candidates[idx].pop("_stats", {}).get(k, 0)
             
             time.sleep(0.5)  # 轮询间隔
         
-        # 清空剩余进度消息
+        # Clear remaining progress messages
         while not progress_queue.empty():
             try:
                 msg = progress_queue.get_nowait()
@@ -1727,7 +1671,7 @@ def generate_candidates(
             except queue.Empty:
                 break
 
-    # 过滤失败的候选
+    # Filter failed candidates
     valid_candidates = []
     for i, c in enumerate(candidates):
         if c is not None:
@@ -1759,7 +1703,7 @@ def generate_questions(
     is_zh = lang == "zh"
     lang_cfg = MARKET_CONFIG["question_languages"][lang]
     
-    # 构建候选摘要
+    # Build candidate summary
     candidate_summaries = []
     for c in candidates:
         sb_preview = c["storyboard_prompt"][:600] if c["storyboard_prompt"] else ""
@@ -1776,7 +1720,7 @@ def generate_questions(
         dept_name = dept["zh_name"] if is_zh else dept["en_name"]
         debater_names = "、".join([d["zh_name"] if is_zh else d["en_name"] for d in dept["debaters"].values()])
         
-        # 每个部门的辩手数量×每辩手出题数 = 该部门总题数
+        # Debaters per dept × questions per debater = total questions per dept
         dept_questions = questions_per_debater * len(dept["debaters"])
         
         if is_zh:
@@ -1854,7 +1798,7 @@ def vote_on_questions(
     is_zh = lang == "zh"
     lang_cfg = MARKET_CONFIG["question_languages"][lang]
     
-    # 收集所有AI（按部门聚合，每部门取1个代表）
+    # Collect all AIs (aggregated by dept, 1 representative per dept)
     all_voters = []
     for dept_key in DEPT_ORDER:
         dept = DEPARTMENTS[dept_key]
@@ -1870,13 +1814,13 @@ def vote_on_questions(
     questions_copy = list(questions)
     random.shuffle(questions_copy)
     
-    # 分配问题给投票人
+    # Assign questions to voters
     assignments = {i: [] for i in range(num_voters)}
     for qi, q in enumerate(questions_copy):
         voter_idx = qi % num_voters
         assignments[voter_idx].append(q)
     
-    # 候选摘要（不是全文，省token）
+    # Candidate summary (not full text, save tokens)
     candidate_summaries = []
     for c in candidates:
         sb_preview = c["storyboard_prompt"][:800] if c["storyboard_prompt"] else ""
@@ -1885,7 +1829,7 @@ def vote_on_questions(
     
     all_candidates_text = "\n\n---\n\n".join(candidate_summaries)
     
-    # 投票
+    # Voting
     votes = []
     vote_counts = {c["label"]: 0 for c in candidates}
     voter_details = []
@@ -1895,7 +1839,7 @@ def vote_on_questions(
         if not my_questions:
             continue
         
-        # 把所有问题合成一次调用
+        # Combine all questions into single API call
         q_list = "\n".join([f"Q{qi+1}: {q['question']}" for qi, q in enumerate(my_questions)])
         labels = "/".join([c["label"] for c in candidates])
         
@@ -1940,7 +1884,7 @@ For each question, choose the best candidate ({labels}). Output as JSON array:
         if response and not response.startswith("ERROR:"):
             try:
                 import re
-                # 提取JSON数组
+                # Extract JSON array
                 json_match = re.search(r'\[.*\]', response, re.DOTALL)
                 if json_match:
                     vote_list = json.loads(json_match.group())
@@ -1961,7 +1905,7 @@ For each question, choose the best candidate ({labels}). Output as JSON array:
                                 "reason": reason,
                             })
             except (json.JSONDecodeError, KeyError, IndexError):
-                # 解析失败，尝试从文本提取
+                # Parse failed, try extracting from text
                 for q in my_questions:
                     for label in [c["label"] for c in candidates]:
                         if label in (response or ""):
@@ -1982,7 +1926,7 @@ For each question, choose the best candidate ({labels}). Output as JSON array:
         if progress_callback:
             progress_callback("voting", vi, voter["debater_name"], num_voters)
     
-    # 计票结果
+    # Vote counting results
     winner_label = max(vote_counts, key=vote_counts.get)
     winner_candidate = None
     for c in candidates:
@@ -1990,7 +1934,7 @@ For each question, choose the best candidate ({labels}). Output as JSON array:
             winner_candidate = c
             break
     
-    # 分析争议问题
+    # Analyze controversial issues
     contested_questions = []
     for q in questions:
         q_votes = [v for v in votes if v["question"] == q["question"]]
@@ -2036,7 +1980,7 @@ def patch_winner(
             "patch_notes": "无争议问题，无需修正" if is_zh else "No contested issues, no patch needed",
         }
     
-    # 汇总争议问题
+    # Summarize controversial issues
     issues_text = "\n".join([
         f"- {cq['question']}（投票分歧：{cq['vote_distribution']}，来源：{cq['source']}）"
         for cq in contested_questions[:10]  # 最多修正10个
@@ -2085,13 +2029,13 @@ Output the revised storyboard and video prompt."""
     response = call_api(messages, api_url, api_key, model, temperature=0.5, max_tokens=8192, stats=stats)
     
     if response and not response.startswith("ERROR:"):
-        # 尝试分割
+        # Try splitting
         parts = response.split("视频提示词" if is_zh else "Video Prompt")
         if len(parts) >= 2:
             storyboard = parts[0].strip()
             video_prompt = parts[1].strip()
         else:
-            # 备用：找[修正]标记的段落
+            # Fallback: find [correction] marked paragraphs
             storyboard = response
             video_prompt = ""
         
@@ -2115,7 +2059,7 @@ def run_cross_debate(
     api_key: str,
     model: str = "deepseek-v4-flash",
     lang: str = "zh",
-    stats: dict = None,  # Token统计累加器
+    stats: dict = None,  # Token statistics累加器
 ) -> Dict:
     """运行两个部门间的交叉辩论"""
     is_zh = lang == "zh"
@@ -2167,7 +2111,7 @@ Analyze conflicts and complementarities from both perspectives, and provide a sy
         "debate_result": result or "交叉辩论未能完成",
     }
 
-# ============ P2: 空间板块交叉审核 ============
+# ============ P2: Spatial Cross-Review ============
 
 def run_spatial_review(
     spatial_consensus: str,
@@ -2176,7 +2120,7 @@ def run_spatial_review(
     api_key: str,
     model: str = "deepseek-v4-flash",
     lang: str = "zh",
-    stats: dict = None,  # Token统计累加器
+    stats: dict = None,  # Token statistics累加器
 ) -> Dict:
     """
     P2: 空间板块初版产出后，由分镜/摄影/剪辑进行可行性审核。
@@ -2239,7 +2183,7 @@ Be specific about problems and suggestions. No vague statements."""
         
         reviews[dept_key] = "\n\n---\n\n".join(feedbacks)
     
-    # 空间板块综合反馈，修订方案
+    # Spatial dept comprehensive feedback, revision plan
     all_reviews_text = ""
     for dept_key, review_text in reviews.items():
         dept = DEPARTMENTS[dept_key]
@@ -2278,7 +2222,7 @@ Synthesize the feedback and revise the spatial layout plan. Requirements:
     messages = [{"role": "user", "content": revise_prompt}]
     revised_consensus = call_api(messages, api_url, api_key, model, temperature=0.3, max_tokens=4096, timeout=180, stats=stats)
     
-    # 清除残留坐标系
+    # Remove residual coordinate system
     if revised_consensus and not revised_consensus.startswith("ERROR:"):
         revised_consensus = clean_spatial_coordinates(revised_consensus)
     
@@ -2288,7 +2232,7 @@ Synthesize the feedback and revise the spatial layout plan. Requirements:
         "revised_consensus": revised_consensus or "空间板块修订失败",
     }
 
-# ============ 总结AI ============
+# ============ Summary AI ============
 
 def run_summary(
     user_script: str,
@@ -2301,7 +2245,7 @@ def run_summary(
     api_key: str,
     model: str = "deepseek-v4-flash",
     lang: str = "zh",
-    stats: dict = None,  # Token统计累加器
+    stats: dict = None,  # Token statistics累加器
 ) -> Dict:
     """
     总结AI产出：
@@ -2311,25 +2255,25 @@ def run_summary(
     """
     is_zh = lang == "zh"
     
-    # 构建所有部门共识
+    # Build all department consensus
     consensus_text = ""
     for dept_key, consensus in all_consensus.items():
         dept = DEPARTMENTS[dept_key]
         name = dept["zh_name"] if is_zh else dept["en_name"]
         consensus_text += f"\n### {name}\n{consensus}\n"
     
-    # 交叉辩论结果
+    # Cross-debate results
     cross_text = ""
     for cr in cross_results:
         cross_text += f"\n### {cr['topic']}\n{cr['debate_result']}\n"
     
-    # 检查是否有剪辑部共识
+    # Check if editing dept consensus exists
     editing_consensus = all_consensus.get("editing", "")
     
-    # 空间板块共识（用于引用物品定位）
+    # Spatial dept consensus (for referencing object positioning)
     spatial_consensus = all_consensus.get("spatial", "")
     
-    # ===== 产物1：分镜表（纯静态关键帧）=====
+    # ===== Output 1: Storyboard (pure static keyframes) =====
     if is_zh:
         storyboard_prompt = f"""你是最终总结AI。请根据以下所有部门的辩论结果，生成纯静态关键帧分镜表。
 
@@ -2597,7 +2541,7 @@ Negative prompt:
 
 [CRITICAL] Every Shot MUST have a [Complete Frame] section—this is the ONLY visual description an AI image tool can understand, without it AI cannot draw! Total Shot count and numbering MUST match the video prompt one-to-one! Output ONLY the storyboard, no explanatory text. Every Shot's Camera field MUST include focal length in mm. Every Shot's Position MUST include object-referenced position + frame position + vertical state (e.g. "left end of long table on wall side, facing opposite side of table / left 1/3 of frame, medium shot / standing"). Storyboard contains ONLY static keyframes—NO dynamic descriptions. Every Shot MUST have Narrative Beat, Switch Motivation, and On-Screen Characters fields, extracted from corresponding department consensus—no free rewriting allowed."""
     
-    # 系统消息：强制要求【完整画面】
+    # System message: enforce [Complete Frame] requirement
     storyboard_system = (
         "负面提示词和统一场景提示词是强制输出项，AI不得省略。你是分镜表生成器。你的首要产出是每个Shot的【完整画面】段——这是整帧画面的自然语言视觉描述，是AI绘图工具唯一能理解的部分。"
         "【完整画面】必须写在每个Shot的最前面，用自然语言描述：前景/中景/背景分别是什么、角色在画面中的位置和整体造型轮廓（不是微表情而是整体视觉）、"
@@ -2620,11 +2564,11 @@ Negative prompt:
         stats=stats,
     )
     
-    # 校验：检查产出是否包含【完整画面】/【Complete Frame】
+    # Validate: check output contains [Complete Frame]/【Complete Frame】
     if storyboard_result:
         has_complete_frame = ("【完整画面】" in storyboard_result) if is_zh else ("[Complete Frame]" in storyboard_result)
         if not has_complete_frame:
-            # 重试一次，用更强的提示
+            # Retry once with stronger prompt
             retry_prompt = storyboard_prompt + (
                 "\n\n⚠️ 你上一次的输出缺少【完整画面】段！每个Shot必须以【完整画面】开头，用自然语言描述整帧画面长什么样。没有【完整画面】的输出是无效的！请重新生成，确保每个Shot都有【完整画面】段。"
             ) if is_zh else (
@@ -2642,7 +2586,7 @@ Negative prompt:
                 stats=stats,
             )
     
-    # ===== 产物2：视频逐镜提示词（[关键帧]+[动态衔接]双层）=====
+    # ===== Output 2: Video shot-by-shot prompts ([Keyframe]+[Dynamic Link] dual-layer) =====
     if is_zh:
         video_prompt = f"""你是最终总结AI。请根据以下所有部门的辩论结果，生成逐镜视频提示词。
 
@@ -2936,7 +2880,7 @@ IMPORTANT:
 5. Position must include object-referenced position + frame position + vertical state
 6. Output ONLY the video prompt itself, no explanatory text."""
     
-    # 系统消息：强制要求【完整画面】
+    # System message: enforce [Complete Frame] requirement
     video_system = (
         "统一场景提示词和统一负面提示词是强制输出项，每个段落都必须包含。每个SHOT的[动态衔接]中的镜头过渡必须有具体运镜方式。你是视频提示词生成器。每个SHOT必须包含【完整画面】→[关键帧]→[动态衔接]三层结构，其中【完整画面】是最重要的部分。"
         "【完整画面】是整帧画面的自然语言视觉描述，是AI绘图工具唯一能理解的部分——描述前景/中景/背景、角色位置和整体造型轮廓、"
@@ -2958,7 +2902,7 @@ IMPORTANT:
         stats=stats,
     )
     
-    # 校验：检查产出是否包含【完整画面】/[Complete Frame]
+    # Validate: check output contains [Complete Frame]/[Complete Frame]
     if video_result:
         has_complete_frame = ("【完整画面】" in video_result or "[完整画面]" in video_result) if is_zh else ("[Complete Frame]" in video_result)
         if not has_complete_frame:
@@ -2986,7 +2930,7 @@ IMPORTANT:
         "video_prompt": video_result or "逐镜视频提示词生成失败",
     }
 
-# ============ P7: 校对环节 ============
+# ============ P7: Proofreading ============
 
 PROOFREAD_DEPARTMENTS = ["screenwriter", "spatial", "storyboard", "dp", "editing"]
 
@@ -2998,7 +2942,7 @@ def run_proofreading(
     api_key: str,
     model: str = "deepseek-v4-flash",
     lang: str = "zh",
-    stats: dict = None,  # Token统计累加器
+    stats: dict = None,  # Token statistics累加器
 ) -> Dict:
     """
     P7: 校对环节——空间/分镜/摄影/剪辑四部门审查最终产出。
@@ -3012,7 +2956,7 @@ def run_proofreading(
         dept_name = dept["zh_name"] if is_zh else dept["en_name"]
         dept_consensus = all_consensus.get(dept_key, "")
         
-        # 每个部门有不同的检查重点
+        # Each department has different check focus
         focus_points = {
             "screenwriter": {
                 "zh": "1. 出场角色清单是否完整（有没有角色被遗忘）\n2. 叙事节拍是否清晰合理\n3. 每个节拍是否标注了观众必须理解什么\n4. 节拍之间是否有角色消失/出现未标注",
@@ -3093,7 +3037,7 @@ Check each point. Output format:
         result = call_api(messages, api_url, api_key, model, temperature=0.2, max_tokens=4096, stats=stats)
         reviews[dept_key] = result or "校对未能完成"
     
-    # 汇总校对结论
+    # Summarize proofread conclusions
     passed = True
     issue_list = []
     summary_parts = []
@@ -3132,7 +3076,7 @@ def run_auto_revision(
     api_key: str,
     model: str = "deepseek-v4-flash",
     lang: str = "zh",
-    stats: dict = None,  # Token统计累加器
+    stats: dict = None,  # Token statistics累加器
 ) -> Dict:
     """
     校对后自动修正：收集校对发现的问题，让LLM直接修正分镜表和视频提示词。
@@ -3141,7 +3085,7 @@ def run_auto_revision(
     is_zh = lang == "zh"
     reviews = proofread_result.get("reviews", {})
     
-    # 收集所有问题项
+    # Collect all issue items
     all_issues = ""
     for dept_key in PROOFREAD_DEPARTMENTS:
         dept = DEPARTMENTS[dept_key]
@@ -3215,7 +3159,7 @@ Output format:
     messages = [{"role": "user", "content": revise_prompt}]
     result = call_api(messages, api_url, api_key, model, temperature=0.2, max_tokens=8192, timeout=180, stats=stats)
     
-    # 解析修正结果
+    # Parse correction results
     revised_storyboard = storyboard
     revised_video_prompt = video_prompt
     revision_notes = ""
@@ -3280,7 +3224,7 @@ def run_director_revision(
     model: str = "deepseek-v4-flash",
     lang: str = "zh",
     rounds: int = 2,
-    stats: dict = None,  # Token统计累加器
+    stats: dict = None,  # Token statistics累加器
 ) -> Dict:
     """
     导演指令修正：导演指定某个部门+给修改意见→系统重跑该部门辩论→重新生成分镜表+视频提示词。
@@ -3294,10 +3238,10 @@ def run_director_revision(
     dept = DEPARTMENTS[department_key]
     dept_name = dept["zh_name"] if is_zh else dept["en_name"]
     
-    # 构建该部门的输入（与正常辩论相同）
+    # Build input for this dept (same as normal debate)
     dept_input = build_dept_input_content(department_key, all_consensus, user_script, positive_prompt, character_refs, lang)
     
-    # 重跑该部门辩论，额外指令包含导演修改意见
+    # Re-run dept debate with director corrections as extra instructions
     extra = f"导演修改意见：{director_note}" if is_zh else f"Director's revision note: {director_note}"
     
     new_dept_result = run_department_debate(
@@ -3312,11 +3256,11 @@ def run_director_revision(
         stats=stats,
     )
     
-    # 替换该部门共识
+    # Replace department consensus
     updated_consensus = dict(all_consensus)
     updated_consensus[department_key] = new_dept_result["consensus"]
     
-    # 如果修改的是空间板块，需要重跑空间交叉审核
+    # If spatial dept modified, re-run spatial cross-review
     if department_key == "spatial":
         spatial_review = run_spatial_review(
             spatial_consensus=new_dept_result["consensus"],
@@ -3326,7 +3270,7 @@ def run_director_revision(
         )
         updated_consensus["spatial"] = spatial_review["revised_consensus"]
     
-    # 重新生成分镜表+视频提示词
+    # Regenerate storyboard + video prompts
     new_output = run_summary(
         user_script=user_script,
         positive_prompt=positive_prompt,
@@ -3388,7 +3332,7 @@ def build_dept_input_content(department_key: str, all_consensus: Dict[str, str],
                 prev.append(f"{pn}：\n{all_consensus[pk]}")
         return "\n\n---\n\n".join(prev)
 
-# ============ 空间示意图提示词生成 ============
+# ============ Spatial Diagram Prompt Generation ============
 
 def run_spatial_diagram(
     spatial_consensus: str,
@@ -3398,7 +3342,7 @@ def run_spatial_diagram(
     api_key: str,
     model: str = "deepseek-v4-flash",
     lang: str = "zh",
-    stats: dict = None,  # Token统计累加器
+    stats: dict = None,  # Token statistics累加器
 ) -> Dict:
     """
     根据空间板块共识生成空间示意图提示词。
@@ -3407,21 +3351,21 @@ def run_spatial_diagram(
     """
     is_zh = lang == "zh"
     
-    # 检测场景数量——如果共识中有"场景二"/"Scene 2"等标记，说明是多场景
+    # Detect scene count — multi-scene if "Scene 2" markers found
     import re
     scene_markers_zh = re.findall(r'场景[二三四五六七八九十]', spatial_consensus)
     scene_markers_en = re.findall(r'Scene\s*(2|3|4|5|6|7|8|9|10)', spatial_consensus)
     scene_count = 1 + max(len(scene_markers_zh), len(scene_markers_en))
     
-    # 提取各场景的子共识（用于多场景分别生成示意图）
+    # Extract sub-consensus per scene (for multi-scene diagram generation)
     scene_sections = []
     if scene_count > 1:
-        # 按场景标记切割
+        # Split by scene markers
         if is_zh:
             parts = re.split(r'###?\s*场景[一二三四五六七八九十]', spatial_consensus)
         else:
             parts = re.split(r'###?\s*Scene\s*\d+', spatial_consensus)
-        # parts[0]是场景数量判断部分，parts[1:]是各场景内容
+        # parts[0] is scene count judgment, parts[1:] are scene contents
         for i, part in enumerate(parts[1:], 1):
             if is_zh:
                 scene_name = f"场景{'一二三四五六七八九十'[i-1] if i <= 10 else str(i)}"
@@ -3502,7 +3446,7 @@ Generate a detailed scene spatial layout visual description for AI image tools t
             "diagram_prompt": result or f"{scene_name}空间示意图提示词生成失败",
         })
     
-    # 多场景时拼接所有场景内容到spatial_diagram_prompt，避免占位文字
+    # Multi-scene: concatenate all scene contents, avoid placeholder text
     if scene_count == 1:
         full_prompt = all_diagrams[0]["diagram_prompt"]
     else:
@@ -3517,7 +3461,7 @@ Generate a detailed scene spatial layout visual description for AI image tools t
         "scene_diagrams": all_diagrams,
     }
 
-# ============ 逐轮辩论（逐步模式用） ============
+# ============ Round-by-Round Debate (step-by-step mode) ============
 
 def run_department_round(
     department_key: str,
@@ -3530,7 +3474,7 @@ def run_department_round(
     lang: str = "zh",
     extra_instructions: str = "",
     carry_forward: str = "",
-    stats: dict = None,  # Token统计累加器
+    stats: dict = None,  # Token statistics累加器
 ) -> tuple:
     """
     运行单个部门的单轮辩论（3位辩手）
@@ -3637,7 +3581,7 @@ def run_department_consensus(
     lang: str = "zh",
     extra_instructions: str = "",
     rounds: int = 3,
-    stats: dict = None,  # Token统计累加器
+    stats: dict = None,  # Token statistics累加器
 ) -> str:
     """
     从累积的辩论论点生成结构化共识
@@ -3694,7 +3638,7 @@ Synthesize a final consensus. Requirements:
         return f"⚠️ 共识生成失败：{consensus}"
     return consensus or "辩论未能达成共识"
 
-# ============ 承上文档 ============
+# ============ Carry-Forward Document ============
 
 CARRY_FORWARD_TEMPLATE = {
     "zh": """请根据以下前段辩论的完整产出，提取一份结构化的「承上文档」，用于保证多段剧本之间的连续性。
@@ -3831,30 +3775,30 @@ def generate_asset_checklist(
     sw_consensus = all_consensus.get("screenwriter", "")
     sp_consensus = all_consensus.get("spatial", "")
     
-    # ---- 提取角色 ----
+    # ---- Extract characters ----
     characters = []
     if is_zh:
-        # 从编剧共识中提取"出场角色与元素清单"部分
+        # Extract character/element list from screenwriter consensus
         roster_match = re.search(r'## 出场角色与元素清单(.*?)(?=\n## |\Z)', sw_consensus, re.DOTALL)
     else:
         roster_match = re.search(r'## On-Screen Roster(.*?)(?=\n## |\Z)', sw_consensus, re.DOTALL)
     
     if roster_match:
         roster_text = roster_match.group(1)
-        # 提取 "- [name]" 行
+        # Extract "- [name]" lines
         for line in roster_text.strip().split("\n"):
             line = line.strip()
             if line.startswith("-"):
-                # 提取角色名（第一个冒号或括号之前的部分）
+                # Extract character name (before first colon or parenthesis)
                 name = re.sub(r'^[-–]\s*', '', line)
-                # 截取到第一个冒号或括号
+                # Truncate at first colon or parenthesis
                 cut = re.search(r'[：:（(]', name)
                 if cut:
                     name = name[:cut.start()].strip()
                 if name:
                     characters.append(name)
     
-    # ---- 提取微表情需求（用于角色资产描述） ----
+    # ---- Extract micro-expression requirements (for character asset description) ----
     expression_needs = {}
     if characters:
         if is_zh:
@@ -3864,18 +3808,18 @@ def generate_asset_checklist(
         if expr_match:
             expr_text = expr_match.group(1)
             for char in characters:
-                # 查找该角色的表情描述
+                # Find expression description for this character
                 char_exprs = []
                 for line in expr_text.strip().split("\n"):
                     if char in line:
-                        # 提取表情描述（冒号后的部分）
+                        # Extract expression description (after colon)
                         parts = line.split("：") if is_zh else line.split(": ")
                         if len(parts) > 1:
                             char_exprs.append(parts[-1].strip()[:60])
                 if char_exprs:
                     expression_needs[char] = "；".join(char_exprs)
     
-    # ---- 提取道具/物品 ----
+    # ---- Extract props/items ----
     props = []
     if is_zh:
         prop_match = re.search(r'#### 场景物品清单（定位基准）(.*?)(?=\n####|\n###|\Z)', sp_consensus, re.DOTALL)
@@ -3888,7 +3832,7 @@ def generate_asset_checklist(
             line = line.strip()
             if line.startswith("-"):
                 name = re.sub(r'^[-–]\s*', '', line)
-                # 提取物品名（第一个冒号之前）
+                # Extract item name (before first colon)
                 cut = re.search(r'[：:]', name)
                 if cut:
                     prop_name = name[:cut.start()].strip()
@@ -3899,7 +3843,7 @@ def generate_asset_checklist(
                 if prop_name:
                     props.append((prop_name, prop_desc))
     
-    # ---- 提取场景 ----
+    # ---- Extract scenes ----
     scenes = []
     if is_zh:
         scene_matches = re.findall(r'### 场景[一二三四五六七八九十\d]+[：:]\s*(.*?)(?=\n####|\Z)', sp_consensus, re.DOTALL)
@@ -3912,7 +3856,7 @@ def generate_asset_checklist(
             scenes.append(scene_name)
     
     if not scenes:
-        # 尝试从场景数量判断中提取
+        # Try extracting from scene count judgment
         if is_zh:
             sc_match = re.search(r'场景数量[：:]\s*(\d+)', sp_consensus)
         else:
@@ -3923,7 +3867,7 @@ def generate_asset_checklist(
         else:
             scenes = ["主场景" if is_zh else "Main Scene"]
     
-    # ---- 格式化输出 ----
+    # ---- Format output ----
     if is_zh:
         lines = ["## 📋 资产参照表 (Asset Checklist)\n"]
         
@@ -3990,7 +3934,7 @@ def generate_carry_forward(
     lang: str = "zh",
     storyboard_prompt: str = "",
     video_prompt: str = "",
-    stats: dict = None,  # Token统计累加器
+    stats: dict = None,  # Token statistics累加器
 ) -> str:
     """
     从各部门辩论共识 + 最终产出中提取结构化承上文档，
@@ -4014,7 +3958,7 @@ def generate_carry_forward(
 
     full_consensus = consensus_text
     if cross_text:
-        full_consensus += f"\n### 交叉辩论结果\n{cross_text}" if is_zh else f"\n### Cross-Debate Results\n{cross_text}"
+        full_consensus += f"\n### Cross-debate results\n{cross_text}" if is_zh else f"\n### Cross-Debate Results\n{cross_text}"
 
     template = CARRY_FORWARD_TEMPLATE.get(lang, CARRY_FORWARD_TEMPLATE["zh"])
     prompt = template.format(
@@ -4039,7 +3983,7 @@ def run_output_edit(
     api_key: str = "",
     model: str = "deepseek-v4-flash",
     lang: str = "zh",
-    stats: dict = None,  # Token统计累加器
+    stats: dict = None,  # Token statistics累加器
 ) -> Dict:
     """
     产出回炉编辑：将分镜表/视频提示词/空间表发送给指定部门，
@@ -4050,7 +3994,7 @@ def run_output_edit(
     dept = DEPARTMENTS[department_key]
     dept_name = dept["zh_name"] if is_zh else dept["en_name"]
     
-    # 构建该部门的专业视角描述
+    # Build professional perspective description for this dept
     debater_styles = []
     for dk, debater in dept["debaters"].items():
         style = debater["zh_style"] if is_zh else debater["en_style"]
@@ -4058,10 +4002,10 @@ def run_output_edit(
         debater_styles.append(f"- {dname}: {style}")
     dept_perspective = "\n".join(debater_styles)
     
-    # 该部门之前的辩论共识
+    # Previous debate consensus for this dept
     dept_consensus = all_consensus.get(department_key, "")
     
-    # 构建空间编辑段落
+    # Build spatial editing paragraph
     spatial_edit_section = ""
     if edit_spatial:
         if is_zh:
@@ -4165,7 +4109,7 @@ Output format:
     messages = [{"role": "user", "content": prompt}]
     result = call_api(messages, api_url, api_key, model, temperature=0.2, max_tokens=8192, timeout=180, stats=stats)
     
-    # 解析修改结果
+    # Parse modification results
     revised_storyboard = current_storyboard
     revised_video_prompt = current_video_prompt
     revised_spatial = spatial_consensus if edit_spatial else None
@@ -4183,7 +4127,7 @@ Output format:
             notes_marker = "===== Edit Notes ====="
             spatial_marker = "===== Revised Spatial Layout ====="
         
-        # 解析分镜表
+        # Parse storyboard
         if sb_marker in result:
             after_sb = result.split(sb_marker, 1)[1]
             sb_end = len(after_sb)
@@ -4193,7 +4137,7 @@ Output format:
                     sb_end = idx
             revised_storyboard = after_sb[:sb_end].strip()
         
-        # 解析视频提示词
+        # Parse video prompts
         if vp_marker in result:
             after_vp = result.split(vp_marker, 1)[1]
             vp_end = len(after_vp)
@@ -4203,7 +4147,7 @@ Output format:
                     vp_end = idx
             revised_video_prompt = after_vp[:vp_end].strip()
         
-        # 解析空间板块（可选）
+        # Parse spatial dept (optional)
         if edit_spatial and spatial_marker in result:
             after_sp = result.split(spatial_marker, 1)[1]
             sp_end = after_sp.find(notes_marker)
@@ -4212,10 +4156,10 @@ Output format:
             else:
                 revised_spatial = after_sp.strip()
         
-        # 解析修改说明
+        # Parse modification notes
         if notes_marker in result:
             notes_text = result.split(notes_marker, 1)[1].strip()
-            # 去除尾部可能混入的空间板块标记
+            # Remove spatial dept markers that may have leaked into the end
             if spatial_marker in notes_text:
                 notes_text = notes_text[:notes_text.find(spatial_marker)].strip()
             edit_notes = notes_text
@@ -4231,7 +4175,7 @@ Output format:
         "original_storyboard": current_storyboard,
         "original_video_prompt": current_video_prompt,
     }
-# ============ 智能回炉 ============
+# ============ Smart Re-roll ============
 
 def run_smart_reroll(
     selected_departments: list,
@@ -4281,11 +4225,11 @@ def run_smart_reroll(
     is_zh = lang == "zh"
     reroll_log = []
     
-    # 深拷贝现有结果，回炉部门会更新
+    # Deep copy existing results, re-rolled departments will be updated
     import copy
     updated_dept_results = copy.deepcopy(all_dept_results)
     
-    # 构建承上信息：编剧部产出供下游部门参考
+    # Build carry-forward info: screenwriter output for downstream reference
     def _build_input_for_dept(dk: str) -> str:
         """为指定部门构建输入内容"""
         script_block = f"用户剧本：\n{user_script}" if is_zh else f"User Script:\n{user_script}"
@@ -4295,7 +4239,7 @@ def run_smart_reroll(
             script_block += f"\n\n角色参考：{character_refs}" if is_zh else f"\n\nCharacter References: {character_refs}"
         return script_block
     
-    # 按dept_order顺序回炉，确保上游产出传递给下游
+    # Re-roll in dept_order, ensure upstream output passes to downstream
     selected_set = set(selected_departments)
     reroll_order = [dk for dk in dept_order if dk in selected_set]
     
@@ -4305,10 +4249,10 @@ def run_smart_reroll(
             progress_callback(f"🔄 {dept_name}...")
         
         try:
-            # 构建输入：上游部门的最新共识
+            # Build input: latest consensus from upstream departments
             input_content = _build_input_for_dept(dk)
             
-            # 添加上游部门共识
+            # Add upstream department consensus
             dept_idx = dept_order.index(dk) if dk in dept_order else -1
             if dept_idx > 0:
                 upstream_text = ""
@@ -4322,7 +4266,7 @@ def run_smart_reroll(
                     prefix = "上游部门共识：\n" if is_zh else "Upstream Department Consensus:\n"
                     input_content = prefix + upstream_text.strip() + "\n\n---\n\n" + input_content
             
-            # 回炉辩论
+            # Re-roll debate
             result = run_department_debate(
                 department_key=dk,
                 input_content=input_content,
@@ -4348,14 +4292,14 @@ def run_smart_reroll(
                 "message": str(e),
             })
     
-    # 重新交叉辩论
+    # Re-run cross-debate
     updated_cross_results = list(existing_cross_results)  # 先保留旧的
     
     if cross_debate_pairs:
         if progress_callback:
             progress_callback("⚔️ " + ("重新交叉辩论..." if is_zh else "Re-running cross-debates..."))
         
-        # 找出需要重新跑的交叉辩论：任一端涉及回炉部门
+        # Find cross-debates to re-run: any end involves re-rolled department
         affected_cross = []
         unaffected_cross = []
         for cr in existing_cross_results:
@@ -4366,7 +4310,7 @@ def run_smart_reroll(
             else:
                 unaffected_cross.append(cr)
         
-        # 重新跑受影响的交叉辩论
+        # Re-run affected cross-debates
         new_cross_results = []
         for cr in affected_cross:
             side_a = cr["side_a"]
@@ -4386,15 +4330,15 @@ def run_smart_reroll(
                     )
                     new_cross_results.append(cross_result)
                 except Exception:
-                    # 交叉辩论失败，保留旧的
+                    # Cross-debate failed, keep old one
                     new_cross_results.append(cr)
             else:
                 new_cross_results.append(cr)
         
-        # 合并：新的受影响的 + 未受影响的
+        # Merge: new affected + unaffected
         updated_cross_results = new_cross_results + unaffected_cross
     
-    # 重新生成最终产出
+    # Regenerate final output
     if progress_callback:
         progress_callback("🎬 " + ("重新生成最终产出..." if is_zh else "Regenerating final output..."))
     

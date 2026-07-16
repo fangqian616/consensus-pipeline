@@ -1,10 +1,8 @@
 """
-事实校验模块 — Consensus Pipeline v4.3
+Fact-Checking Module — Consensus Pipeline v4.3
 
-共识提取后，调用外部检索工具交叉验证关键结论，
-为共识结论锚定具体文献DOI。
-
-v4.3: 修复中文分词失效（单字符滑动窗口兜底）
+After consensus extraction, calls external search tools to cross-validate key conclusions,
+anchoring consensus conclusions to specific literature DOIs.
 """
 import json
 from typing import List, Dict, Any, Optional
@@ -13,18 +11,18 @@ from dataclasses import dataclass, field
 
 @dataclass
 class FactCheckResult:
-    """单条结论的校验结果"""
-    claim: str                                       # 原始结论
+    """Verification result for a single conclusion"""
+    claim: str                                       # Original claim
     status: str = "unverified"                       # verified / partially_verified / contradicted / unverified
-    supporting_dois: List[str] = field(default_factory=list)   # 支持的文献DOI
-    contradicting_dois: List[str] = field(default_factory=list) # 反对的文献DOI
-    confidence: float = 0.0                          # 置信度 0-1
-    notes: str = ""                                  # 校验备注
+    supporting_dois: List[str] = field(default_factory=list)   # Supporting literature DOIs
+    contradicting_dois: List[str] = field(default_factory=list) # Contradicting literature DOIs
+    confidence: float = 0.0                          # Confidence 0-1
+    notes: str = ""                                  # Verification notes
 
 
 @dataclass
 class FactCheckReport:
-    """事实校验报告"""
+    """Fact-check report"""
     results: List[FactCheckResult] = field(default_factory=list)
     overall_confidence: float = 0.0
     summary: str = ""
@@ -39,24 +37,24 @@ class FactCheckReport:
 
 def _extract_ngrams(text: str, n: int = 2) -> set:
     """
-    从文本中提取n-gram，兼容中文和英文。
+    Extract n-grams from text, supporting both Chinese and English.
     
-    英文：按空格分词后取n-gram
-    中文：按单字符滑动窗口取n-gram
+    English: word-level n-grams after space tokenization
+    Chinese: character-level n-grams via sliding window
     """
     text = text.lower().strip()
-    # 判断是否主要是中文
+    # Determine if text is primarily Chinese
     chinese_chars = sum(1 for c in text if '\u4e00' <= c <= '\u9fff')
     total_chars = sum(1 for c in text if c.strip())
     
     if chinese_chars > total_chars * 0.3:
-        # 中文为主：字符级n-gram
+        # Chinese-dominant: character-level n-grams
         chars = [c for c in text if c.strip()]
         if len(chars) < n:
             return {"".join(chars)} if chars else set()
         return {"".join(chars[i:i+n]) for i in range(len(chars) - n + 1)}
     else:
-        # 英文为主：词级n-gram
+        # English-dominant: word-level n-grams
         words = [w for w in text.split() if len(w) > 2]
         if len(words) < n:
             return set(words)
@@ -65,36 +63,36 @@ def _extract_ngrams(text: str, n: int = 2) -> set:
 
 class FactChecker:
     """
-    事实校验
+    Fact-Checking
 
-    位置：Phase 7（共识提取）之后，Phase 8（结构化输出）之前
+    Position: after Phase 7 (Consensus Extraction), before Phase 8 (Structured Output)
 
-    职责：
-    1. 提取共识结论中的可验证事实
-    2. 调用检索工具交叉验证
-    3. 为结论锚定具体文献DOI
-    4. 标注置信度
+    Responsibilities:
+    1. Extract verifiable facts from consensus conclusions
+    2. Call search tools for cross-validation
+    3. Anchor conclusions to specific literature DOIs
+    4. Label confidence levels
     """
 
     def __init__(self, search_fn=None, llm_call_fn=None):
         """
         Args:
-            search_fn: 检索函数，签名为 fn(query, max_results) -> List[Dict]
-                       每个Dict至少包含 title, doi, abstract 字段
-            llm_call_fn: LLM调用函数
+            search_fn: Search function with signature fn(query, max_results) -> List[Dict]
+                       Each Dict must contain at least title, doi, abstract fields
+            llm_call_fn: LLM call function
         """
         self.search_fn = search_fn
         self.llm_call_fn = llm_call_fn
 
     def check(self, consensus_points: List[str]) -> FactCheckReport:
         """
-        校验共识结论列表。
+        Verify a list of consensus conclusions.
 
         Args:
-            consensus_points: 共识提取的结论列表
+            consensus_points: List of conclusions from consensus extraction
 
         Returns:
-            FactCheckReport: 校验报告
+            FactCheckReport: Verification report
         """
         results = []
 
@@ -102,23 +100,23 @@ class FactChecker:
             result = self._verify_point(point)
             results.append(result)
 
-        # 计算整体置信度
+        # Calculate overall confidence
         if results:
             overall = sum(r.confidence for r in results) / len(results)
         else:
             overall = 0.0
 
-        # 生成摘要
+        # Generate summary
         verified = sum(1 for r in results if r.status == "verified")
         partial = sum(1 for r in results if r.status == "partially_verified")
         contradicted = sum(1 for r in results if r.status == "contradicted")
         unverified = sum(1 for r in results if r.status == "unverified")
 
         summary = (
-            f"共校验{len(results)}条结论："
-            f"{verified}条已验证，{partial}条部分验证，"
-            f"{contradicted}条有反面证据，{unverified}条未验证。"
-            f"整体置信度：{overall:.0%}"
+            f"Verified {len(results)} conclusions: "
+            f"{verified} verified, {partial} partially verified, "
+            f"{contradicted} with counter-evidence, {unverified} unverified. "
+            f"Overall confidence: {overall:.0%}"
         )
 
         return FactCheckReport(
@@ -128,11 +126,11 @@ class FactChecker:
         )
 
     def _verify_point(self, point: str) -> FactCheckResult:
-        """校验单条结论"""
+        """Verify a single conclusion"""
         result = FactCheckResult(claim=point)
 
         if self.search_fn:
-            # 使用检索工具验证
+            # Verify using search tool
             try:
                 search_results = self.search_fn(point, max_results=5)
                 supporting = []
@@ -143,7 +141,7 @@ class FactChecker:
                     title = paper.get("title", "")
                     abstract = paper.get("abstract", "")
 
-                    # 判断是支持还是反对
+                    # Determine supporting or contradicting stance
                     stance = self._judge_stance(point, title, abstract)
                     if stance == "supporting" and doi:
                         supporting.append(doi)
@@ -153,7 +151,7 @@ class FactChecker:
                 result.supporting_dois = supporting
                 result.contradicting_dois = contradicting
 
-                # 确定状态
+                # Determine status
                 if supporting and not contradicting:
                     result.status = "verified"
                     result.confidence = min(0.9, 0.5 + 0.1 * len(supporting))
@@ -167,27 +165,27 @@ class FactChecker:
                     result.status = "unverified"
 
             except Exception as e:
-                result.notes = f"检索验证失败：{str(e)}"
+                result.notes = f"Search verification failed: {str(e)}"
 
         elif self.llm_call_fn:
-            # 使用LLM判断
+            # Verify using LLM
             result = self._verify_with_llm(point)
 
         else:
-            # 无外部工具，标记为未验证
+            # No external tools available, mark as unverified
             result.status = "unverified"
-            result.notes = "无可用的检索工具或LLM进行验证"
+            result.notes = "No search tool or LLM available for verification"
 
         return result
 
     def _judge_stance(self, claim: str, title: str, abstract: str) -> str:
         """
-        判断论文对结论的态度。
+        Determine the paper's stance toward a conclusion.
         
-        v4.3: 使用n-gram重叠替代空格分词，兼容中英文。
+        v4.3: Uses n-gram overlap instead of space tokenization, compatible with both CJK and English.
         """
         if not self.llm_call_fn:
-            # n-gram关键词匹配（兼容中英文）
+            # n-gram keyword matching (CJK/English compatible)
             text = f"{title} {abstract}".lower()
             claim_ngrams = _extract_ngrams(claim, n=2)
             
@@ -201,11 +199,11 @@ class FactChecker:
                 return "supporting"
             return "neutral"
 
-        # LLM判断
-        system_prompt = """你是学术事实校验助手。判断论文摘要是否支持给定的结论。
-只输出一个词：supporting / contradicting / neutral"""
+        # LLM judgment
+        system_prompt = """You are an academic fact-checking assistant. Determine whether the paper abstract supports the given conclusion.
+Output only one word: supporting / contradicting / neutral"""
 
-        user_msg = f"结论：{claim}\n\n论文标题：{title}\n摘要：{abstract[:500]}"
+        user_msg = f"Conclusion: {claim}\n\nPaper title: {title}\nAbstract: {abstract[:500]}"
         response = self.llm_call_fn(system_prompt, user_msg).strip().lower()
 
         if "supporting" in response:
@@ -215,16 +213,16 @@ class FactChecker:
         return "neutral"
 
     def _verify_with_llm(self, point: str) -> FactCheckResult:
-        """使用LLM进行校验"""
+        """Verify using LLM"""
         result = FactCheckResult(claim=point)
 
-        system_prompt = """你是学术事实校验助手。评估以下结论的可信度：
-1. 这个结论在学术文献中是否被广泛支持？
-2. 是否有已知的反面证据？
-3. 置信度估计（0-1）
+        system_prompt = """You are an academic fact-checking assistant. Evaluate the credibility of the following conclusion:
+1. Is this conclusion widely supported in academic literature?
+2. Are there known counter-evidence?
+3. Confidence estimate (0-1)
 
-请输出JSON：
-{"status": "verified/partially_verified/contradicted/unverified", "confidence": 0.8, "notes": "说明"}"""
+Output JSON:
+{"status": "verified/partially_verified/contradicted/unverified", "confidence": 0.8, "notes": "explanation"}"""
 
         response = self.llm_call_fn(system_prompt, point)
         try:

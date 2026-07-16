@@ -1,11 +1,11 @@
 """
-AI Consensus Pipeline v4.0 - 通用AI多部门辩论内容创作框架
-v4.0: 需求调研Tab(Phase 0-4) + 程序部/教程部 + 学术调研集成
-支持逐步模式：每轮辩论后暂停，导演可审阅并给出纠正指令
-v3.0: Consensus Pipeline重构——智能配组Tab + 预设/用户配置管理 + AI Router自动配组
-v2.4: 市场模式+候选竞选+投票选举+补丁修正
-v2.2: 编剧部新增叙事架构师+摄影部切换动机+分镜表表格化+浏览器通知提醒
-v2.1: 空间定位重构：从坐标系锚点改为物品定位+画面位置双层结构
+AI Consensus Pipeline v4.0 - Multi-department AI debate content creation framework
+v4.0: Requirement research tab (Phase 0-4) + Programming/Tutorial departments + Academic research integration
+Supports step-by-step mode: pause after each debate round, director reviews and gives correction instructions
+v3.0: Consensus Pipeline restructure — Smart grouping tab + preset/user config management + AI Router auto-grouping
+v2.4: Market mode + candidate campaign + vote election + patch correction
+v2.2: Screenwriter dept adds narrative architect + DP switch motivation + storyboard tabularization + browser notifications
+v2.1: Spatial positioning restructure: from coordinate anchor to object positioning + frame position dual-layer structure
 """
 import streamlit as st
 import streamlit.components.v1 as st_components
@@ -40,7 +40,7 @@ from config_manager import (
 )
 from router import analyze_and_configure, analyze_revision_impact
 
-# v4.0 需求调研模块
+# v4.0 Requirement research module
 from requirement import (
     RequirementDocument, RequirementInterviewer,
     StructuredRequirement, RequirementStructurer,
@@ -49,19 +49,19 @@ from requirement import (
     FactChecker, FactCheckReport, FactCheckResult,
 )
 
-# ============ 浏览器通知 ============
+# ============ Browser Notifications ============
 
-# 提示音：base64编码的短促提示音（约0.3秒的叮咚声）
+# Notification sound: base64-encoded short chime (~0.3s ding-dong)
 _NOTIFICATION_AUDIO_B64 = """
 data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2LkI2Hg3x1b2Vpe4eQlZONhX54cGhgYGl1gIuSlZKMhX54c2xkYWdwe4SOk5WRjIV+eHNsZGFncHuEjpOVkYyFfnhzbGRhZ3B7hI6TlZGMhX54c2xkYWdwe4SOk5WRjIV+eHNsZGFncHs=
 """
 
 def browser_notify(title: str, message: str):
     """
-    发送浏览器桌面通知 + 播放提示音。
-    即使Streamlit页面在后台标签页也能收到通知。
+    Send browser desktop notification + play chime.
+    Works even when Streamlit page is in a background tab.
     """
-    # 桌面通知
+    # Desktop notification
     notify_js = f"""
     <script>
     (function() {{
@@ -80,7 +80,7 @@ def browser_notify(title: str, message: str):
     """
     st_components.html(notify_js, height=0)
     
-    # 提示音
+    # Notification sound
     audio_html = f"""
     <audio autoplay style="display:none">
     <source src="{_NOTIFICATION_AUDIO_B64}" type="audio/wav">
@@ -89,25 +89,25 @@ def browser_notify(title: str, message: str):
     st_components.html(audio_html, height=0)
 
 
-# ============ 磁盘持久化 ============
-# 每步完成自动存JSON到磁盘，断网/崩溃/关机不丢结果
+# ============ Disk Persistence ============
+# Auto-save JSON to disk after each step, survives network loss/crash/shutdown
 
 _AUTOSAVE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "autosave")
 
 def _ensure_autosave_dir():
-    """确保自动保存目录存在"""
+    """Ensure autosave directory exists"""
     os.makedirs(_AUTOSAVE_DIR, exist_ok=True)
 
 def autosave_result(key: str, data: dict):
     """
-    将结果持久化到磁盘。
-    key: 如 "normal_result", "market_step1", "market_result"
-    data: 要保存的字典数据
+    Persist results to disk.
+    key: e.g. "normal_result", "market_step1", "market_result"
+    data: dict data to save
     """
     try:
         _ensure_autosave_dir()
         filepath = os.path.join(_AUTOSAVE_DIR, f"{key}.json")
-        # 序列化时处理不可JSON化的类型
+        # Handle non-JSON-serializable types during serialization
         def _default(obj):
             if isinstance(obj, (set, frozenset)):
                 return list(obj)
@@ -117,14 +117,14 @@ def autosave_result(key: str, data: dict):
         with open(filepath, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2, default=_default)
     except Exception as e:
-        # 持久化失败不影响主流程，但打个日志
+        # Persistence failure does not affect main flow, just log it
         import sys
-        print(f"[autosave] 保存 {key} 失败: {e}", file=sys.stderr)
+        print(f"[autosave] Save {key} failed: {e}", file=sys.stderr)
 
 def autosave_load(key: str) -> dict | None:
     """
-    从磁盘加载持久化结果。
-    返回 dict 或 None（文件不存在时）
+    Load persisted results from disk.
+    Returns dict or None (when file does not exist)
     """
     filepath = os.path.join(_AUTOSAVE_DIR, f"{key}.json")
     if not os.path.exists(filepath):
@@ -134,21 +134,21 @@ def autosave_load(key: str) -> dict | None:
             return json.load(f)
     except Exception as e:
         import sys
-        print(f"[autosave] 加载 {key} 失败: {e}", file=sys.stderr)
+        print(f"[autosave] Load {key} failed: {e}", file=sys.stderr)
         return None
 
 def autosave_has(key: str) -> bool:
-    """检查是否存在持久化结果"""
+    """Check if persisted result exists"""
     return os.path.exists(os.path.join(_AUTOSAVE_DIR, f"{key}.json"))
 
 def autosave_list() -> list[str]:
-    """列出所有已持久化的结果key"""
+    """List all persisted result keys"""
     if not os.path.isdir(_AUTOSAVE_DIR):
         return []
     return [f.replace(".json", "") for f in os.listdir(_AUTOSAVE_DIR) if f.endswith(".json")]
 
 def autosave_clear(key: str = None):
-    """清除持久化结果。key=None时清除全部"""
+    """Clear persisted results. key=None clears all"""
     import glob
     if key:
         filepath = os.path.join(_AUTOSAVE_DIR, f"{key}.json")
@@ -160,10 +160,10 @@ def autosave_clear(key: str = None):
 
 
 def notify_stage_complete(stage_name: str, detail: str = ""):
-    """阶段完成通知的快捷方法"""
+    """Shortcut for stage completion notification"""
     is_zh = st.session_state.get("lang", "zh") == "zh"
     title = "🎬 辩论系统" if is_zh else "🎬 Debate System"
-    msg = f"✅ {stage_name}完成！" if is_zh else f"✅ {stage_name} complete!"
+    msg = f"✅ {stage_name} complete!" if is_zh else f"✅ {stage_name} complete!"
     if detail:
         msg += f" {detail}"
     browser_notify(title, msg)
@@ -227,7 +227,7 @@ LANG = {
         "proofread_running": "🔍 正在校对...",
         "proofread_result": "校对结果",
         "proofread_overall": "总体评价",
-        # 逐步模式
+        # Step-by-step mode
         "step_mode": "逐步辩论模式",
         "step_mode_hint": "开启后每轮辩论暂停，导演可审阅并给出纠正指令再继续",
         "step_round_title": "第{round}轮辩论完成",
@@ -243,7 +243,7 @@ LANG = {
         "step_run_proofread": "🔍 执行校对",
         "step_waiting": "等待导演操作",
         "step_current_status": "当前状态",
-        # 承上文档
+        # Carry-forward document
         "carry_forward_label": "📋 承上文档（前段决策摘要）",
         "carry_forward_hint": "粘贴上一段辩论生成的承上文档，保证多段剧本之间的连续性",
         "carry_forward_generate": "🔄 生成承上文档",
@@ -251,7 +251,7 @@ LANG = {
         "carry_forward_copy": "📋 复制承上文档",
         "carry_forward_export": "📥 导出承上文档",
         "carry_forward_note": "💡 辩论完成后点击「生成承上文档」，将产物粘贴到下一段的承上文档输入框中",
-        # 空间示意图
+        # Spatial diagram
         "spatial_diagram": "🗺️ 空间示意图",
         "spatial_diagram_generate": "🗺️ 生成空间示意图提示词",
         "spatial_diagram_generating": "🗺️ 正在生成空间示意图提示词...",
@@ -272,7 +272,7 @@ LANG = {
         "director_revision_running": "🎬 正在重辩{dept}并重新生成产出...",
         "director_revision_done": "✅ 导演指令修正完成",
         "revision_rounds": "重辩轮次",
-        # 产出回炉编辑
+        # Output re-roll editing
         "output_edit": "✏️ 产出回炉编辑",
         "output_edit_hint": "选中部门+给修改意见 → 从该部门专业视角定向修改分镜表/视频提示词/空间表（不重跑辩论）",
         "output_edit_dept": "选择编辑部门",
@@ -286,7 +286,7 @@ LANG = {
         "output_edit_apply": "✅ 应用编辑结果",
         "output_edit_applied": "✅ 编辑结果已应用到产出",
         "output_edit_spatial_updated": "（空间板块定义已同步更新）",
-        # 模型与架构
+        # Model and architecture
         "model_profile": "🤖 模型配置",
         "model_profile_hint": "选择预置模型或自定义",
         "custom_api_url": "自定义API地址",
@@ -296,7 +296,7 @@ LANG = {
         "mode_pipeline": "共识管线 (Pipeline of Consensus)",
         "mode_single_agent": "单Agent基线 (Baseline)",
         "mode_expert_pool": "专家池 (Expert Pool)",
-        # 对比面板
+        # Comparison panel
         "tab_compare": "📊 对比",
         "compare_title": "📊 运行对比面板",
         "compare_desc": "同一剧本，不同模型/架构的运行结果对比。展示Harness Engineering的核心论点：换架构 > 换模型。",
@@ -317,7 +317,7 @@ LANG = {
         "mode_pipeline_desc": "8部门 × 3-4辩手 × N轮 → 共识管线",
         "mode_single_desc": "1次LLM调用 → 无结构基线",
         "mode_expert_desc": "场景分析 → 2辩手/部门 → 精简管线",
-        # 市场模式
+        # Market mode
         "tab_market": "🏪 市场",
         "market_title": "🏪 市场模式",
         "market_subtitle": "3个候选竞选 → 100题投票选举 → 补丁修正 → 最优产出",
@@ -356,7 +356,7 @@ LANG = {
         "asset_checklist": "📋 资产参照表",
         "asset_checklist_hint": "从各部门共识自动提取制作动画前需要准备的素材清单",
         "asset_checklist_download": "📥 导出资产参照表",
-        # v3.0 智能配组
+        # v3.0 Smart grouping
         "tab_config": "🧠 智能配组",
         "config_title": "🧠 Consensus Pipeline 智能配组",
         "config_subtitle": "描述你的创作需求，AI自动配置最优辩论工作组",
@@ -632,21 +632,21 @@ def init_state():
         "debate_rounds": 3,
         "extra_instructions": "",
         "step_mode": True,
-        # 辩论结果
+        # Debate result
         "dept_results": {},
         "spatial_review_result": None,
         "cross_results": [],
         "final_output": {},
         "proofread_result": None,
         "debate_completed": False,
-        # 逐步模式状态
+        # Step-by-step mode state
         "step_phase": "idle",  # idle / round_done / dept_done / all_dept_done / spatial_review / cross_done / completed
         "step_dept_index": 0,
         "step_round": 1,
         "step_all_arguments": [],
         "step_debate_log": [],
         "step_corrections": [],
-        # 承上文档
+        # Carry-forward document
         "carry_forward": "",
         "carry_forward_result": "",
         "auto_revision_result": None,
@@ -659,17 +659,17 @@ def init_state():
         "custom_api_key": "",
         "custom_model_name": "",
         "architecture_mode": "pipeline_of_consensus",
-        "run_history": [],  # 对比面板的运行历史
+        "run_history": [],  # Comparison panel的运行历史
         "current_stats": None,  # 当前运行的token统计
         "current_start_time": None,  # 当前运行的开始时间
         "current_end_time": None,  # 当前运行的结束时间
         # v2.4 Market
-        "market_result": None,  # 市场模式结果
+        "market_result": None,  # Market mode结果
         "market_num_candidates": 3,
         "market_questions_per": 7,
         "market_parallel_workers": 3,
         "market_rounds": 3,
-        # v3.0 智能配组
+        # v3.0 Smart grouping
         "workgroup_config": None,  # 当前工作组配置（PresetConfig dict）
         "workgroup_name": "动画辩论",  # 当前配置名称
     }
@@ -677,13 +677,13 @@ def init_state():
         if k not in st.session_state:
             st.session_state[k] = v
     
-    # v3.0: 启动时自动加载上次使用的配置
+    # v3.0: Auto-load last used config on startup
     if not st.session_state.get("_config_auto_loaded", False):
         st.session_state._config_auto_loaded = True
         last_used = get_last_used()
         if last_used:
             try:
-                # 优先从user_profiles加载，其次从presets
+                # Prefer loading from user_profiles, then presets
                 profiles = list_profiles()
                 if last_used in profiles:
                     cfg = load_profile(last_used)
@@ -699,7 +699,7 @@ def init_state():
 
 def render_sidebar():
     with st.sidebar:
-        # 语言切换
+        # Language switch
         lang_col1, lang_col2 = st.columns(2)
         with lang_col1:
             if st.button("🇨🇳 中文", use_container_width=True,
@@ -714,10 +714,10 @@ def render_sidebar():
         
         st.divider()
         
-        # API配置
+        # API configuration
         st.subheader("🔑 API")
         
-        # 模型配置
+        # Model configuration
         profile_options = {}
         for pk, pv in MODEL_PROFILES.items():
             profile_options[pk] = pv["zh_name"] if st.session_state.lang == "zh" else pv["en_name"]
@@ -753,7 +753,7 @@ def render_sidebar():
             profile = MODEL_PROFILES[selected_profile]
             st.session_state.api_url = profile["api_url"]
             st.session_state.model_name = profile["model"]
-            # API Key仍手动输入（密码框rerun时返回空值，仅在用户实际输入时更新）
+            # API Key still manually entered (password field returns empty on rerun, only update when user actually types)
             _api_key_input = st.text_input(
                 t("api_key"),
                 value=st.session_state.api_key,
@@ -764,7 +764,7 @@ def render_sidebar():
         
         st.divider()
         
-        # 辩论参数
+        # Debate parameters
         st.subheader("⚙️ " + ("辩论参数" if st.session_state.lang == "zh" else "Parameters"))
         st.session_state.debate_rounds = st.slider(
             t("debate_rounds"),
@@ -780,7 +780,7 @@ def render_sidebar():
         
         st.divider()
         
-        # 架构模式
+        # Architecture mode
         st.subheader(t("architecture_mode"))
         mode_options = {}
         for mk, mv in ARCHITECTURE_MODES.items():
@@ -794,14 +794,14 @@ def render_sidebar():
         )
         st.session_state.architecture_mode = selected_mode
         
-        # 模式说明
+        # Mode description
         mode_info = ARCHITECTURE_MODES[selected_mode]
         mode_desc = mode_info["zh_desc"] if st.session_state.lang == "zh" else mode_info["en_desc"]
         st.caption(mode_desc)
 
         st.divider()
         
-        # 市场参数
+        # Market parameters
         st.subheader("🏪 " + ("市场参数" if st.session_state.lang == "zh" else "Market Params"))
         st.session_state.market_num_candidates = st.slider(
             t("market_num_candidates"),
@@ -826,7 +826,7 @@ def render_sidebar():
 
         st.divider()
         
-        # 逐步模式开关
+        # Step-by-step mode toggle
         st.session_state.step_mode = st.toggle(
             t("step_mode"),
             value=st.session_state.step_mode,
@@ -835,7 +835,7 @@ def render_sidebar():
 
         st.divider()
         
-        # 存档管理
+        # Archive management
         saved_keys = autosave_list()
         if saved_keys:
             st.subheader("💾 " + ("存档管理" if st.session_state.lang == "zh" else "Autosave"))
@@ -848,7 +848,7 @@ def render_sidebar():
         
         st.divider()
         
-        # v3.0 我的配置
+        # v3.0 My configs
         st.subheader(t("config_profile_label"))
         _all_profiles = list_profiles()
         _all_presets = list_presets()
@@ -887,23 +887,23 @@ def render_sidebar():
 
 
 def build_dept_input(dept_key: str) -> str:
-    """构建部门输入（按P1→P2→P3→P4流程）"""
+    """Build department inputs (P1→P2→P3→P4 flow)"""
     is_zh = st.session_state.lang == "zh"
     script = st.session_state.script
     positive = st.session_state.positive_prompt
     chars = st.session_state.character_refs
     dept_results = st.session_state.get("dept_results", {})
     
-    # P1: 编剧部
+    # P1: Screenwriter department
     if dept_key == "screenwriter":
         return f"剧本：\n{script}\n\n场景风格：\n{positive}\n\n角色参考：\n{chars}"
     
-    # P2: 空间板块（基于编剧部产出）
+    # P2: Spatial planning (based on screenwriter output)
     elif dept_key == "spatial":
         sw = dept_results.get("screenwriter", {}).get("consensus", script)
         return f"编剧部细节填充版剧本：\n{sw}\n\n原始场景风格：\n{positive}"
     
-    # P3: 视觉四部门（基于编剧+空间产出）
+    # P3: Visual four departments (based on screenwriter + spatial output)
     elif dept_key == "storyboard":
         sw = dept_results.get("screenwriter", {}).get("consensus", script)
         sp = dept_results.get("spatial", {}).get("consensus", "")
@@ -917,7 +917,7 @@ def build_dept_input(dept_key: str) -> str:
             parts.append(f"分镜部：\n{dept_results['storyboard']['consensus']}")
         return "\n\n---\n\n".join(parts)
     
-    # P4: 音效+剪辑
+    # P4: Sound + Editing
     elif dept_key == "sound":
         parts = [f"编剧部：\n{dept_results.get('screenwriter', {}).get('consensus', script)}"]
         if "storyboard" in dept_results:
@@ -943,10 +943,10 @@ def build_dept_input(dept_key: str) -> str:
         return "\n\n---\n\n".join(prev)
 
 
-# ============ 一键全辩 ============
+# ============ One-Click Full Debate ============
 
 def run_all_debates():
-    """执行全部辩论流程（非逐步模式）"""
+    """Execute full debate flow (non-step mode)"""
     is_zh = st.session_state.lang == "zh"
     api_url = st.session_state.api_url
     api_key = st.session_state.api_key
@@ -960,14 +960,14 @@ def run_all_debates():
     negative = st.session_state.negative_prompt
     chars = st.session_state.character_refs
     
-    # v2.3: Token统计初始化
+    # v2.3: Token stats initialization
     stats = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "api_calls": 0}
     st.session_state.current_stats = stats
     st.session_state.current_start_time = time.time()
     
     arch_mode = st.session_state.architecture_mode
     
-    # === 单Agent基线模式 ===
+    # === Single Agent Baseline Mode ===
     if arch_mode == "single_agent":
         progress = st.progress(0, text=t("debate_progress"))
         result = run_single_agent(
@@ -985,14 +985,14 @@ def run_all_debates():
         progress.progress(1.0, text="✅ " + ("单Agent基线生成完成" if is_zh else "Single agent baseline complete"))
         return
     
-    # === Pipeline / Expert Pool 模式 ===
+    # === Pipeline / Expert Pool Mode ===
     dept_results = {}
     total_steps = len(DEPT_ORDER) * rounds * 3
     progress = st.progress(0, text=t("debate_progress"))
     step = 0
     
     if arch_mode == "expert_pool":
-        # 专家池模式：先做场景分析，再精简辩论
+        # Expert pool mode: scene analysis first, then streamlined debate
         expert_result = run_expert_pool_debate(
             user_script=script,
             positive_prompt=positive,
@@ -1006,7 +1006,7 @@ def run_all_debates():
         dept_results = expert_result["dept_results"]
         st.session_state.expert_pool_result = expert_result
     else:
-        # P1-P4: 部门辩论（Pipeline of Consensus）
+        # P1-P4: Department debates (Pipeline of Consensus)
         for dept_key in DEPT_ORDER:
             dept = DEPARTMENTS[dept_key]
             dept_name = dept["zh_name"] if is_zh else dept["en_name"]
@@ -1017,7 +1017,7 @@ def run_all_debates():
                 d = DEPARTMENTS[dk]
                 dn = d["zh_name"] if is_zh else d["en_name"]
                 if debater == "consensus":
-                    # 共识生成阶段
+                    # Consensus generation phase
                     progress.progress(min(step / total_steps, 0.99), text=f"🔄 {dn} - 正在生成部门总结（可能需要2-5分钟）...")
                 else:
                     step += 1
@@ -1037,7 +1037,7 @@ def run_all_debates():
             dept_results[dept_key] = result
             notify_stage_complete(dept_name)
     
-    # P2: 空间板块交叉审核
+    # P2: Spatial planning cross-review
     spatial_consensus = dept_results.get("spatial", {}).get("consensus", "")
     if spatial_consensus:
         with st.spinner("🔍 " + ("空间板块交叉审核..." if is_zh else "Spatial review...")):
@@ -1047,14 +1047,14 @@ def run_all_debates():
                 api_url=api_url, api_key=api_key, model=model, lang=lang,
                 stats=stats,
             )
-            # 用修订后的空间共识替换原来的
+            # Replace original with revised spatial consensus
             dept_results["spatial"]["consensus"] = spatial_review["revised_consensus"]
             st.session_state.spatial_review_result = spatial_review
             notify_stage_complete("空间交叉审核" if is_zh else "Spatial Review")
     
     st.session_state.dept_results = dept_results
     
-    # P5: 交叉辩论
+    # P5: Cross-debate
     cross_results = []
     for cd in P5_CROSS_DEBATES:
         a_key, b_key = cd["side_a"], cd["side_b"]
@@ -1069,7 +1069,7 @@ def run_all_debates():
             cross_results.append(cr)
     st.session_state.cross_results = cross_results
     
-    # P6: 总结AI
+    # P6: Summary AI
     final = run_summary(
         all_consensus={k: v["consensus"] for k, v in dept_results.items()},
         cross_results=cross_results,
@@ -1086,10 +1086,10 @@ def run_all_debates():
     progress.progress(1.0, text="✅ " + ("全部辩论完成！" if is_zh else "All debates complete!"))
 
 
-# ============ 逐步模式 ============
+# ============ Step-by-Step Mode ============
 
 def step_run_round(correction: str = ""):
-    """逐步模式：执行当前部门当前轮辩论"""
+    """Step mode: execute current department current round debate"""
     dept_key = DEPT_ORDER[st.session_state.step_dept_index]
     dept_input = build_dept_input(dept_key)
     
@@ -1103,7 +1103,7 @@ def step_run_round(correction: str = ""):
     
     cf = st.session_state.carry_forward if st.session_state.step_round == 1 else ""
     
-    # 确保stats已初始化
+    # Ensure stats are initialized
     if st.session_state.current_stats is None:
         st.session_state.current_stats = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "api_calls": 0}
         st.session_state.current_start_time = time.time()
@@ -1128,11 +1128,11 @@ def step_run_round(correction: str = ""):
 
 
 def step_generate_consensus():
-    """逐步模式：为当前部门生成共识"""
+    """Step mode: generate consensus for current department"""
     dept_key = DEPT_ORDER[st.session_state.step_dept_index]
     dept_input = build_dept_input(dept_key)
     
-    # 确保stats已初始化
+    # Ensure stats are initialized
     if st.session_state.current_stats is None:
         st.session_state.current_stats = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "api_calls": 0}
         st.session_state.current_start_time = time.time()
@@ -1161,7 +1161,7 @@ def step_generate_consensus():
 
 
 def step_next_dept():
-    """逐步模式：进入下一个部门"""
+    """Step mode: advance to next department"""
     st.session_state.step_dept_index += 1
     st.session_state.step_round = 1
     st.session_state.step_all_arguments = []
@@ -1175,7 +1175,7 @@ def step_next_dept():
 
 
 def step_run_spatial_review():
-    """逐步模式：执行P2空间板块交叉审核"""
+    """Step mode: execute P2 spatial cross-review"""
     dept_results = st.session_state.dept_results
     spatial_consensus = dept_results.get("spatial", {}).get("consensus", "")
     if spatial_consensus:
@@ -1193,15 +1193,15 @@ def step_run_spatial_review():
 
 
 def step_run_cross_debates():
-    """逐步模式：执行P5交叉辩论"""
+    """Step mode: execute P5 cross-debate"""
     dept_results = st.session_state.dept_results
     cross_results = []
     
-    # P2: 空间审核（如果还没做）
+    # P2: Spatial review (if not done yet)
     if not st.session_state.get("spatial_review_result"):
         step_run_spatial_review()
     
-    # P5: 交叉辩论
+    # P5: Cross-debate
     for cd in P5_CROSS_DEBATES:
         a_key, b_key = cd["side_a"], cd["side_b"]
         if a_key in dept_results and b_key in dept_results:
@@ -1221,8 +1221,8 @@ def step_run_cross_debates():
 
 
 def step_run_summary():
-    """逐步模式：生成最终产出"""
-    # 确保stats已初始化
+    """Step mode: generate final output"""
+    # Ensure stats are initialized
     if st.session_state.current_stats is None:
         st.session_state.current_stats = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "api_calls": 0}
         st.session_state.current_start_time = time.time()
@@ -1248,12 +1248,12 @@ def step_run_summary():
     st.session_state.step_phase = "completed"
 
 
-# ============ 输入Tab ============
+# ============ Input Tab ============
 
 def render_input_tab():
     is_zh = st.session_state.get("lang", "zh") == "zh"
     current_config = get_current_config()
-    # 判断当前配置是否为学术/程序类（非动画）
+    # Determine if current config is academic/programming (non-animation)
     dept_keys = list(current_config.get("departments", {}).keys())
     is_academic = any(k in dept_keys for k in ["literature_search", "methodology_review", "report_integration", "programming", "tutorial"])
     
@@ -1266,7 +1266,7 @@ def render_input_tab():
             placeholder="例如：\n研究主题：碳价预测\n方法论：机器学习\n时间范围：近5年\n质量标准：CSSCI及以上" if is_zh else "e.g.:\nTopic: Carbon price prediction\nMethodology: Machine Learning\nTime: Last 5 years\nQuality: CSSCI+",
             label_visibility="collapsed",
         )
-        # 学术模式隐藏正向/负向提示词和角色引用，改为研究约束
+        # Academic mode hides positive/negative prompts and character refs, shows research constraints instead
         with st.expander("🔬 " + ("研究约束与补充" if is_zh else "Research Constraints"), expanded=False):
             st.session_state.positive_prompt = st.text_area(
                 "🔍 " + ("检索关键词/重点方向" if is_zh else "Search Keywords / Focus"),
@@ -1325,7 +1325,7 @@ def render_input_tab():
         
         st.info(t("segment_note"))
     
-    # 承上文档输入
+    # Carry-forward document input
     st.divider()
     st.subheader(t("carry_forward_label"))
     st.session_state.carry_forward = st.text_area(
@@ -1344,7 +1344,7 @@ def render_input_tab():
         st.warning(t("need_script"))
         return
     
-    # 两个启动按钮
+    # Two start buttons
     btn_col1, btn_col2 = st.columns(2)
     
     with btn_col1:
@@ -1375,7 +1375,7 @@ def render_input_tab():
             st.rerun()
 
 
-# ============ 辩论Tab ============
+# ============ Debate Tab ============
 
 def render_debate_tab():
     is_zh = st.session_state.lang == "zh"
@@ -1400,7 +1400,7 @@ def render_debate_tab():
         
         with st.expander(f"🎬 **{dept_name}**", expanded=False):
             for log_entry in result.get("debate_log", []):
-                st.markdown(f"**{log_entry['debater_name']}**（第{log_entry['round']}轮）")
+                st.markdown(f"**{log_entry['debater_name']}** (Round {log_entry['round']})")
                 st.markdown(log_entry["content"])
                 st.divider()
             
@@ -1427,7 +1427,7 @@ def render_debate_tab():
 
 
 def render_step_mode():
-    """渲染逐步模式界面"""
+    """Render step-by-step mode UI"""
     is_zh = st.session_state.lang == "zh"
     phase = st.session_state.step_phase
     dept_index = st.session_state.step_dept_index
@@ -1495,7 +1495,7 @@ def render_step_mode():
         
         with st.expander("📝 " + ("辩论过程" if is_zh else "Debate Log"), expanded=False):
             for log_entry in result.get("debate_log", []):
-                st.markdown(f"**{log_entry['debater_name']}**（第{log_entry['round']}轮）")
+                st.markdown(f"**{log_entry['debater_name']}** (Round {log_entry['round']})")
                 st.markdown(log_entry["content"])
                 st.divider()
         
@@ -1550,18 +1550,18 @@ def render_step_mode():
     elif phase == "cross_done":
         st.success("✅ " + ("交叉辩论完成" if is_zh else "Cross-debates complete"))
         
-        # P2空间审核结果
+        # P2 spatial review result
         if st.session_state.get("spatial_review_result"):
             with st.expander(f"🔍 **{t('p2_cross_title')}**"):
                 sr = st.session_state.spatial_review_result
                 for dk, rv in sr.get("reviews", {}).items():
                     dept = DEPARTMENTS[dk]
                     dept_name = dept["zh_name"] if is_zh else dept["en_name"]
-                    st.markdown(f"**{dept_name}** 审核反馈：")
+                    st.markdown(f"**{dept_name}** Review feedback:")
                     st.markdown(rv)
                     st.divider()
         
-        # P5交叉辩论结果
+        # P5 cross-debate result
         for cr in st.session_state.cross_results:
             a_dept = DEPARTMENTS[cr["side_a"]]
             b_dept = DEPARTMENTS[cr["side_b"]]
@@ -1578,7 +1578,7 @@ def render_step_mode():
     elif phase == "completed":
         st.success("🎬 " + ("全部流程完成！请到「最终产出」Tab查看结果，到「校对」Tab执行校对" if is_zh else "All complete! Check Output tab for results, Proofread tab for QA"))
     
-    # 已有部门结果
+    # Existing department results
     if st.session_state.dept_results and phase not in ("all_dept_done", "cross_done", "completed"):
         st.divider()
         for dk in DEPT_ORDER:
@@ -1591,7 +1591,7 @@ def render_step_mode():
 
 
 def rerun_single_dept(dept_key: str, revision_note: str):
-    """打回重辩单个部门"""
+    """Reject and re-debate a single department"""
     dept_input = build_dept_input(dept_key)
     extra = st.session_state.extra_instructions
     if revision_note:
@@ -1613,13 +1613,13 @@ def rerun_single_dept(dept_key: str, revision_note: str):
     st.rerun()
 
 
-# ============ 交叉辩论Tab ============
+# ============ Cross-Debate Tab ============
 
 def render_cross_tab():
     cross_results = st.session_state.get("cross_results", [])
     is_zh = st.session_state.lang == "zh"
     
-    # P2空间审核
+    # P2 spatial review
     if st.session_state.get("spatial_review_result"):
         sr = st.session_state.spatial_review_result
         st.subheader(t("p2_cross_title"))
@@ -1633,7 +1633,7 @@ def render_cross_tab():
     
     st.divider()
     
-    # P5交叉辩论
+    # P5 cross-debate
     st.subheader(t("p5_cross_title"))
     if not cross_results:
         st.info(t("cross_not_started"))
@@ -1649,13 +1649,13 @@ def render_cross_tab():
             st.markdown(cr.get("debate_result", ""))
 
 
-# ============ 产出Tab ============
+# ============ Output Tab ============
 
 def render_output_tab():
     is_zh = st.session_state.lang == "zh"
     final = st.session_state.get("final_output", {})
     
-    # 🔧 自动恢复普通模式结果
+    # 🔧 Auto-restore normal mode results
     if not final:
         saved = autosave_load("normal_result")
         if saved:
@@ -1668,7 +1668,7 @@ def render_output_tab():
         st.info(t("output_not_ready"))
         return
     
-    # 分镜表
+    # Storyboard
     st.subheader(t("output_storyboard"))
     storyboard_text = final.get("storyboard_prompt", "")
     st.code(storyboard_text, language=None)
@@ -1693,7 +1693,7 @@ def render_output_tab():
     
     st.divider()
     
-    # 视频提示词
+    # Video prompts
     st.subheader(t("output_video"))
     video_text = final.get("video_prompt", "")
     st.code(video_text, language=None)
@@ -1718,7 +1718,7 @@ def render_output_tab():
     
     st.divider()
     
-    # 空间示意图
+    # Spatial diagram
     st.subheader(t("spatial_diagram"))
     st.caption(t("spatial_diagram_hint"))
     
@@ -1748,7 +1748,7 @@ def render_output_tab():
             scene_diagrams = diagram.get("scene_diagrams", [])
             
             if scene_count > 1 and scene_diagrams:
-                # 多场景：每个场景单独展示
+                # Multi-scene: display each scene separately
                 for sd in scene_diagrams:
                     st.markdown(f"**🗺️ {sd['scene_name']}**")
                     st.code(sd["diagram_prompt"], language=None)
@@ -1762,7 +1762,7 @@ def render_output_tab():
                     )
                     st.divider()
             else:
-                # 单场景：原有逻辑
+                # Single scene: original logic
                 diagram_text = diagram.get("spatial_diagram_prompt", "")
                 st.code(diagram_text, language=None)
                 
@@ -1786,7 +1786,7 @@ def render_output_tab():
     
     st.divider()
     
-    # 资产参照表
+    # Asset reference table
     st.subheader(t("asset_checklist"))
     st.caption(t("asset_checklist_hint"))
     
@@ -1812,7 +1812,7 @@ def render_output_tab():
     st.divider()
     
 
-    # ===== PDF 导出 =====
+    # ===== PDF Export =====
     st.divider()
     st.subheader("📄 " + ("PDF报告导出" if is_zh else "Export PDF Reports"))
     st.caption("将所有部门辩论产出导出为PDF文件" if is_zh else "Export all department debate outputs as PDF files")
@@ -1823,7 +1823,7 @@ def render_output_tab():
         pdf_col1, pdf_col2 = st.columns(2)
         
         with pdf_col1:
-            # 全量辩论报告PDF
+            # Full debate report PDF
             all_md_parts = []
             for dept_key, dept_data in dept_results.items():
                 dept_name = dept_data.get("zh_name", dept_key)
@@ -1850,10 +1850,10 @@ def render_output_tab():
                         key="dl_full_pdf",
                     )
                 except Exception as _e:
-                    st.warning(f"PDF生成失败: {_e}")
+                    st.warning(f"PDF generation failed: {_e}")
         
         with pdf_col2:
-            # 各部门单独PDF
+            # Individual department PDFs
             dept_pdf_options = []
             for dept_key, dept_data in dept_results.items():
                 dept_name = dept_data.get("zh_name", dept_key)
@@ -1887,11 +1887,11 @@ def render_output_tab():
                             key=f"dl_dept_pdf_{_dept_key}",
                         )
                     except Exception as _e:
-                        st.warning(f"PDF生成失败: {_e}")
+                        st.warning(f"PDF generation failed: {_e}")
     else:
         st.info("需要先完成部门辩论才能导出PDF" if is_zh else "Complete department debates first")
     
-    # 承上文档
+    # Carry-forward document
     st.subheader(t("carry_forward_label"))
     st.caption(t("carry_forward_note"))
     
@@ -1935,7 +1935,7 @@ def render_output_tab():
     
     st.divider()
     
-    # ===== 智能回炉 =====
+    # ===== Smart Re-roll =====
     with st.expander("🧠 " + ("智能回炉" if is_zh else "Smart Re-roll"), expanded=False):
         st.caption(
             "输入修改意见，AI自动分析应该回炉哪些部门。你可以在此基础上增减部门，只重跑选中的部分。"
@@ -1976,21 +1976,21 @@ def render_output_tab():
         if impact and not impact.get("error"):
             st.success("✅ " + ("AI分析完成！以下是推荐回炉的部门：" if is_zh else "AI analysis complete! Recommended departments to re-roll:"))
             
-            # 部门选择
+            # Department selection
             available_depts = []
             for dk in DEPT_ORDER:
                 dept = DEPARTMENTS[dk]
                 name = dept["zh_name"] if is_zh else dept["en_name"]
                 available_depts.append((dk, name))
             
-            # 默认选中AI推荐的部门
+            # Default to AI-recommended department
             ai_recommended = set(d.get("dept_key") for d in impact.get("affected_departments", []))
             
             st.caption("✅ " + ("勾选要回炉的部门，可增减" if is_zh else "Check departments to re-roll, add/remove as needed"))
             
             selected_depts = {}
             for dk, name in available_depts:
-                # 找AI推荐理由
+                # Find AI recommendation reason
                 reason = ""
                 for d in impact.get("affected_departments", []):
                     if d["dept_key"] == dk:
@@ -2007,7 +2007,7 @@ def render_output_tab():
                     key=f"smart_reroll_dept_{dk}",
                 )
             
-            # 交叉辩论提示
+            # Cross-debate prompt
             cross_pairs = impact.get("cross_debate_pairs", [])
             if cross_pairs:
                 pairs_text = ", ".join(
@@ -2016,7 +2016,7 @@ def render_output_tab():
                 )
                 st.info("⚔️ " + (f"将重新交叉辩论：{pairs_text}" if is_zh else f"Will re-run cross-debates: {pairs_text}"))
             
-            # 执行按钮
+            # Execute button
             final_selected = [dk for dk, v in selected_depts.items() if v]
             if final_selected:
                 dept_names = ", ".join(DEPARTMENTS[dk]["zh_name"] if is_zh else DEPARTMENTS[dk]["en_name"] for dk in final_selected)
@@ -2063,7 +2063,7 @@ def render_output_tab():
         elif impact and impact.get("error"):
             st.error(f"❌ {impact.get('message', '分析失败' if is_zh else 'Analysis failed')}")
     
-    # ===== 产出回炉编辑 =====
+    # ===== Output Re-roll Editing =====
     with st.expander(t("output_edit"), expanded=False):
         st.caption(t("output_edit_hint"))
         
@@ -2126,7 +2126,7 @@ def render_output_tab():
                 with st.expander("📝 " + t("output_edit_notes")):
                     st.markdown(edit_res["edit_notes"])
             
-            # 展示修改后的产出
+            # Display modified output
             rev_sb = edit_res.get("storyboard_prompt", "")
             rev_vp = edit_res.get("video_prompt", "")
             rev_sp = edit_res.get("spatial_consensus")
@@ -2141,11 +2141,11 @@ def render_output_tab():
                 with st.expander("🗺️ " + ("修改后空间板块" if is_zh else "Revised Spatial Layout")):
                     st.code(rev_sp, language=None)
             
-            # 一键应用
+            # One-click apply
             if st.button(t("output_edit_apply"), type="primary", use_container_width=True, key="apply_output_edit"):
                 st.session_state.final_output["storyboard_prompt"] = rev_sb
                 st.session_state.final_output["video_prompt"] = rev_vp
-                # 如果修改了空间板块，同步更新dept_results
+                # If spatial department modified, sync update dept_results
                 if rev_sp:
                     dept_results = st.session_state.get("dept_results", {})
                     if "spatial" in dept_results:
@@ -2157,7 +2157,7 @@ def render_output_tab():
     
     st.divider()
     
-    # 完整结果JSON
+    # Complete result JSON
     full_result = {
         "script": st.session_state.script,
         "positive_prompt": st.session_state.positive_prompt,
@@ -2186,11 +2186,11 @@ def render_output_tab():
     )
 
 
-# ============ 校对Tab ============
+# ============ Proofread Tab ============
 
 def render_proofread_tab():
     is_zh = st.session_state.lang == "zh"
-    # ===== 事实校验 =====
+    # ===== Fact Check =====
     with st.expander("🔬 " + ("事实校验（Phase 7.5）" if is_zh else "Fact Check (Phase 7.5)"), expanded=False):
         st.caption("对共识结论进行交叉验证，锚定文献DOI" if is_zh else "Cross-validate consensus points and anchor DOIs")
         
@@ -2204,7 +2204,7 @@ def render_proofread_tab():
                 all_consensus.extend(points[:3])  # 每个部门取前3条
         
         if all_consensus:
-            st.info(f"共提取 {len(all_consensus)} 条待校验结论")
+            st.info(f"Extracted {len(all_consensus)} claims for verification")
             
             if st.button("🚀 " + ("开始事实校验" if is_zh else "Start Fact Check"), key="fact_check_btn"):
                 # Build search function from AcademicSearchEngine
@@ -2242,27 +2242,27 @@ def render_proofread_tab():
             
             report = st.session_state.get("fact_check_report")
             if report:
-                st.success(f"校验完成 | 整体置信度：{report.overall_confidence:.0%}")
+                st.success(f"Verification complete | Overall confidence: {report.overall_confidence:.0%}")
                 st.write(report.summary)
                 
                 # Show each result
                 for i, r in enumerate(report.results):
                     status_emoji = {"verified": "✅", "partially_verified": "⚠️", "contradicted": "❌", "unverified": "❓"}
                     emoji = status_emoji.get(r.status, "❓")
-                    with st.expander(f"{emoji} 结论{i+1}: {r.claim[:50]}... ({r.status})", expanded=r.status != "verified"):
-                        st.write(f"**状态**: {r.status} | **置信度**: {r.confidence:.0%}")
+                    with st.expander(f"{emoji} Claim {i+1}: {r.claim[:50]}... ({r.status})", expanded=r.status != "verified"):
+                        st.write(f"**Status**: {r.status} | **Confidence**: {r.confidence:.0%}")
                         if r.supporting_dois:
-                            st.write("**支持文献DOI**:")
+                            st.write("**Supporting literature DOI**:")
                             for doi in r.supporting_dois:
                                 st.write(f"- {doi}")
                         if r.contradicting_dois:
-                            st.write("**反对文献DOI**:")
+                            st.write("**Contradicting literature DOI**:")
                             for doi in r.contradicting_dois:
                                 st.write(f"- {doi}")
                         if r.notes:
-                            st.write(f"**备注**: {r.notes}")
+                            st.write(f"**Notes**: {r.notes}")
                 
-                # PDF导出
+                # PDF export
                 import tempfile as _tf
                 _pdf_dir = _tf.mkdtemp()
                 _pdf_path = os.path.join(_pdf_dir, "fact_check_report.pdf")
@@ -2287,7 +2287,7 @@ def render_proofread_tab():
                         key="dl_fact_check_pdf",
                     )
                 except Exception as _e:
-                    st.warning(f"PDF生成失败: {_e}")
+                    st.warning(f"PDF generation failed: {_e}")
         else:
             st.info("需要先完成部门辩论才能进行事实校验" if is_zh else "Complete department debates first")
     
@@ -2331,7 +2331,7 @@ def render_proofread_tab():
             with st.expander(f"🔍 **{dept_name}**"):
                 st.markdown(review)
         
-        # ===== 校对发现问题 → 自动修正 =====
+        # ===== Proofread Issues → Auto Fix =====
         if not pr.get("passed"):
             st.divider()
             st.subheader(t("auto_revision"))
@@ -2343,7 +2343,7 @@ def render_proofread_tab():
                     with st.expander("📝 " + t("auto_revision_notes")):
                         st.markdown(revision["revision_notes"])
                 
-                # 展示修正后的产出
+                # Display corrected output
                 rev_sb = revision.get("storyboard_prompt", "")
                 rev_vp = revision.get("video_prompt", "")
                 if rev_sb:
@@ -2353,7 +2353,7 @@ def render_proofread_tab():
                     with st.expander("🎥 " + t("output_video")):
                         st.code(rev_vp, language=None)
                 
-                # 一键应用修正
+                # One-click apply correction
                 if st.button("✅ " + ("应用修正结果" if is_zh else "Apply Revision"), type="primary", use_container_width=True, key="apply_auto_revision"):
                     st.session_state.final_output["storyboard_prompt"] = rev_sb
                     st.session_state.final_output["video_prompt"] = rev_vp
@@ -2378,7 +2378,7 @@ def render_proofread_tab():
                         st.session_state.auto_revision_result = revision
                         st.rerun()
         
-        # ===== 导演指令修正 =====
+        # ===== Director Instruction Correction =====
         st.divider()
         st.subheader(t("director_revision"))
         st.caption("导演指定部门+修改意见 → 重跑该部门辩论 → 重新生成分镜表+视频提示词" if is_zh else "Director picks department + notes → re-debate that dept → regenerate storyboard + video prompt")
@@ -2434,30 +2434,30 @@ def render_proofread_tab():
                         rounds=revision_rounds,
                         stats=st.session_state.get("current_stats"),
                     )
-                    # 更新部门共识和最终产出
+                    # Update department consensus and final output
                     st.session_state.dept_results[selected_dept] = result["dept_result"]
                     st.session_state.final_output = {
                         "storyboard_prompt": result["storyboard_prompt"],
                         "video_prompt": result["video_prompt"],
                     }
-                    # 清除旧校对结果
+                    # Clear old proofread results
                     st.session_state.proofread_result = None
                     st.session_state.auto_revision_result = None
                     st.rerun()
 
 
 
-# ============ 对比面板 ============
+# ============ Comparison Panel ============
 
 def render_compare_tab():
-    """渲染运行对比面板"""
+    """Render run comparison panel"""
     is_zh = st.session_state.lang == "zh"
     run_history = st.session_state.get("run_history", [])
     
     st.subheader(t("compare_title"))
     st.caption(t("compare_desc"))
     
-    # 保存当前运行结果
+    # Save current run results
     if st.session_state.get("debate_completed") and st.session_state.get("final_output"):
         if st.button(t("compare_save_run"), type="primary", use_container_width=True, key="save_current_run"):
             stats = st.session_state.get("current_stats", {})
@@ -2488,10 +2488,10 @@ def render_compare_tab():
         st.info(t("compare_no_runs"))
         return
     
-    # 对比总览表
+    # Comparison overview table
     st.subheader(t("compare_table"))
     
-    # 构建对比数据
+    # Build comparison data
     cols = ["#", t("compare_model"), t("compare_mode"), t("compare_tokens"), t("compare_time"), t("compare_api_calls")]
     table_data = []
     for i, run in enumerate(run_history):
@@ -2507,7 +2507,7 @@ def render_compare_tab():
     
     st.dataframe(table_data, use_container_width=True, hide_index=True)
     
-    # 每次运行的详情
+    # Details for each run
     for i, run in enumerate(run_history):
         mode_name = ARCHITECTURE_MODES.get(run["architecture_mode"], {}).get("zh_name" if is_zh else "en_name", run["architecture_mode"])
         with st.expander(f"\u2615 {t('compare_run_label', idx=i+1)} \u2014 {run['model_name']} / {mode_name}"):
@@ -2530,7 +2530,7 @@ def render_compare_tab():
                 with st.expander("\U0001F3A5 " + t("compare_video_preview")):
                     st.code(vp[:2000] + ("..." if len(vp) > 2000 else ""), language=None)
     
-    # 清空按钮
+    # Clear button
     col_clear1, col_clear2 = st.columns([3, 1])
     with col_clear2:
         if st.button(t("compare_clear"), key="clear_all_runs"):
@@ -2538,13 +2538,13 @@ def render_compare_tab():
             st.rerun()
 
 
-# ============ 主入口 ============
+# ============ Main Entry ============
 
 
-# ============ 市场Tab ============
+# ============ Market Tab ============
 
 def render_market_tab():
-    """渲染市场Tab"""
+    """Render Market Tab"""
     is_zh = st.session_state.lang == "zh"
     
     st.subheader(t("market_title"))
@@ -2554,19 +2554,19 @@ def render_market_tab():
         st.warning(t("market_need_debate"))
         return
     
-    # 查看已有结果
+    # View existing results
     market_result = st.session_state.get("market_result")
     
-    # 🔧 自动恢复：断网/崩溃后从磁盘恢复
+    # 🔧 Auto-recover: restore from disk after network loss/crash
     if not market_result:
-        # 检查是否有磁盘存档
+        # Check for disk archives
         saved = autosave_load("market_result")
         if saved:
             st.info("💾 " + ("检测到上次未完成的市场模式结果，已自动恢复！" if is_zh else "Previous market result recovered from disk!"))
             st.session_state.market_result = saved
             market_result = saved
         else:
-            # 检查是否有阶段性存档
+            # Check for staged archives
             step3 = autosave_load("market_step3")
             step2 = autosave_load("market_step2")
             step1 = autosave_load("market_step1")
@@ -2584,7 +2584,7 @@ def render_market_tab():
                 market_result = step1
     
     if not market_result:
-        # 导入已有结果选项
+        # Import existing result option
         existing_result = st.session_state.get("final_output")
         if existing_result and existing_result.get("storyboard_prompt"):
             include_existing = st.checkbox(
@@ -2595,15 +2595,15 @@ def render_market_tab():
             if include_existing:
                 st.caption("✅ " + ("普通模式结果将作为候选A参与市场竞选，其余候选从API生成" if is_zh else "Normal mode result will join as Candidate A, other candidates generated via API"))
         
-        # 开张按钮
+        # Start button
         if st.button(t("market_start"), type="primary", use_container_width=True):
             run_market()
             st.rerun()
         return
     
-    # ---- 展示结果 ----
+    # ---- Display results ----
     
-    # Step 1: 候选方案
+    # Step 1: Candidate proposals
     candidates = market_result.get("candidates", [])
     st.subheader(t("market_candidates"))
     for c in candidates:
@@ -2616,12 +2616,12 @@ def render_market_tab():
     
     st.divider()
     
-    # Step 2: 问题统计（可能没有）
+    # Step 2: Issue statistics (may not exist)
     questions = market_result.get("questions", [])
     if questions:
         st.subheader(t("market_questions_total", total=len(questions)))
         
-        # 按部门统计问题数
+        # Count issues by department
         dept_q_counts = {}
         for q in questions:
             dk = q.get("source_dept", "unknown")
@@ -2634,15 +2634,15 @@ def render_market_tab():
         st.divider()
     else:
         st.info("❓ " + ("出题尚未完成，重新开市将从此步骤继续" if is_zh else "Questions not yet generated, restart market to continue from this step"))
-        # 提供重新开市按钮
+        # Offer re-open market button
         if st.button("🔄 " + ("重新开市（从出题开始）" if is_zh else "Restart market (from questions)"), type="primary"):
-            # 保留候选，重新跑出题+
+            # Keep candidates, re-run question generation
             st.session_state.market_result = None
-            # 候选数据保留在step1存档中
+            # Candidate data preserved in step1 archive
             st.rerun()
         return
     
-    # Step 3: 投票结果（可能没有）
+    # Step 3: Vote results (may not exist)
     vote_result = market_result.get("vote_result")
     if vote_result:
         vote_counts = vote_result.get("vote_counts", {})
@@ -2652,14 +2652,14 @@ def render_market_tab():
         st.subheader(t("market_vote_result"))
         st.success(t("market_winner", label=winner_label, votes=winner_votes))
         
-        # 票数柱状图
+        # Vote count bar chart
         if vote_counts:
             st.bar_chart(vote_counts)
         
-        # 投票详情
+        # Vote details
         with st.expander("📊 " + t("market_vote_detail")):
             votes = vote_result.get("votes", [])
-            # 按部门分组展示
+            # Display grouped by department
             dept_votes = {}
             for v in votes:
                 voter_dept = v.get("voter", "").split("/")[0] if "/" in v.get("voter", "") else "Other"
@@ -2670,11 +2670,11 @@ def render_market_tab():
             for dept_name, dept_v in dept_votes.items():
                 with st.expander(f"🏛️ {dept_name}"):
                     for v in dept_v[:10]:  # 每部门最多显示10个
-                        st.markdown(f"- **Q:** {v['question'][:80]}... → **选:** 候选{v.get('choice', '?')} {v.get('reason', '')[:100]}")
+                        st.markdown(f"- **Q:** {v['question'][:80]}... → **Choice:** Candidate {v.get('choice', '?')} {v.get('reason', '')[:100]}")
         
         st.divider()
         
-        # 争议问题
+        # Controversial issues
         contested = vote_result.get("contested_questions", [])
         if contested:
             with st.expander("⚠️ " + t("market_contested"), expanded=True):
@@ -2690,7 +2690,7 @@ def render_market_tab():
             st.rerun()
         return
     
-    # Step 4: 补丁修正
+    # Step 4: Patch correction
     patch_result = market_result.get("patch_result")
     if patch_result:
         st.subheader(t("market_patch_result"))
@@ -2703,7 +2703,7 @@ def render_market_tab():
     
     st.divider()
     
-    # 应用按钮
+    # Apply button
     col1, col2 = st.columns(2)
     with col1:
         if st.button(t("market_apply_winner"), type="primary", use_container_width=True):
@@ -2726,7 +2726,7 @@ def render_market_tab():
 
 
 def run_market():
-    """执行市场完整流程——全面防护版，任何步骤失败都不会白跑"""
+    """Execute full market flow — fully protected, no step failure wastes previous results"""
     is_zh = st.session_state.lang == "zh"
     api_url = st.session_state.api_url
     api_key = st.session_state.api_key
@@ -2743,7 +2743,7 @@ def run_market():
     
     progress = st.progress(0, text=t("market_running"))
     
-    # ====== Step 1: 生成候选 ======
+    # ====== Step 1: Generate candidates ======
     progress.progress(0.05, text=t("market_step1"))
     
     completed_count = 0
@@ -2780,7 +2780,7 @@ def run_market():
         except Exception:
             pass  # 进度更新失败不影响主流程
     
-    # 如果导入已有结果，API少生成一个候选
+    # If importing existing result, API generates one fewer candidate
     include_existing = st.session_state.get("market_include_existing", False)
     existing_result = st.session_state.get("final_output")
     has_existing = include_existing and existing_result and existing_result.get("storyboard_prompt")
@@ -2811,7 +2811,7 @@ def run_market():
         progress.progress(1.0, text="❌ " + ("失败" if is_zh else "Failed"))
         return
     
-    # 导入普通模式已有结果作为候选
+    # Import normal mode existing result as candidate
     include_existing = st.session_state.get("market_include_existing", False)
     existing_result = st.session_state.get("final_output")
     if include_existing and existing_result and existing_result.get("storyboard_prompt"):
@@ -2824,7 +2824,7 @@ def run_market():
             "stats": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "api_calls": 0},
             "is_existing": True,
         }
-        # 已有结果作为候选A，其余候选标签从B开始
+        # Existing result as candidate A, remaining candidates start from B
         candidates.insert(0, existing_candidate)
         for i, c in enumerate(candidates[1:], 1):
             c["label"] = chr(65 + i)  # B, C, D...
@@ -2834,16 +2834,16 @@ def run_market():
     if step1_errors:
         st.warning(f"⚠️ {len(step1_errors)} {('个候选生成失败' if is_zh else 'candidates failed')}")
     
-    # 📦 Step1完成 → 存盘
+    # 📦 Step1 complete → save to disk
     autosave_result("market_step1", {"candidates": candidates, "errors": step1_errors})
-    # ====== Step 2: 出题 ======
+    # ====== Step 2: Question generation ======
     progress.progress(0.55, text=t("market_step2"))
     
     def on_q_progress(phase, dept_key, debater_key):
         try:
             dept = DEPARTMENTS.get(dept_key, {})
             dn = dept.get("zh_name" if is_zh else "en_name", dept_key)
-            # debater_key现在传的是dept_key（部门出题模式），直接用部门名
+            # debater_key now passes dept_key (dept question mode), use dept name directly
             progress.progress(0.55, text=f"❓ {dn} {('出题中' if is_zh else 'questioning')}...")
         except Exception:
             pass
@@ -2858,7 +2858,7 @@ def run_market():
         )
     except Exception as e:
         st.error(f"❌ Step 2 {('出题失败' if is_zh else 'Question generation failed')}: {e}")
-        # 出题失败也保留候选结果
+        # Keep candidate results even if question generation fails
         st.session_state.market_result = {
             "candidates": candidates, "questions": [],
             "vote_result": None, "patch_result": None,
@@ -2880,10 +2880,10 @@ def run_market():
         progress.progress(1.0, text="⚠️ " + ("候选已保存" if is_zh else "Candidates saved"))
         return
     
-    # 📦 Step2完成 → 存盘
+    # 📦 Step2 complete → save to disk
     autosave_result("market_step2", {"candidates": candidates, "questions": questions})
     
-    # ====== Step 3: 投票 ======
+    # ====== Step 3: Voting ======
     progress.progress(0.7, text=t("market_step3"))
     
     def on_vote_progress(phase, vi, debater_name, total_voters=None):
@@ -2913,17 +2913,17 @@ def run_market():
         progress.progress(1.0, text="⚠️ " + ("候选已保存，投票失败" if is_zh else "Candidates saved, voting failed"))
         return
     
-    # 检查投票结果
+    # Check voting results
     winner = vote_result.get("winner_candidate") if vote_result else None
     if not winner and candidates:
-        # 投票失败但候选还在，直接取第一个
+        # Vote failed but candidates exist, take first one
         winner = candidates[0]
         st.warning("⚠️ " + ("投票未产生明确胜者，默认使用候选A" if is_zh else "No clear winner, using Candidate A"))
     
-    # 📦 Step3完成 → 存盘
+    # 📦 Step3 complete → save to disk
     autosave_result("market_step3", {"candidates": candidates, "questions": questions, "vote_result": vote_result})
     
-    # ====== Step 4: 补丁修正 ======
+    # ====== Step 4: Patch correction ======
     progress.progress(0.92, text=t("market_step4"))
     
     patch_result = None
@@ -2946,7 +2946,7 @@ def run_market():
             "patch_notes": ("无争议问题，无需修正" if is_zh else "No contested issues"),
         }
     
-    # ====== 完成 ======
+    # ====== Complete ======
     progress.progress(1.0, text="✅ " + ("市场收市！" if is_zh else "Market closed!"))
     
     st.session_state.market_result = {
@@ -2957,20 +2957,20 @@ def run_market():
     }
     
     st.session_state.current_end_time = time.time()
-    # 📦 最终结果存盘
+    # 📦 Final result saved to disk
     autosave_result("market_result", st.session_state.market_result)
 
 
-# ============ v3.0 智能配组 Tab ============
+# ============ v3.0 Smart Grouping Tab ============
 
 def render_config_tab():
-    """🧠 智能配组 — Consensus Pipeline v3.0 入口"""
+    """🧠 Smart Grouping — Consensus Pipeline v3.0 Entry"""
     is_zh = st.session_state.lang == "zh"
     
     st.subheader(t("config_title"))
     st.caption(t("config_subtitle"))
     
-    # 显示当前配置
+    # Display current config
     _cur_name = get_current_config_name()
     st.info(f"{'当前配置' if is_zh else 'Current config'}: **{_cur_name}**  |  {'部门数' if is_zh else 'Depts'}: {len(DEPARTMENTS)}  |  {'辩手总数' if is_zh else 'Total debaters'}: {sum(len(d.get('debaters', {})) for d in DEPARTMENTS.values())}")
     
@@ -2979,7 +2979,7 @@ def render_config_tab():
     with left_col:
         st.markdown("### " + ("需求输入" if is_zh else "Requirement Input"))
         
-        # 用户需求描述
+        # User requirement description
         user_input = st.text_area(
             t("config_input_label"),
             height=150,
@@ -2987,7 +2987,7 @@ def render_config_tab():
             key="config_user_input",
         )
         
-        # AI智能配组按钮
+        # AI smart grouping button
         if st.button(t("config_ai_button"), type="primary", use_container_width=True, disabled=not user_input):
             if not st.session_state.api_key:
                 st.error(t("need_api"))
@@ -3009,7 +3009,7 @@ def render_config_tab():
                     st.warning(t("config_clarification"))
                     for q in result.get("clarification_questions", []):
                         st.markdown(f"- {q}")
-                    # 仍然保存部分配置供编辑
+                    # Still save partial config for editing
                     st.session_state.workgroup_config = result
                 else:
                     st.session_state.workgroup_config = result
@@ -3017,7 +3017,7 @@ def render_config_tab():
         
         st.divider()
         
-        # 预设选择
+        # Preset selection
         st.markdown("### " + t("config_preset_label"))
         presets = list_presets()
         if presets:
@@ -3035,7 +3035,7 @@ def render_config_tab():
                 except Exception as e:
                     st.error(str(e))
         
-        # 用户配置选择
+        # User config selection
         st.markdown("### " + t("config_profile_label"))
         profiles = list_profiles()
         if profiles:
@@ -3064,13 +3064,13 @@ def render_config_tab():
         
         config = st.session_state.get("workgroup_config")
         if config is None:
-            # 尝试加载当前生效的配置
+            # Try loading currently active config
             config = get_current_config()
         
         if not config or not config.get("departments"):
             st.info(t("config_no_depts"))
         else:
-            # 每个部门一个折叠区
+            # One collapsible section per department
             depts = config.get("departments", {})
             dept_order = config.get("dept_order", list(depts.keys()))
             
@@ -3083,7 +3083,7 @@ def render_config_tab():
                 num_debaters = len(debaters)
                 
                 with st.expander(f"**{dept_name}** ({num_debaters}{'位辩手' if is_zh else ' debaters'})", expanded=False):
-                    # 启用/禁用开关
+                    # Enable/disable toggle
                     dept_enabled = st.checkbox(
                         f"{t('config_dept_enabled')}/{t('config_dept_disabled')}",
                         value=True,
@@ -3091,7 +3091,7 @@ def render_config_tab():
                     )
                     
                     if dept_enabled:
-                        # 辩手列表
+                        # Debater list
                         for d_key, debater in debaters.items():
                             d_name = debater.get("zh_name", d_key) if is_zh else debater.get("en_name", d_key)
                             style_key = "zh_style" if is_zh else "en_style"
@@ -3105,14 +3105,14 @@ def render_config_tab():
                                 key=f"config_debater_style_{dept_key}_{d_key}",
                                 label_visibility="collapsed",
                             )
-                            # 实时更新到配置
+                            # Real-time update to config
                             if new_style != current_style:
                                 config["departments"][dept_key]["debaters"][d_key][style_key] = new_style
                                 st.session_state.workgroup_config = config
             
             st.divider()
             
-            # 全局参数编辑
+            # Global parameter editing
             st.markdown("### " + t("config_global_params"))
             
             vd = config.get("visual_directive", {})
@@ -3151,7 +3151,7 @@ def render_config_tab():
             
             st.divider()
             
-            # Skill注入区
+            # Skill injection area
             st.markdown("### " + t("config_skill_injection"))
             skill_md = st.text_area(
                 t("config_skill_injection"),
@@ -3160,7 +3160,7 @@ def render_config_tab():
                 key="config_skill_md",
             )
             if skill_md:
-                # 选择目标部门
+                # Select target department
                 dept_keys = list(depts.keys())
                 target_options = [t("config_skill_target_all")] + [
                     depts[k].get("zh_name", k) if is_zh else depts[k].get("en_name", k)
@@ -3175,7 +3175,7 @@ def render_config_tab():
                     if selected_target == target_options[0]:
                         target_depts = None  # 全部
                     else:
-                        # 找到对应的dept_key
+                        # Find corresponding dept_key
                         idx = target_options.index(selected_target) - 1
                         target_depts = [dept_keys[idx]]
                     
@@ -3183,12 +3183,12 @@ def render_config_tab():
                     st.session_state.workgroup_config = config
                     st.success("✅ " + ("Skill已注入！" if is_zh else "Skill injected!"))
     
-    # 底部操作栏
+    # Bottom action bar
     st.divider()
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        # 保存配置
+        # Save config
         save_name = st.text_input(
             t("config_save_name"),
             value=st.session_state.get("workgroup_name", ""),
@@ -3204,7 +3204,7 @@ def render_config_tab():
                 st.error("请输入配置名称" if is_zh else "Please enter a config name")
     
     with col2:
-        # 导出配置
+        # Export config
         if st.button(t("config_export"), use_container_width=True):
             config = st.session_state.get("workgroup_config", get_current_config())
             json_str = export_config(config)
@@ -3217,7 +3217,7 @@ def render_config_tab():
             )
     
     with col3:
-        # 导入配置
+        # Import config
         imported_json = st.text_area(
             "JSON" if is_zh else "JSON",
             height=60,
@@ -3241,7 +3241,7 @@ def render_config_tab():
                 st.warning("请先粘贴JSON" if is_zh else "Please paste JSON first")
     
     with col4:
-        # 确认并开始
+        # Confirm and start
         if st.button(t("config_apply"), type="primary", use_container_width=True):
             config = st.session_state.get("workgroup_config", get_current_config())
             apply_config(config)
@@ -3252,22 +3252,22 @@ def render_config_tab():
 
 
 
-# ============ v4.0 需求调研 Tab ============
+# ============ v4.0 Requirement Research Tab ============
 
 def render_requirement_tab():
-    """渲染需求调研Tab — Phase 0~4 的完整流程"""
+    """Render requirement research Tab — Phase 0~4 complete flow"""
     is_zh = st.session_state.get("lang", "zh") == "zh"
     
     st.header("🔬 " + ("需求调研" if is_zh else "Requirement Research"))
     st.caption("v4.0 " + ("对话式需求调研 → 结构化 → 讨论组 → 配置推荐 → 审核" if is_zh else "Interview → Structure → Discussion → Recommend → Review"))
     
-    # ---- LLM 配置（从sidebar获取） ----
+    # ---- LLM Config (from sidebar) ----
     api_url = st.session_state.get("api_url", "")
     api_key = st.session_state.get("api_key", "")
     model = st.session_state.get("model_name", "")
     
     def _llm_call(system_prompt: str, user_prompt: str) -> str:
-        """统一的LLM调用，复用app的API配置"""
+        """Unified LLM call, reusing app API configuration"""
         import requests as _req
         headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
         payload = {
@@ -3288,7 +3288,7 @@ def render_requirement_tab():
     
     llm_available = bool(api_url and api_key and model)
     
-    # ---- Phase 状态管理 ----
+    # ---- Phase state management ----
     if "req_phase" not in st.session_state:
         st.session_state.req_phase = 0
     if "req_document" not in st.session_state:
@@ -3304,7 +3304,7 @@ def render_requirement_tab():
     
     phase = st.session_state.req_phase
     
-    # ---- 进度条 ----
+    # ---- Progress bar ----
     phase_names = ["Phase 0: 需求调研", "Phase 1: 需求结构化", "Phase 2: 讨论组", "Phase 3: 配置推荐", "Phase 4: 用户审核"] if is_zh else \
                   ["Phase 0: Interview", "Phase 1: Structure", "Phase 2: Discussion", "Phase 3: Recommend", "Phase 4: Review"]
     progress_val = (phase + 1) / 5
@@ -3320,12 +3320,12 @@ def render_requirement_tab():
     st.divider()
     
     # ================================================================
-    # Phase 0: 对话式需求调研
+    # Phase 0: Conversational requirement interview
     # ================================================================
     if phase == 0:
         st.subheader("Phase 0: " + ("对话式需求调研" if is_zh else "Requirement Interview"))
         
-        # 领域选择
+        # Domain selection
         domain_options = {
             "academic_research": "📚 学术调研" if is_zh else "📚 Academic Research",
             "animation": "🎬 动画制作" if is_zh else "🎬 Animation",
@@ -3339,7 +3339,7 @@ def render_requirement_tab():
             key="req_domain_select",
         )
         
-        # 初始需求输入
+        # Initial requirement input
         user_topic = st.text_area(
             "描述你的需求" if is_zh else "Describe your requirement",
             placeholder="例如：我想调研机器学习在能源经济学中的前沿应用..." if is_zh else "e.g., I want to research ML applications in energy economics...",
@@ -3347,14 +3347,14 @@ def render_requirement_tab():
             key="req_topic_input",
         )
         
-        # 已有的访谈历史
+        # Existing interview history
         if st.session_state.req_interview_history:
             st.markdown("#### " + ("访谈记录" if is_zh else "Interview History"))
             for i, turn in enumerate(st.session_state.req_interview_history):
                 with st.chat_message("user" if turn["role"] == "user" else "assistant"):
                     st.markdown(turn["content"])
         
-        # 追问输入
+        # Follow-up question input
         follow_up = st.chat_input(
             ("回答追问 / 补充信息" if st.session_state.req_interview_history else "开始调研") if is_zh else \
             ("Answer follow-up / Add info" if st.session_state.req_interview_history else "Start research"),
@@ -3365,19 +3365,19 @@ def render_requirement_tab():
             if not llm_available:
                 st.error("⚠️ " + ("请先在侧边栏配置LLM API" if is_zh else "Please configure LLM API in sidebar"))
             else:
-                # 添加用户消息
+                # Add user message
                 st.session_state.req_interview_history.append({"role": "user", "content": follow_up})
                 
-                # AI追问
+                # AI follow-up
                 with st.spinner("🤔 " + ("调研AI正在分析..." if is_zh else "Research AI analyzing...")):
-                    # 初始化或继续访谈
+                    # Initialize or continue interview
                     if "req_interviewer" not in st.session_state or st.session_state.get("req_interviewer") is None:
                         st.session_state.req_interviewer = RequirementInterviewer(llm_call_fn=_llm_call, domain_hint=selected_domain)
                         result = st.session_state.req_interviewer.start(user_input=follow_up)
                     else:
                         result = st.session_state.req_interviewer.chat(user_message=follow_up)
                     
-                    # 保存AI追问
+                    # Save AI follow-up
                     next_q = result.get("question", "")
                     if next_q:
                         understanding = result.get("current_understanding", "")
@@ -3387,18 +3387,18 @@ def render_requirement_tab():
                         ai_msg += f"**{("追问" if is_zh else "Follow-up")}:** {next_q}"
                         st.session_state.req_interview_history.append({"role": "assistant", "content": ai_msg})
                     
-                    # 保存需求文档（如果访谈完成）
+                    # Save requirement doc (if interview complete)
                     if result.get("is_complete", False):
                         st.session_state.req_document = st.session_state.req_interviewer.get_requirement_document()
                 
                 st.rerun()
         
-        # 结束调研按钮
+        # End interview button
         if st.session_state.req_interview_history:
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("✅ " + ("需求已明确，进入结构化" if is_zh else "Requirement clear, proceed to structure"), type="primary", key="req_finish_interview"):
-                    # 如果没有AI生成过文档，用用户输入手动构建
+                    # If no AI-generated doc, manually build from user input
                     if not st.session_state.req_document:
                         st.session_state.req_document = RequirementDocument(
                             topic=user_topic or follow_up or "",
@@ -3421,7 +3421,7 @@ def render_requirement_tab():
                     st.rerun()
     
     # ================================================================
-    # Phase 1: 需求结构化
+    # Phase 1: Requirement structuring
     # ================================================================
     elif phase == 1:
         st.subheader("Phase 1: " + ("需求结构化" if is_zh else "Requirement Structuring"))
@@ -3429,14 +3429,14 @@ def render_requirement_tab():
         if st.session_state.req_document:
             req_doc = st.session_state.req_document
             
-            # 展示需求文档
+            # Display requirement doc
             with st.expander("📋 " + ("需求文档" if is_zh else "Requirement Document"), expanded=True):
                 if isinstance(req_doc, dict):
                     st.json(req_doc)
                 else:
                     st.json(req_doc.to_dict() if hasattr(req_doc, 'to_dict') else str(req_doc))
             
-            # 结构化按钮
+            # Structure button
             if st.button("🔧 " + ("结构化需求" if is_zh else "Structure Requirement"), type="primary", key="req_structure_btn"):
                 with st.spinner("🤔 " + ("结构化中..." if is_zh else "Structuring...")):
                     structurer = RequirementStructurer(llm_call_fn=_llm_call if llm_available else None)
@@ -3451,7 +3451,7 @@ def render_requirement_tab():
                 st.rerun()
     
     # ================================================================
-    # Phase 2: 讨论组
+    # Phase 2: Discussion group
     # ================================================================
     elif phase == 2:
         st.subheader("Phase 2: " + ("需求讨论组" if is_zh else "Requirement Discussion Group"))
@@ -3459,14 +3459,14 @@ def render_requirement_tab():
         if st.session_state.req_structured:
             structured = st.session_state.req_structured
             
-            # 展示结构化结果
+            # Display structured results
             with st.expander("📊 " + ("结构化需求" if is_zh else "Structured Requirement"), expanded=False):
                 if isinstance(structured, dict):
                     st.json(structured)
                 else:
                     st.json(structured.to_dict() if hasattr(structured, 'to_dict') else str(structured))
             
-            # 讨论组配置预览
+            # Discussion group config preview
             st.markdown("#### " + ("讨论组成员" if is_zh else "Discussion Panel"))
             roles = structured.get("suggested_roles", []) if isinstance(structured, dict) else (structured.suggested_roles if hasattr(structured, 'suggested_roles') else [])
             if roles:
@@ -3477,7 +3477,7 @@ def render_requirement_tab():
             else:
                 st.info(("将使用默认3角色：方法论审查 / 反方视角 / 落地可行性" if is_zh else "Default 3 roles: Methodology Review / Counter-perspective / Feasibility"))
             
-            # 运行讨论
+            # Run discussion
             if st.button("💬 " + ("运行讨论组" if is_zh else "Run Discussion"), type="primary", key="req_discuss_btn"):
                 with st.spinner("🤔 " + ("讨论组正在审议..." if is_zh else "Discussion panel deliberating...")):
                     discussion = DiscussionGroup(llm_call_fn=_llm_call if llm_available else None)
@@ -3492,7 +3492,7 @@ def render_requirement_tab():
                 st.rerun()
     
     # ================================================================
-    # Phase 3: 配置推荐
+    # Phase 3: Config recommendation
     # ================================================================
     elif phase == 3:
         st.subheader("Phase 3: " + ("部门配置推荐" if is_zh else "Department Config Recommendation"))
@@ -3501,14 +3501,14 @@ def render_requirement_tab():
             discussion = st.session_state.req_discussion
             structured = st.session_state.req_structured
             
-            # 展示讨论结果
+            # Display discussion results
             with st.expander("💬 " + ("讨论纪要" if is_zh else "Discussion Minutes"), expanded=False):
                 if isinstance(discussion, dict):
                     st.json(discussion)
                 else:
                     st.json(discussion.to_dict() if hasattr(discussion, 'to_dict') else str(discussion))
             
-            # 生成配置推荐
+            # Generate config recommendation
             if st.button("⚙️ " + ("生成部门配置" if is_zh else "Generate Department Config"), type="primary", key="req_config_btn"):
                 with st.spinner("🤔 " + ("正在推荐部门配置..." if is_zh else "Generating config recommendation...")):
                     recommender = ConfigRecommender(llm_call_fn=_llm_call if llm_available else None)
@@ -3523,7 +3523,7 @@ def render_requirement_tab():
                 st.rerun()
     
     # ================================================================
-    # Phase 4: 用户审核
+    # Phase 4: User review
     # ================================================================
     elif phase == 4:
         st.subheader("Phase 4: " + ("用户审核" if is_zh else "User Review"))
@@ -3533,11 +3533,11 @@ def render_requirement_tab():
             
             st.markdown("### " + ("推荐的部门配置" if is_zh else "Recommended Department Config"))
             
-            # 全量呈现 + 可折叠
+            # Full presentation + collapsible
             departments = config.get("departments", {}) if isinstance(config, dict) else (config.get("departments", {}) if hasattr(config, 'get') else {})
             dept_order = config.get("dept_order", list(departments.keys())) if isinstance(config, dict) else []
             
-            # 基本信息编辑
+            # Basic info editing
             config_name = st.text_input(
                 ("配置名称" if is_zh else "Config Name"),
                 value=config.get("name", "") if isinstance(config, dict) else "",
@@ -3549,7 +3549,7 @@ def render_requirement_tab():
                 key="req_config_desc",
             )
             
-            # 逐部门展示（可折叠）
+            # Department-by-department display (collapsible)
             edited_departments = {}
             for dept_key in dept_order:
                 dept = departments.get(dept_key, {})
@@ -3557,9 +3557,9 @@ def render_requirement_tab():
                 en_name = dept.get("en_name", "") if isinstance(dept, dict) else ""
                 
                 with st.expander(f"🏢 {zh_name} / {en_name} (`{dept_key}`)", expanded=False):
-                    # 部门信息可编辑
-                    d_zh = st.text_input("中文名", value=zh_name, key=f"req_dept_zh_{dept_key}")
-                    d_en = st.text_input("英文名", value=en_name, key=f"req_dept_en_{dept_key}")
+                    # Department info editable
+                    d_zh = st.text_input("Chinese name", value=zh_name, key=f"req_dept_zh_{dept_key}")
+                    d_en = st.text_input("English name", value=en_name, key=f"req_dept_en_{dept_key}")
                     
                     debaters = dept.get("debaters", {}) if isinstance(dept, dict) else {}
                     edited_debaters = {}
@@ -3567,12 +3567,12 @@ def render_requirement_tab():
                     for debater_key, debater in debaters.items():
                         if not isinstance(debater, dict):
                             continue
-                        st.markdown(f"**辩手 {debater_key}**: {debater.get('zh_name', '')}")
+                        st.markdown(f"**Debater {debater_key}**: {debater.get('zh_name', '')}")
                         
-                        db_zh_name = st.text_input("辩手中文名", value=debater.get("zh_name", ""), key=f"req_db_zh_{dept_key}_{debater_key}")
-                        db_en_name = st.text_input("辩手英文名", value=debater.get("en_name", ""), key=f"req_db_en_{dept_key}_{debater_key}")
-                        db_zh_style = st.text_area("中文风格（Prompt）", value=debater.get("zh_style", ""), height=100, key=f"req_db_zhs_{dept_key}_{debater_key}")
-                        db_en_style = st.text_area("英文风格（Prompt）", value=debater.get("en_style", ""), height=80, key=f"req_db_ens_{dept_key}_{debater_key}")
+                        db_zh_name = st.text_input("Debater Chinese name", value=debater.get("zh_name", ""), key=f"req_db_zh_{dept_key}_{debater_key}")
+                        db_en_name = st.text_input("Debater English name", value=debater.get("en_name", ""), key=f"req_db_en_{dept_key}_{debater_key}")
+                        db_zh_style = st.text_area("Chinese style (Prompt)", value=debater.get("zh_style", ""), height=100, key=f"req_db_zhs_{dept_key}_{debater_key}")
+                        db_en_style = st.text_area("English style (Prompt)", value=debater.get("en_style", ""), height=80, key=f"req_db_ens_{dept_key}_{debater_key}")
                         
                         edited_debaters[debater_key] = {
                             "zh_name": db_zh_name,
@@ -3587,13 +3587,13 @@ def render_requirement_tab():
                         "debaters": edited_debaters,
                     }
             
-            # 审核操作
+            # Review operations
             st.divider()
             col1, col2, col3 = st.columns(3)
             
             with col1:
                 if st.button("✅ " + ("确认配置，进入辩论" if is_zh else "Confirm & Start Debate"), type="primary", key="req_confirm_btn"):
-                    # 将审核后的配置写入session_state，让智能配组Tab可以使用
+                    # Write reviewed config to session_state for smart grouping tab
                     final_config = {
                         "name": config_name,
                         "description": config_desc,
@@ -3606,10 +3606,10 @@ def render_requirement_tab():
                         "negative_prompts": config.get("negative_prompts", "") if isinstance(config, dict) else "",
                     }
                     
-                    # 写入当前配置
+                    # Write to current config
                     apply_config(final_config)
                     
-                    # 自动将需求文档填入script字段，让辩论Tab能直接启动
+                    # Auto-fill requirement doc into script field so debate tab can start directly
                     req_doc = st.session_state.get("req_document")
                     req_structured = st.session_state.get("req_structured")
                     script_parts = []
@@ -3646,7 +3646,7 @@ def render_requirement_tab():
             
             with col2:
                 if st.button("🔄 " + ("修改配置" if is_zh else "Edit Config"), key="req_edit_btn"):
-                    # 保持在Phase 4让用户继续编辑
+                    # Stay in Phase 4 for user to continue editing
                     pass
             
             with col3:
@@ -3654,7 +3654,7 @@ def render_requirement_tab():
                     st.session_state.req_phase = 3
                     st.rerun()
             
-            # 保存配置为预设
+            # Save config as preset
             with st.expander("💾 " + ("导出为预设" if is_zh else "Export as Preset"), expanded=False):
                 preset_name = st.text_input(("预设名称" if is_zh else "Preset Name"), value=config_name, key="req_export_name")
                 if st.button(("保存预设" if is_zh else "Save Preset"), key="req_save_preset_btn"):
@@ -3672,10 +3672,10 @@ def render_requirement_tab():
                     save_profile(preset_name, final_config)
                     st.success(("预设已保存！" if is_zh else "Preset saved!"))
 
-            # ===== 调研报告PDF导出 =====
+            # ===== Research report PDF export =====
             with st.expander("📄 " + ("导出调研报告PDF" if is_zh else "Export Research PDF"), expanded=False):
                 if st.button("📄 " + ("生成调研报告PDF" if is_zh else "Generate Research PDF"), key="req_gen_pdf_btn"):
-                    # 收集Phase 0-3的产出
+                    # Collect Phase 0-3 outputs
                     req_doc = st.session_state.get("req_document")
                     req_structured = st.session_state.get("req_structured")
                     req_discussion = st.session_state.get("req_discussion")
@@ -3706,7 +3706,7 @@ def render_requirement_tab():
                                 key="dl_req_pdf",
                             )
                         except Exception as _e:
-                            st.warning(f"PDF生成失败: {_e}")
+                            st.warning(f"PDF generation failed: {_e}")
                     else:
                         st.warning("暂无调研内容可导出" if is_zh else "No research content to export")
 

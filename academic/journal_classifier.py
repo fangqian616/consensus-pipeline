@@ -1,13 +1,11 @@
 """
-期刊质量查询器 — Consensus Pipeline v4.3
+Journal Quality Classifier — Consensus Pipeline v4.3
 
-支持两种模式：
-1. 本地硬编码注册表（默认，零配置）
-2. easyScholar API（免费，覆盖30+分级体系，需注册获取密钥）
+Supports two modes:
+1. Local hardcoded registry (default, zero-config)
+2. easyScholar API (free, covers 30+ ranking systems, requires registration key)
 
-注册地址：https://www.easyscholar.cc → 用户中心 → 开放接口
-
-v4.3: 修复循环导入（改从journal_registry导入）、修复模糊匹配过于激进
+Register at: https://www.easyscholar.cc → User Center → Open API
 """
 import os
 import json
@@ -19,7 +17,7 @@ from .journal_registry import JOURNAL_QUALITY_REGISTRY
 
 
 # ============================================================
-# easyScholar API 配置
+# easyScholar API Configuration
 # ============================================================
 EASYSCHOLAR_API_URL = "https://www.easyscholar.cc/open/getPublicationRank"
 EASYSCHOLAR_SECRET_KEY = os.environ.get("EASYSCHOLAR_SECRET_KEY", "")
@@ -27,21 +25,21 @@ EASYSCHOLAR_SECRET_KEY = os.environ.get("EASYSCHOLAR_SECRET_KEY", "")
 
 def _level_from_easyscholar(rank_data: Dict) -> str:
     """
-    从easyScholar返回数据推断S/A/B/C/D等级。
+    Infer S/A/B/C/D tier from easyScholar response data.
 
-    规则：
+    Rules:
     - SCI/SSCI Q1 + IF>=5 → S
-    - SCI/SSCI Q1 或 中科院1区 → A
-    - CSSCI/CSCD 或 中科院2区 → B
-    - 其他有等级数据 → C
-    - 无数据 → D
+    - SCI/SSCI Q1 or CAS Tier 1 → A
+    - CSSCI/CSCD or CAS Tier 2 → B
+    - Other ranking data present → C
+    - No data → D
     """
     if not rank_data:
         return "D"
 
     official = rank_data.get("officialRank", {}).get("all", {})
     if not official:
-        # customRank可能是dict或list，兼容两种格式
+        # customRank may be dict or list; handle both formats
         custom = rank_data.get("customRank", {})
         if isinstance(custom, dict):
             official = custom.get("all", {})
@@ -62,14 +60,14 @@ def _level_from_easyscholar(rank_data: Dict) -> str:
     cscd = official.get("cscd", "")
     cas_warning = official.get("sciwarn", "")
 
-    if cas_warning and cas_warning != "无":
+    if cas_warning and cas_warning != "无":  # "无" = "none" in easyScholar API response; must keep Chinese
         return "D"
 
     if "Q1" in str(sci_jcr) and sci_if >= 5.0:
         return "S"
-    if "1区" in str(cas_upgrade):
+    if "1区" in str(cas_upgrade):  # "1区" = CAS Tier 1 in easyScholar API response; must keep Chinese
         return "S"
-    if "Q1" in str(sci_jcr) or "2区" in str(cas_upgrade):
+    if "Q1" in str(sci_jcr) or "2区" in str(cas_upgrade):  # "2区" = CAS Tier 2 in easyScholar API response
         return "A"
     if cssci or cscd or "Q2" in str(sci_jcr):
         return "B"
@@ -81,7 +79,7 @@ def _level_from_easyscholar(rank_data: Dict) -> str:
 
 @lru_cache(maxsize=500)
 def query_easyscholar(journal_name: str) -> Optional[Dict[str, Any]]:
-    """通过easyScholar API查询期刊等级。"""
+    """Query journal ranking via the easyScholar API."""
     if not EASYSCHOLAR_SECRET_KEY:
         return None
 
@@ -107,27 +105,28 @@ def classify_journal_enhanced(
     use_easyscholar: bool = True,
 ) -> Dict[str, Any]:
     """
-    增强版期刊分级：本地注册表 → easyScholar API → 默认规则。
+    Enhanced journal classification: local registry → easyScholar API → default rules.
 
-    v4.3: 修复模糊匹配 — 精确优先，子串匹配仅当长度比例>=80%时才触发
+    v4.3: Fixed fuzzy matching — exact match first; substring match only triggers when
+    the shorter string length is >= 80% of the longer one.
 
     Args:
-        journal_name: 期刊名称
-        use_easyscholar: 是否尝试easyScholar API
+        journal_name: Journal name
+        use_easyscholar: Whether to try the easyScholar API
 
     Returns:
         {"level": "S/A/B/C/D", "if_2026": float|None, "jcr": str, "note": str, "source": "local/api/fallback"}
     """
     normalized = journal_name.lower().strip().replace(".", "").replace(",", "")
 
-    # 1. 本地注册表 — 精确匹配优先
+    # 1. Local registry — exact match first
     for key, val in JOURNAL_QUALITY_REGISTRY.items():
         key_norm = key.lower().strip().replace(".", "").replace(",", "")
         if normalized == key_norm:
             return {**val, "source": "local"}
 
-    # 子串匹配 — 仅当较短的字符串长度 >= 较长字符串的80%时才触发
-    # 避免"Energy"匹配到所有含Energy的期刊
+    # Substring match — only triggers when shorter string length >= 80% of longer string
+    # Avoid "Energy" matching all journals containing "Energy"
     for key, val in JOURNAL_QUALITY_REGISTRY.items():
         key_norm = key.lower().strip().replace(".", "").replace(",", "")
         shorter = min(len(normalized), len(key_norm))
@@ -158,7 +157,7 @@ def classify_journal_enhanced(
             if official.get("ssci"):
                 jcr_parts.append(f"SSCI {official['ssci']}")
             if official.get("sciUp"):
-                jcr_parts.append(f"中科院{official['sciUp']}")
+                jcr_parts.append(f"CAS {official['sciUp']}")
             if official.get("cssci"):
                 jcr_parts.append("CSSCI")
             if official.get("cscd"):
@@ -167,20 +166,20 @@ def classify_journal_enhanced(
             return {
                 "level": level,
                 "if_2026": sci_if,
-                "jcr": " / ".join(jcr_parts) if jcr_parts else "API查询",
-                "note": f"easyScholar查询",
+                "jcr": " / ".join(jcr_parts) if jcr_parts else "API query",
+                "note": f"easyScholar query",
                 "source": "api",
             }
 
-    # 3. 默认规则
-    return {"level": "C", "if_2026": None, "jcr": "未知", "note": "未在注册表中且未查询API", "source": "fallback"}
+    # 3. Default rules
+    return {"level": "C", "if_2026": None, "jcr": "Unknown", "note": "Not in registry and API not queried", "source": "fallback"}
 
 
 def batch_classify_journals(
     journal_names: List[str],
     use_easyscholar: bool = True,
 ) -> Dict[str, Dict[str, Any]]:
-    """批量查询期刊等级。"""
+    """Batch-query journal rankings."""
     results = {}
     for name in journal_names:
         results[name] = classify_journal_enhanced(name, use_easyscholar=use_easyscholar)

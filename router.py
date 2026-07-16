@@ -1,15 +1,14 @@
 """
-AI Router模块 — Consensus Pipeline v4.0
-分析用户输入，自动生成工作组配置（PresetConfig格式）。
-v4.0: 新增需求调研路由(Phase 0-4) + 程序部/教程部
-分析用户输入，自动生成工作组配置（PresetConfig格式）。
+AI Router Module — Consensus Pipeline v4.0
+Analyze user input and auto-generate workgroup configuration (PresetConfig format).
+v4.0: Added requirement research routing (Phase 0-4) + Programming/Tutorial departments
 """
 import json
 import requests
 from typing import Optional
 
-# ============ 可用部门池 ============
-# Router从这些部门中选择，根据用户需求裁剪
+# ============ Available Department Pool ============
+# Router selects from these departments based on user requirements
 AVAILABLE_DEPARTMENTS = {
     "screenwriter": {"zh_name": "编剧部", "en_name": "Screenwriter"},
     "spatial": {"zh_name": "空间板块", "en_name": "Spatial Planning"},
@@ -19,18 +18,18 @@ AVAILABLE_DEPARTMENTS = {
     "vfx": {"zh_name": "视效部", "en_name": "Visual Effects"},
     "sound": {"zh_name": "音效部", "en_name": "Sound Design"},
     "editing": {"zh_name": "剪辑部", "en_name": "Editing"},
-    # 通用内容创作扩展部门
+    # General content creation extension departments
     "narrative": {"zh_name": "叙事部", "en_name": "Narrative Design"},
     "visual_style": {"zh_name": "视觉风格部", "en_name": "Visual Style"},
     "content_structure": {"zh_name": "内容结构部", "en_name": "Content Structure"},
     "audience": {"zh_name": "受众分析部", "en_name": "Audience Analysis"},
     "quality": {"zh_name": "质控部", "en_name": "Quality Control"},
-    # v4.0 程序与教程部门
+    # v4.0 Programming and Tutorial departments
     "programming": {"zh_name": "程序部", "en_name": "Programming"},
     "tutorial": {"zh_name": "教程部", "en_name": "Tutorial"},
 }
 
-# ============ 内容类型模板 ============
+# ============ Content Type Templates ============
 CONTENT_TYPE_TEMPLATES = {
     "animation": {
         "zh_name": "动画制作",
@@ -57,7 +56,7 @@ CONTENT_TYPE_TEMPLATES = {
         "default_departments": ["screenwriter", "spatial", "storyboard", "dp", "lighting", "sound", "editing"],
         "debate_rounds": 3,
     },
-    # v4.0 学术调研 + 程序教程
+    # v4.0 Academic research + Programming/Tutorial
     "academic_research": {
         "zh_name": "学术调研",
         "default_departments": ["literature_search", "metadata_inspector", "methodology_review", "cross_validation", "theme_clustering", "visualization", "report_writing", "programming", "tutorial"],
@@ -70,7 +69,7 @@ CONTENT_TYPE_TEMPLATES = {
     },
 }
 
-# ============ Router系统提示词 ============
+# ============ Router System Prompts ============
 
 ROUTER_SYSTEM_PROMPT_ZH = """你是Consensus Pipeline的AI Router。你的任务是根据用户描述的创作需求，自动配置最适合的辩论工作组。
 
@@ -180,23 +179,23 @@ def analyze_and_configure(
     lang: str = "zh",
 ) -> dict:
     """
-    分析用户输入，自动生成工作组配置。
+    Analyze user input and auto-generate workgroup configuration.
     
     Args:
-        user_input: 用户对创作需求的描述
-        api_url: LLM API地址
-        api_key: LLM API密钥
-        model: 模型名称
-        lang: 语言 "zh" 或 "en"
+        user_input: User's description of creative requirements
+        api_url: LLM API URL
+        api_key: LLM API key
+        model: Model name
+        lang: Language "zh" or "en"
     
     Returns:
-        PresetConfig格式的dict，包含工作组完整配置
+        PresetConfig-format dict with complete workgroup configuration
     """
     system_prompt = ROUTER_SYSTEM_PROMPT_ZH if lang == "zh" else ROUTER_SYSTEM_PROMPT_EN
     
     user_prompt = f"用户需求描述：\n{user_input}" if lang == "zh" else f"User requirement:\n{user_input}"
     
-    # 调用LLM
+    # Call LLM
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}",
@@ -220,9 +219,9 @@ def analyze_and_configure(
     except Exception as e:
         return {
             "error": True,
-            "message": f"Router调用LLM失败: {str(e)}",
-            "name": "配置失败",
-            "description": "AI配组未能完成，请手动配置或重试",
+            "message": f"Router LLM call failed: {str(e)}",
+            "name": "Configuration failed",
+            "description": "AI configuration failed, please configure manually or retry",
             "departments": {},
             "dept_order": [],
             "visual_directive": {"zh": "", "en": ""},
@@ -232,18 +231,18 @@ def analyze_and_configure(
             "debate_rounds": 2,
             "negative_prompts": "",
             "needs_clarification": True,
-            "clarification_questions": ["请更详细地描述你的创作需求"],
+            "clarification_questions": ["Please describe your creative requirements in more detail"],
         }
     
-    # 解析JSON（容错：提取```json```代码块）
+    # Parse JSON (fault-tolerant: extract ```json``` code blocks)
     config = _parse_json_response(content)
     if config is None:
         return {
             "error": True,
-            "message": "Router返回的JSON解析失败，原始内容已保存",
+            "message": "Router JSON parsing failed, raw content saved",
             "raw_content": content,
-            "name": "配置解析失败",
-            "description": "AI返回格式异常，请重试或手动配置",
+            "name": "Configuration parsing failed",
+            "description": "AI returned abnormal format, please retry or configure manually",
             "departments": {},
             "dept_order": [],
             "visual_directive": {"zh": "", "en": ""},
@@ -253,7 +252,7 @@ def analyze_and_configure(
             "debate_rounds": 2,
             "negative_prompts": "",
             "needs_clarification": True,
-            "clarification_questions": ["AI返回格式异常，请重试"],
+            "clarification_questions": ["AI returned abnormal format, please retry"],
         }
     
     # 确保必要字段存在
@@ -264,14 +263,14 @@ def analyze_and_configure(
 
 
 def _parse_json_response(content: str) -> Optional[dict]:
-    """从LLM响应中提取JSON，支持```json```代码块"""
-    # 尝试直接解析
+    """Extract JSON from LLM response, supporting ```json``` code blocks"""
+    # Try direct parsing
     try:
         return json.loads(content)
     except json.JSONDecodeError:
         pass
     
-    # 尝试提取```json```代码块
+    # Try extracting ```json``` code blocks
     import re
     json_blocks = re.findall(r'```(?:json)?\s*\n?(.*?)\n?```', content, re.DOTALL)
     for block in json_blocks:
@@ -280,7 +279,7 @@ def _parse_json_response(content: str) -> Optional[dict]:
         except json.JSONDecodeError:
             continue
     
-    # 尝试找最外层的大括号
+    # Try finding outermost braces
     first_brace = content.find('{')
     last_brace = content.rfind('}')
     if first_brace != -1 and last_brace > first_brace:
@@ -293,9 +292,9 @@ def _parse_json_response(content: str) -> Optional[dict]:
 
 
 def _ensure_config_fields(config: dict) -> dict:
-    """确保配置有必要字段，缺失的用默认值填充"""
+    """Ensure config has required fields, fill missing ones with defaults"""
     defaults = {
-        "name": "未命名配置",
+        "name": "Unnamed configuration",
         "description": "",
         "content_type": "unknown",
         "departments": {},
@@ -314,12 +313,12 @@ def _ensure_config_fields(config: dict) -> dict:
         if key not in config:
             config[key] = default_val
     
-    # 确保dept_order与departments一致
+    # Ensure dept_order is consistent with departments
     if not config["dept_order"]:
         config["dept_order"] = list(config["departments"].keys())
     
     return config
-# ============ 智能回炉：修订影响分析 ============
+# ============ Smart Re-roll: Revision Impact Analysis ============
 
 REVISION_IMPACT_SYSTEM_PROMPT_ZH = """你是Consensus Pipeline的智能回炉分析器。用户对最终产出（分镜表/视频提示词）给出了修改意见，你需要分析哪些部门需要重新辩论。
 
@@ -425,13 +424,13 @@ def analyze_revision_impact(
     lang: str = "zh",
 ) -> dict:
     """
-    分析用户修改意见，判断哪些部门需要回炉。
+    Analyze user revision feedback and determine which departments need re-debating.
     
     Args:
-        revision_feedback: 用户对最终产出的修改意见
-        current_config: 当前使用的PresetConfig（含departments和dept_order）
-        api_url/api_key/model: LLM配置
-        lang: 语言
+        revision_feedback: User's revision feedback on final output
+        current_config: Current PresetConfig (containing departments and dept_order)
+        api_url/api_key/model: LLM configuration
+        lang: Language
     
     Returns:
         {
@@ -442,7 +441,7 @@ def analyze_revision_impact(
     """
     system_prompt = REVISION_IMPACT_SYSTEM_PROMPT_ZH if lang == "zh" else REVISION_IMPACT_SYSTEM_PROMPT_EN
     
-    # 构建当前部门信息
+    # Build current department info
     dept_info_lines = []
     for dk in current_config.get("dept_order", []):
         dept = current_config.get("departments", {}).get(dk, {})
@@ -482,7 +481,7 @@ def analyze_revision_impact(
     except Exception as e:
         return {
             "error": True,
-            "message": f"智能回炉分析失败: {str(e)}",
+            "message": f"Smart re-roll analysis failed: {str(e)}",
             "affected_departments": [],
             "cross_debate_pairs": [],
         }
@@ -491,14 +490,14 @@ def analyze_revision_impact(
     if parsed is None:
         return {
             "error": True,
-            "message": "智能回炉分析返回格式异常",
+            "message": "Smart re-roll analysis returned abnormal format",
             "raw_content": content,
             "affected_departments": [],
             "cross_debate_pairs": [],
         }
     
     parsed["error"] = False
-    # 确保字段存在
+    # Ensure required fields exist
     if "affected_departments" not in parsed:
         parsed["affected_departments"] = []
     if "cross_debate_pairs" not in parsed:
