@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit" alt="Streamlit">
-  <img src="https://img.shields.io/badge/Latest-v0.7.4-brightgreen" alt="Version">
+  <img src="https://img.shields.io/badge/Latest-v0.7.5-brightgreen" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
@@ -431,7 +431,7 @@ consensus-pipeline/
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| **v0.7.4** | 2026-07-17 | UI 9→4 Tab重组、easyScholar降级、README全面重写、语言选择前置 |
+| **v0.7.5** | 2026-07-17 | UI 9→4 Tab重组、easyScholar降级、README全面重写、语言选择前置 |
 | **v0.7.3** | 2026-07-17 | 修复辩论轮次参数处理（多轮辩论循环） |
 | **v0.7.2** | 2026-07-17 | 英文报告输出（`--lang en`）、GitHub旧tag清理 |
 | **v0.7.1** | 2026-07-17 | 首个开源版本：QC审校部门、动态领域配置、引用校验、置信度标注、OpenAlex优先 |
