@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Domain Configuration Generator — Consensus Pipeline v0.6.2
+Domain Configuration Generator — Consensus Pipeline v0.7.0
 
 Dynamically generates domain configuration based on research topic, ensuring pipeline generality.
 No more hardcoded domain-specific keywords (e.g., exclusion signals, energy keywords).
@@ -21,6 +21,7 @@ def generate_domain_config(topic: str, llm_call_fn: Callable, output_dir: str = 
     - query_rotation: Search query rotation list
     - tier_definitions: core/method/background tier definitions
     - llm_classify_prompt: LLM binary classification prompt template
+    - categorization_schema: Auto-generated classification dimensions, buckets, and keywords
 
     Args:
         topic: Research topic (e.g., "Machine Learning in Energy Economics")
@@ -68,11 +69,42 @@ You must output a valid JSON object containing the following fields:
    The prompt asks the LLM to answer "yes" or "no" for each paper — does this paper belong to the target domain?
    Format requirement: output "Paper N: Yes/No" for each paper, with a brief reason.
 
+6. "categorization_schema": An object defining classification dimensions for topic clustering.
+   This replaces hardcoded category maps, enabling domain-agnostic paper categorization.
+   Structure:
+   {
+     "research_area": {
+       "Category1": ["keyword1", "keyword2", ...],
+       "Category2": ["keyword3", ...],
+       "Other": []
+     },
+     "methodology": {
+       "Category1": ["keyword1", ...],
+       "Category2": ["keyword2", ...],
+       "Other": []
+     },
+     "data_type": {
+       "Category1": ["keyword1", ...],
+       "Other": []
+     },
+     "geographic_scope": {
+       "Category1": ["keyword1", ...],
+       "Other": []
+     }
+   }
+   Requirements:
+   - Must include exactly these 4 dimensions: research_area, methodology, data_type, geographic_scope
+   - Each dimension must have 3-5 meaningful categories (plus "Other" as fallback)
+   - Each category must have 3-8 lowercase English keywords (and optionally Chinese equivalents for matching Chinese papers)
+   - Categories and keywords must be SPECIFIC to the research topic — do NOT use generic placeholders
+   - The "Other" bucket must always exist with an empty keyword list []
+
 Important:
 - Output only JSON, no other text
 - Ensure the JSON is valid and parseable
 - Use English lowercase for keywords
-- Exclusion signals should cover common noise domains"""
+- Exclusion signals should cover common noise domains
+- categorization_schema must be topic-specific, not generic"""
 
     user_msg = f"Research topic: {topic}\n\nPlease generate the precise domain configuration JSON."
 
@@ -93,7 +125,7 @@ Important:
 
     # Validate required fields
     required_fields = ["domain_definition", "exclusion_signals", "query_rotation",
-                       "tier_definitions", "llm_classify_prompt"]
+                       "tier_definitions", "llm_classify_prompt", "categorization_schema"]
     for field in required_fields:
         if field not in config:
             config[field] = _default_domain_config(topic).get(field, "")
@@ -109,6 +141,17 @@ Important:
             elif "keywords" not in config["tier_definitions"][tier]:
                 config["tier_definitions"][tier]["keywords"] = []
 
+    # Validate categorization_schema structure
+    required_dims = ["research_area", "methodology", "data_type", "geographic_scope"]
+    if "categorization_schema" not in config or not isinstance(config["categorization_schema"], dict):
+        config["categorization_schema"] = _default_categorization_schema(topic)
+    else:
+        for dim in required_dims:
+            if dim not in config["categorization_schema"]:
+                config["categorization_schema"][dim] = {"Other": []}
+            elif not isinstance(config["categorization_schema"][dim], dict):
+                config["categorization_schema"][dim] = {"Other": []}
+
     # Save to file
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
@@ -117,6 +160,36 @@ Important:
             json.dump(config, f, ensure_ascii=False, indent=2)
 
     return config
+
+
+def _default_categorization_schema(topic: str) -> Dict[str, Any]:
+    """Default categorization schema (fallback when LLM generation fails)"""
+    topic_lower = topic.lower()
+    return {
+        "research_area": {
+            "Primary": [topic_lower.split()[0]] if topic_lower else ["research"],
+            "Related": [w for w in topic_lower.split()[:3]] if len(topic_lower.split()) > 1 else [],
+            "Other": [],
+        },
+        "methodology": {
+            "Empirical": ["empirical", "quantitative", "statistical"],
+            "Computational": ["simulation", "computational", "modeling"],
+            "Review": ["review", "meta-analysis", "survey"],
+            "Other": [],
+        },
+        "data_type": {
+            "Quantitative": ["quantitative", "numerical", "statistical"],
+            "Qualitative": ["qualitative", "interview", "case study"],
+            "Mixed": ["mixed methods", "triangulation"],
+            "Other": [],
+        },
+        "geographic_scope": {
+            "Global": ["global", "worldwide", "international"],
+            "Regional": ["regional", "cross-country", "multi-country"],
+            "National": ["national", "country-specific"],
+            "Other": [],
+        },
+    }
 
 
 def _extract_json(text: str) -> Dict[str, Any]:
@@ -191,5 +264,6 @@ Criteria:
 - "Yes": The paper's research topic or methodology is directly related to "{topic}"
 - "No": The paper does not involve this domain at all (e.g., belongs to unrelated fields like materials science, biology, medicine, etc.)
 
-Please strictly follow the output format."""
+Please strictly follow the output format.""",
+        "categorization_schema": _default_categorization_schema(topic),
     }
