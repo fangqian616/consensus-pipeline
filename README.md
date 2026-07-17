@@ -44,9 +44,9 @@ Consensus Pipeline replaces single-AI generation with **structured multi-agent d
 | **📊 Confidence Annotation** | Every conclusion tagged with `(N/M papers, confidence level)` — no more unsupported claims |
 | **🔧 OpenAlex Priority** | Abstract backfill uses OpenAlex first (no 429 rate limits), falls back to Semantic Scholar |
 
-### v0.7.1 vs v5.1.8
+### v0.7.1 vs Legacy Version
 
-| Metric | v5.1.8 | v0.7.1 |
+| Metric | Legacy | v0.7.1 |
 |--------|:------:|:----:|
 | Off-topic papers in output | 49/56 (88%) | 0/77 (0%) |
 | "See [N]" placeholder citations | Multiple | 0 |
@@ -366,13 +366,13 @@ consensus-pipeline/
 | Version | Date | Changes |
 |---------|------|---------|
 | **v0.7.1** | 2026-07-17 | QC department, dynamic domain config, citation validation, confidence annotation, OpenAlex priority |
-| v5.1.8-fix2 | 2026-07-16 | Reference section regex fix, carbon keyword filter |
-| v5.1.8 | 2026-07-15 | "See [N]" prefix ban, out-of-scope citation removal |
-| v5.1.7 | 2026-07-15 | Abstract backfill, OpenAlex integration |
-| v5.1 | 2026-07-15 | Dual-template report, 4th relevance filter, 209-journal registry |
-| v5.0 | 2026-07-15 | easyScholar API integration |
-| v4.0 | 2026-07-15 | Requirement research, academic mode, programming & tutorial depts |
-| v3.0 | 2026-07-14 | AI Router, user-editable prompts, local persistence, Skill injection |
+| v5.1.8-fix2 | 2026-07-16 | Reference section regex fix, carbon keyword filter *(legacy)* |
+| v5.1.8 | 2026-07-15 | "See [N]" prefix ban, out-of-scope citation removal *(legacy)* |
+| v5.1.7 | 2026-07-15 | Abstract backfill, OpenAlex integration *(legacy)* |
+| v5.1 | 2026-07-15 | Dual-template report, 4th relevance filter, 209-journal registry *(legacy)* |
+| v5.0 | 2026-07-15 | easyScholar API integration *(legacy)* |
+| v4.0 | 2026-07-15 | Requirement research, academic mode, programming & tutorial depts *(legacy)* |
+| v3.0 | 2026-07-14 | AI Router, user-editable prompts, local persistence, Skill injection *(legacy)* |
 
 All versions available as [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases).
 
