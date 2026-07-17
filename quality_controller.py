@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Quality Controller — Consensus Pipeline v6.0
+Quality Controller — Consensus Pipeline v0.6.2
 
 Implements the review-rejection pipeline: hard_filter → llm_classify → tag_layer → validate_citations
 Resolves the v5.1 issue of irrelevant papers mixing into CSV/charts
