@@ -587,7 +587,7 @@ class ReportGenerator:
 
             return "\n".join(lines) if lines else ""
         except Exception as e:
-            print(f"  [WARN] 图表生成失败: {e}")
+            print(f"  [WARN] Chart generation failed / 图表生成失败: {e}")
             return ""
 
     @staticmethod
