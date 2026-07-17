@@ -162,6 +162,18 @@ Script / Story
 
 ---
 
+## 📋 Prerequisites
+
+| Requirement | Details |
+|-------------|---------|
+| Python 3.9+ | 3.11+ recommended |
+| DeepSeek API Key | [Register](https://platform.deepseek.com/) — ~$0.01 per full run |
+| Internet | Access to DeepSeek API (custom endpoints supported) |
+
+> 💡 No GPU needed. No database needed. No other service registration required. Paper retrieval uses free open APIs (arXiv / Semantic Scholar / OpenAlex).
+
+---
+
 ## 🚀 Quick Start
 
 ```bash
@@ -393,17 +405,6 @@ Automated factual verification of report claims with source tracing.
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o` |
 | Custom | Any OpenAI-compatible endpoint | Any model |
 
-### Optional: easyScholar API
-
-For enhanced journal ranking, get a key at [easyScholar](https://www.easyscholar.cc/):
-
-```bash
-# Set in Streamlit sidebar or environment variable
-export EASYSCHOLAR_SECRET_KEY=your_key_here
-```
-
-Without easyScholar, the pipeline uses a local 209-journal registry as fallback.
-
 ### Environment Variables
 
 ```bash
@@ -504,6 +505,17 @@ A: Yes. In Smart Config, disable departments you don't need. For CLI, the full p
 A: Just change the `--topic` argument. Dynamic Domain Config (v0.7.1+) auto-generates new exclusion signals, query rotation, and tier definitions — no code changes needed.
 
 ---
+
+### Optional: easyScholar API
+
+For enhanced journal ranking, get a key at [easyScholar](https://www.easyscholar.cc/):
+
+```bash
+# Set in Streamlit sidebar or environment variable
+export EASYSCHOLAR_SECRET_KEY=your_key_here
+```
+
+Without easyScholar, the pipeline uses a local 209-journal registry as fallback.
 
 ## 🤝 Contributing
 
