@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit" alt="Streamlit">
-  <img src="https://img.shields.io/badge/Latest-v0.7.4-brightgreen" alt="Version">
+  <img src="https://img.shields.io/badge/Latest-v0.7.5-brightgreen" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
@@ -434,7 +434,7 @@ consensus-pipeline/
 
 | Version | Date | Changes |
 |---------|------|---------|
-| **v0.7.4** | 2026-07-17 | UI 9→4 Tab restructure, easyScholar demoted, README rewrite, language welcome screen |
+| **v0.7.5** | 2026-07-17 | UI 9→4 Tab restructure, easyScholar demoted, README rewrite, language welcome screen |
 | **v0.7.3** | 2026-07-17 | Fixed debate rounds parameter (multi-round debate loop) |
 | **v0.7.2** | 2026-07-17 | English report output (`--lang en`), legacy tag cleanup |
 | **v0.7.1** | 2026-07-17 | First public release: QC department, dynamic domain config, citation validation, confidence annotation, OpenAlex priority |
