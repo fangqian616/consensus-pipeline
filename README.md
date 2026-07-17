@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit" alt="Streamlit">
-  <img src="https://img.shields.io/badge/Latest-v0.7.3-brightgreen" alt="Version">
+  <img src="https://img.shields.io/badge/Latest-v0.7.4-brightgreen" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
