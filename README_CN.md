@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit" alt="Streamlit">
-  <img src="https://img.shields.io/badge/Latest-v0.7.0-brightgreen" alt="Version">
+  <img src="https://img.shields.io/badge/Latest-v0.7.1-brightgreen" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
@@ -29,12 +29,12 @@
 | **输入** | 研究主题 | 剧本/故事 |
 | **流程** | 检索→审校→辩论→综述 | 8部门辩论→分镜表→视频提示词 |
 | **输出** | 文献综述+论文元数据 | 九宫格分镜表+逐镜视频提示词 |
-| **成熟度** | ✅ v0.7.0 — 生产可用 | 🔄 v3.0 — 持续迭代中 |
+| **成熟度** | ✅ v0.7.1 — 生产可用 | 🔄 v3.0 — 持续迭代中 |
 | **适合** | 研究者、学生、分析师 | 动画制作者、内容创作者 |
 
 ---
 
-## 🆕 v0.7.0 新功能
+## 🆕 v0.7.1 新功能
 
 | 功能 | 说明 |
 |------|------|
@@ -44,9 +44,9 @@
 | **📊 置信度标注** | 每条结论标注`(N/M篇支撑，置信度)`——不再有无支撑的断言 |
 | **🔧 OpenAlex优先** | Abstract回填优先走OpenAlex（无429限流），回退Semantic Scholar |
 
-### v0.7.0 vs v5.1.8
+### v0.7.1 vs v5.1.8
 
-| 指标 | v5.1.8 | v0.7.0 |
+| 指标 | v5.1.8 | v0.7.1 |
 |------|:------:|:----:|
 | 产出中不相关论文 | 49/56 (88%) | 0/77 (0%) |
 | "参见[N]"占位引用 | 多处 | 0 |
@@ -61,7 +61,7 @@
 
 ## 🏗️ 架构
 
-### 学术管线 (v0.7.0)
+### 学术管线 (v0.7.1)
 
 ```
 研究主题
@@ -80,7 +80,7 @@
      ▼
 ┌─────────────────────────┐
 │ Phase 3.5: QC审校部门    │  ← 三层过滤：
-│ 质量审校（v0.7.0新增）      │     硬过滤→LLM分类→层级标注
+│ 质量审校（v0.7.1新增）      │     硬过滤→LLM分类→层级标注
 │                          │     219篇→77篇（core/method/background）
 └────────────┬────────────┘
              │
@@ -185,9 +185,9 @@ python run_pipeline.py --topic "机器学习在能源经济学上的运用"
 | **编程** | 分析主流模型/工具，输出可运行代码 |
 | **教程** | 教授研究工具与方法使用 |
 
-### QC审校部门（v0.7.0新增）
+### QC审校部门（v0.7.1新增）
 
-v0.7.0最大的质量飞跃。三层过滤确保零污染：
+v0.7.1最大的质量飞跃。三层过滤确保零污染：
 
 ```
 输入：219篇论文（多源检索）
@@ -208,7 +208,7 @@ v0.7.0最大的质量飞跃。三层过滤确保零污染：
 最终产出不相关率：0%
 ```
 
-### 动态领域配置（v0.7.0新增）
+### 动态领域配置（v0.7.1新增）
 
 不再硬编码关键词。LLM根据你的主题生成一切：
 
@@ -335,8 +335,8 @@ consensus-pipeline/
 ├── debate_engine.py             # 核心辩论引擎 (v3.0)
 ├── config_manager.py            # 配置持久化与预设
 ├── run_pipeline.py              # CLI无头运行器
-├── quality_controller.py        # QC审校部门 (v0.7.0)
-├── domain_config_generator.py   # 动态领域配置 (v0.7.0)
+├── quality_controller.py        # QC审校部门 (v0.7.1)
+├── domain_config_generator.py   # 动态领域配置 (v0.7.1)
 ├── report_generator.py          # 带置信度的报告生成
 ├── docx_exporter.py             # Word导出（表格格式化）
 ├── pdf_exporter.py              # PDF导出（中文字体支持）
@@ -363,7 +363,7 @@ consensus-pipeline/
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| **v0.7.0** | 2026-07-17 | QC审校部门、动态领域配置、引用校验、置信度标注、OpenAlex优先 |
+| **v0.7.1** | 2026-07-17 | QC审校部门、动态领域配置、引用校验、置信度标注、OpenAlex优先 |
 | v5.1.8-fix2 | 2026-07-16 | 参考文献段正则修复、碳关键词过滤 |
 | v5.1.8 | 2026-07-15 | 禁止"参见[N]"前缀、超范围引用删除 |
 | v5.1.7 | 2026-07-15 | Abstract回填、OpenAlex集成 |
