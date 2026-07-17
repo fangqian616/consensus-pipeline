@@ -626,6 +626,24 @@ def phase6_cross_debate(config, dept_outputs):
     log("Phase6", "Starting cross-debate / 开始交叉辩论")
 
     p2_debates = config.get("p2_cross_debates", [])
+
+    # v0.7.5 fallback: auto-generate cross-debate pairs if config left them empty
+    if not p2_debates:
+        dept_order = config.get("dept_order", [])
+        n = len(dept_order)
+        if n >= 2:
+            log("Phase6", f"p2_cross_debates empty, auto-generating {min(n//2, 3)} pairs from {n} departments")
+            for i in range(min(n // 2, 3)):
+                a = dept_order[i]
+                b = dept_order[n - 1 - i]
+                if a != b:
+                    p2_debates.append({
+                        "side_a": a,
+                        "side_b": b,
+                        "zh_topic": f"{a} 与 {b} 的交叉验证",
+                        "en_topic": f"Cross-validation: {a} vs {b}",
+                    })
+
     cross_results = []
 
     for debate_config in p2_debates:
