@@ -17,7 +17,7 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _FONT_CANDIDATES = [
     os.path.join(_THIS_DIR, "fonts", "LXGWWenKai-Regular.ttf"),
     os.path.join(_THIS_DIR, "v4-run", "fonts", "LXGWWenKai-Regular.ttf"),
-    "CJK_FONT_PATH_PLACEHOLDER",  # Chinese path — system-specific, do not translate
+    os.environ.get("CJK_FONT_PATH", ""),  # User-defined CJK font path via env var
     "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
 ]
