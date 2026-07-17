@@ -532,10 +532,32 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
         f"请基于以下论文列表，从{dept_name}角度给出专业分析。")
 
     arguments = []
+    rounds = max(1, rounds)  # Ensure at least 1 round
 
-    # Each debater speaks independently
-    for debater in debater_list:
-        system_prompt = f"""你是Consensus Pipeline的{dept_name}辩手「{debater['name']}」。
+    # Multi-round debate: debaters speak each round, can reference previous rounds
+    for round_num in range(1, rounds + 1):
+        round_label = f"Round {round_num}/{rounds}" if rounds > 1 else ""
+        if round_num > 1:
+            log("Phase5", f"  --- {round_label} ---")
+
+        for debater in debater_list:
+            # Build round context: in round 2+, include previous arguments
+            prev_context = ""
+            if round_num > 1:
+                prev_args = []
+                for a in arguments:
+                    if a["role"] != debater["key"]:
+                        prev_args.append(f"辩手「{a['debater']}」: {a['argument'][:800]}")
+                    else:
+                        prev_args.append(f"你（上一轮）: {a['argument'][:800]}")
+                prev_context = f"""
+
+【前{round_num-1}轮辩论摘要】
+{chr(10).join(prev_args)}
+
+请在上一轮观点基础上，回应其他辩手的质疑或补充新论据。不要重复已有观点，聚焦于：1) 对他人质疑的回应 2) 新的证据或角度"""
+
+            system_prompt = f"""你是Consensus Pipeline的{dept_name}辩手「{debater['name']}」。
 你的专业视角：{debater['style']}
 
 {task_prompt}
@@ -552,18 +574,25 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
 1. 基于论文列表中的具体证据，不要空泛
 2. 明确指出关键发现和问题
 3. 给出可操作的建议
-4. {_lang_instr()}"""
+4. {_lang_instr()}{prev_context}"""
 
-        user_msg = f"论文列表：\n{papers_summary[:12000]}"
+            user_msg = f"论文列表：\n{papers_summary[:12000]}"
+            if round_num > 1:
+                user_msg += f"\n\n（{round_label}——请在已有观点上深化或回应，避免重复）"
 
-        log("Phase5", f"  Debater {debater['name']} speaking...")
-        response = llm_call(system_prompt, user_msg, temperature=0.4)
+            log("Phase5", f"  Debater {debater['name']} {round_label} speaking...")
+            response = llm_call(system_prompt, user_msg, temperature=0.4)
 
-        arguments.append({
-            "debater": debater["name"],
-            "role": debater["key"],
-            "argument": response,
-        })
+            # For round 2+, append to existing argument; round 1 creates new entry
+            existing = [a for a in arguments if a["role"] == debater["key"]]
+            if existing and round_num > 1:
+                existing[0]["argument"] += f"\n\n--- {round_label} ---\n{response}"
+            else:
+                arguments.append({
+                    "debater": debater["name"],
+                    "role": debater["key"],
+                    "argument": response,
+                })
 
     # Consensus integration
     if len(arguments) > 1:
