@@ -730,18 +730,19 @@ def init_state():
 def render_sidebar():
     with st.sidebar:
         # Language switch
-        lang_col1, lang_col2 = st.columns(2)
-        with lang_col1:
-            if st.button("🇨🇳 中文", use_container_width=True,
-                         type="primary" if st.session_state.lang == "zh" else "secondary"):
-                st.session_state.lang = "zh"
-                st.rerun()
-        with lang_col2:
-            if st.button("🇬🇧 English", use_container_width=True,
-                         type="primary" if st.session_state.lang == "en" else "secondary"):
-                st.session_state.lang = "en"
-                st.rerun()
-        
+        # Language switch (compact)
+        _lang_opts = {"zh": "🇨🇳 中文", "en": "🇬🇧 English"}
+        _cur_lang = st.session_state.lang
+        _sel_lang = st.selectbox(
+            "Language", options=["zh", "en"],
+            format_func=lambda x: _lang_opts[x],
+            index=["zh", "en"].index(_cur_lang),
+            key="_sidebar_lang_select", label_visibility="collapsed"
+        )
+        if _sel_lang != _cur_lang:
+            st.session_state.lang = _sel_lang
+            st.rerun()
+
         st.divider()
         
         # API configuration
