@@ -1,7 +1,7 @@
 """
-交叉验证+主题聚类 — Consensus Pipeline v4.0
+Cross-Validation + Topic Clustering — Consensus Pipeline v4.0
 
-对检索结果进行交叉验证和9维度主题聚类。
+Performs cross-validation on search results and 9-dimension topic clustering.
 """
 import json
 from typing import List, Dict, Any, Optional
@@ -11,18 +11,18 @@ from collections import Counter, defaultdict
 from .search_engine import PaperCandidate
 
 
-# ============ 9维度聚类 ============
+# ============ 9-Dimension Clustering ============
 
 CLUSTERING_DIMENSIONS = [
-    "research_area",      # 研究领域
-    "methodology",        # 方法论
-    "data_type",          # 数据类型
-    "geographic_scope",   # 地理范围
-    "temporal_focus",     # 时间特征
-    "research_design",    # 研究设计
-    "core_finding",       # 核心发现
-    "policy_implication", # 政策含义
-    "tech_approach",      # 技术路线
+    "research_area",      # Research area
+    "methodology",        # Methodology
+    "data_type",          # Data type
+    "geographic_scope",   # Geographic scope
+    "temporal_focus",     # Temporal focus
+    "research_design",    # Research design
+    "core_finding",       # Core finding
+    "policy_implication", # Policy implication
+    "tech_approach",      # Technical approach
 ]
 
 
@@ -43,21 +43,21 @@ class ClusterResult:
 
 @dataclass
 class ValidationResult:
-    """交叉验证结果"""
+    """Cross-validation result"""
     paper_title: str = ""
     doi: str = ""
-    cross_source_count: int = 0      # 被几个检索源找到
-    consistency_score: float = 0.0   # 多源一致性分数
+    cross_source_count: int = 0      # Number of sources that found this paper
+    consistency_score: float = 0.0   # Multi-source consistency score
     sources: List[str] = field(default_factory=list)
     notes: str = ""
 
 
 class CrossValidator:
     """
-    交叉验证 + 主题聚类
+    Cross-Validation + Topic Clustering
 
-    1. 交叉验证：检查同一论文在多个检索源中出现的情况
-    2. 主题聚类：按9维度对论文进行分类
+    1. Cross-validation: check if the same paper appears across multiple search sources
+    2. Topic clustering: classify papers along 9 dimensions
     """
 
     def __init__(self, llm_call_fn=None):
@@ -65,17 +65,17 @@ class CrossValidator:
 
     def validate(self, papers: List[PaperCandidate]) -> List[ValidationResult]:
         """
-        交叉验证：多源出现次数越多，可信度越高。
+        Cross-validation: the more sources a paper appears in, the higher its credibility.
 
         Args:
-            papers: 候选论文列表（已去重但记录了来源）
+            papers: Candidate paper list (deduplicated but with source info preserved)
 
         Returns:
-            验证结果列表
+            List of validation results
         """
         results = []
 
-        # 按DOI或标题分组
+        # Group by DOI or title
         doi_groups = defaultdict(list)
         title_groups = defaultdict(list)
 
@@ -85,7 +85,7 @@ class CrossValidator:
             title_key = paper.title.lower()[:50].strip()
             title_groups[title_key].append(paper)
 
-        # 对每个唯一论文计算交叉验证分数
+        # Calculate cross-validation score for each unique paper
         seen = set()
         for paper in papers:
             key = paper.doi or paper.title.lower()[:50].strip()
@@ -93,7 +93,7 @@ class CrossValidator:
                 continue
             seen.add(key)
 
-            # 找到同一论文的所有来源记录
+            # Find all source records for the same paper
             if paper.doi:
                 group = doi_groups.get(paper.doi, [paper])
             else:
@@ -109,7 +109,7 @@ class CrossValidator:
                     sources.add(p.source)
 
             cross_count = len(sources)
-            consistency = min(1.0, cross_count / 3.0)  # 3个源全找到 = 1.0
+            consistency = min(1.0, cross_count / 3.0)  # Found in all 3 sources = 1.0
 
             results.append(ValidationResult(
                 paper_title=paper.title,
@@ -117,7 +117,7 @@ class CrossValidator:
                 cross_source_count=cross_count,
                 consistency_score=consistency,
                 sources=list(sources),
-                notes=f"在{cross_count}个检索源中被发现" if cross_count > 1 else "仅在1个检索源中发现",
+                notes=f"Found in {cross_count} sources" if cross_count > 1 else "Found in only 1 source",
             ))
 
         return results
@@ -128,14 +128,14 @@ class CrossValidator:
         dimensions: Optional[List[str]] = None,
     ) -> List[ClusterResult]:
         """
-        9维度主题聚类。
+        9-dimension topic clustering.
 
         Args:
-            papers: 候选论文列表
-            dimensions: 使用的维度列表，默认全部9维度
+            papers: Candidate paper list
+            dimensions: Dimensions to use, defaults to all 9
 
         Returns:
-            聚类结果列表
+            List of clustering results
         """
         dimensions = dimensions or CLUSTERING_DIMENSIONS
         results = []
@@ -152,7 +152,7 @@ class CrossValidator:
         papers: List[PaperCandidate],
         dimensions: List[str],
     ) -> List[ClusterResult]:
-        """基于规则的聚类（关键词匹配）"""
+        """Rule-based clustering (keyword matching)"""
         results = []
 
         for dim in dimensions:
@@ -172,75 +172,75 @@ class CrossValidator:
         return results
 
     def _categorize_by_dimension(self, dimension: str, paper: PaperCandidate) -> str:
-        """按维度归类论文"""
+        """Categorize a paper by the given dimension"""
         text = f"{paper.title} {paper.abstract}".lower()
 
         category_map = {
             "research_area": {
-                "碳价/碳市场": ["carbon price", "carbon market", "emission trading", "碳价", "碳市场"],
-                "能源效率": ["energy efficiency", "能源效率", "节能"],
-                "可再生能源": ["renewable", "solar", "wind", "可再生", "光伏", "风电"],
-                "能源政策": ["energy policy", "能源政策", "政策评估"],
-                "其他": [],
+                "Carbon Pricing/Market": ["carbon price", "carbon market", "emission trading", "碳价", "碳市场"],
+                "Energy Efficiency": ["energy efficiency", "能源效率", "节能"],
+                "Renewable Energy": ["renewable", "solar", "wind", "可再生", "光伏", "风电"],
+                "Energy Policy": ["energy policy", "能源政策", "政策评估"],
+                "Other": [],
             },
             "methodology": {
-                "计量经济学": ["econometric", "panel", "regression", "iv", "did", "计量", "面板", "回归"],
-                "机器学习": ["machine learning", "deep learning", "neural", "lstm", "机器学习", "深度学习"],
-                "混合方法": ["hybrid", "ensemble", "混合", "组合"],
-                "优化模型": ["optimization", "linear programming", "优化", "规划"],
-                "其他": [],
+                "Econometrics": ["econometric", "panel", "regression", "iv", "did", "计量", "面板", "回归"],
+                "Machine Learning": ["machine learning", "deep learning", "neural", "lstm", "机器学习", "深度学习"],
+                "Hybrid Methods": ["hybrid", "ensemble", "混合", "组合"],
+                "Optimization": ["optimization", "linear programming", "优化", "规划"],
+                "Other": [],
             },
             "data_type": {
-                "面板数据": ["panel data", "面板数据"],
-                "时间序列": ["time series", "时间序列", "序列"],
-                "截面数据": ["cross-section", "截面"],
-                "文本数据": ["text", "nlp", "文本", "自然语言"],
-                "其他": [],
+                "Panel Data": ["panel data", "面板数据"],
+                "Time Series": ["time series", "时间序列", "序列"],
+                "Cross-Section": ["cross-section", "截面"],
+                "Text Data": ["text", "nlp", "文本", "自然语言"],
+                "Other": [],
             },
             "geographic_scope": {
-                "中国": ["china", "chinese", "中国"],
-                "全球": ["global", "worldwide", "全球"],
-                "欧洲": ["europe", "eu", "欧洲"],
-                "美国": ["united states", "usa", "美国"],
-                "其他": [],
+                "China": ["china", "chinese", "中国"],
+                "Global": ["global", "worldwide", "全球"],
+                "Europe": ["europe", "eu", "欧洲"],
+                "United States": ["united states", "usa", "美国"],
+                "Other": [],
             },
         }
 
         if dimension in category_map:
-            for category, keywords in category_map[dimension].items():
-                if category == "其他":
+            for category, keywords in category_map.items():
+                if category == "Other":
                     continue
                 if any(kw in text for kw in keywords):
                     return category
-            return "其他"
+            return "Other"
 
-        # 没有规则的维度，返回"未分类"
-        return "未分类"
+        # Dimensions without rules default to "Uncategorized"
+        return "Uncategorized"
 
     def _cluster_with_llm(
         self,
         papers: List[PaperCandidate],
         dimensions: List[str],
     ) -> List[ClusterResult]:
-        """使用LLM进行聚类"""
+        """LLM-based clustering"""
         paper_list = [{"title": p.title, "journal": p.journal, "year": p.year} for p in papers]
 
-        system_prompt = f"""你是学术论文分类专家。对以下论文按{len(dimensions)}个维度进行聚类。
+        system_prompt = f"""You are an academic paper classification expert. Cluster the following papers across {len(dimensions)} dimensions.
 
-维度列表：{json.dumps(dimensions, ensure_ascii=False)}
+Dimension list: {json.dumps(dimensions, ensure_ascii=False)}
 
-请输出JSON格式的聚类结果：
+Output JSON-formatted clustering results:
 [
   {{
-    "dimension": "维度名",
+    "dimension": "dimension_name",
     "clusters": {{
-      "类别1": ["论文标题1", "论文标题2"],
-      "类别2": ["论文标题3"]
+      "category1": ["paper_title1", "paper_title2"],
+      "category2": ["paper_title3"]
     }}
   }}
 ]"""
 
-        user_msg = f"论文列表：\n{json.dumps(paper_list, ensure_ascii=False, indent=2)}"
+        user_msg = f"Paper list:\n{json.dumps(paper_list, ensure_ascii=False, indent=2)}"
         response = self.llm_call_fn(system_prompt, user_msg)
 
         try:
@@ -256,5 +256,5 @@ class CrossValidator:
                 ))
             return results
         except json.JSONDecodeError:
-            # 回退到规则聚类
+            # Fallback to rule-based clustering
             return self._cluster_rule_based(papers, dimensions)
