@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit" alt="Streamlit">
-  <img src="https://img.shields.io/badge/Latest-v6.0-brightgreen" alt="Version">
+  <img src="https://img.shields.io/badge/Latest-v0.6.2-brightgreen" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
@@ -29,12 +29,12 @@ Consensus Pipeline replaces single-AI generation with **structured multi-agent d
 | **Input** | A research topic | A script / story |
 | **Process** | Search → QC → Debate → Review | 8-dept debate → Storyboard → Video prompts |
 | **Output** | Literature review + paper metadata | 9-grid storyboard + per-shot video prompts |
-| **Maturity** | ✅ v6.0 — production-ready | 🔄 v3.0 — actively iterating |
+| **Maturity** | ✅ v0.6.2 — production-ready | 🔄 v3.0 — actively iterating |
 | **Best for** | Researchers, students, analysts | Animators, content creators |
 
 ---
 
-## 🆕 What's New in v6.0
+## 🆕 What's New in v0.6.2
 
 | Feature | Description |
 |---------|-------------|
@@ -44,9 +44,9 @@ Consensus Pipeline replaces single-AI generation with **structured multi-agent d
 | **📊 Confidence Annotation** | Every conclusion tagged with `(N/M papers, confidence level)` — no more unsupported claims |
 | **🔧 OpenAlex Priority** | Abstract backfill uses OpenAlex first (no 429 rate limits), falls back to Semantic Scholar |
 
-### v6.0 vs v5.1.8
+### v0.6.2 vs v5.1.8
 
-| Metric | v5.1.8 | v6.0 |
+| Metric | v5.1.8 | v0.6.2 |
 |--------|:------:|:----:|
 | Off-topic papers in output | 49/56 (88%) | 0/77 (0%) |
 | "See [N]" placeholder citations | Multiple | 0 |
@@ -61,7 +61,7 @@ Full changelog: [GitHub Releases](https://github.com/fangqian616/consensus-pipel
 
 ## 🏗️ Architecture
 
-### Academic Pipeline (v6.0)
+### Academic Pipeline (v0.6.2)
 
 ```
 Research Topic
@@ -81,7 +81,7 @@ Research Topic
 ┌─────────────────────────┐
 │ Phase 3.5: QC Department│  ← 3-layer sieve:
 │ Quality Control         │     hard_filter → LLM_classify → tag_layer
-│ (NEW in v6.0)           │     219 papers → 77 relevant (core/method/background)
+│ (NEW in v0.6.2)           │     219 papers → 77 relevant (core/method/background)
 └────────────┬────────────┘
              │
      ▼
@@ -187,9 +187,9 @@ python run_pipeline.py --topic "Machine Learning in Energy Economics"
 | **Programming** | Analyze mainstream models/tools, output runnable code |
 | **Tutorial** | Teach how to use research tools & methods |
 
-### QC Department (v6.0 New)
+### QC Department (v0.6.2 New)
 
-The biggest quality leap in v6.0. Three-layer filtering ensures zero pollution:
+The biggest quality leap in v0.6.2. Three-layer filtering ensures zero pollution:
 
 ```
 Input: 219 papers (from multi-source retrieval)
@@ -210,7 +210,7 @@ Exclusion rate: 64.8%
 Off-topic rate in final output: 0%
 ```
 
-### Dynamic Domain Config (v6.0 New)
+### Dynamic Domain Config (v0.6.2 New)
 
 No more hardcoded keywords. LLM generates everything based on your topic:
 
@@ -337,8 +337,8 @@ consensus-pipeline/
 ├── debate_engine.py             # Core debate engine (v3.0)
 ├── config_manager.py            # Config persistence & presets
 ├── run_pipeline.py              # CLI runner for headless execution
-├── quality_controller.py        # QC department (v6.0)
-├── domain_config_generator.py   # Dynamic domain config (v6.0)
+├── quality_controller.py        # QC department (v0.6.2)
+├── domain_config_generator.py   # Dynamic domain config (v0.6.2)
 ├── report_generator.py          # Report generation with confidence
 ├── docx_exporter.py             # Word export with table formatting
 ├── pdf_exporter.py              # PDF export with Chinese fonts
@@ -365,7 +365,7 @@ consensus-pipeline/
 
 | Version | Date | Changes |
 |---------|------|---------|
-| **v6.0** | 2026-07-16 | QC department, dynamic domain config, citation validation, confidence annotation, OpenAlex priority |
+| **v0.6.2** | 2026-07-17 | QC department, dynamic domain config, citation validation, confidence annotation, OpenAlex priority |
 | v5.1.8-fix2 | 2026-07-16 | Reference section regex fix, carbon keyword filter |
 | v5.1.8 | 2026-07-15 | "See [N]" prefix ban, out-of-scope citation removal |
 | v5.1.7 | 2026-07-15 | Abstract backfill, OpenAlex integration |
