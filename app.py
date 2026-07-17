@@ -389,6 +389,21 @@ LANG = {
         "config_clarification": "⚠️ AI需要更多信息",
         "config_error": "❌ 配置出错",
         "config_current": "当前配置",
+        # --- Tab restructure keys ---
+        "tab_setup": "🔬 需求与配置",
+        "tab_setup_req": "📋 需求调研",
+        "tab_setup_config": "🧠 智能配组",
+        "tab_setup_input": "📝 内容输入",
+        "tab_debate_combined": "🗣️ 辩论",
+        "tab_dept_debate": "🗣️ 部门辩论",
+        "tab_cross_debate_sub": "⚔️ 交叉辩论",
+        "tab_output_combined": "🎬 产出",
+        "tab_final_output": "🎬 最终产出",
+        "tab_proofread_sub": "🔍 校对",
+        "tab_tools": "📊 工具",
+        "tab_compare_sub": "📊 运行对比",
+        "tab_market_sub": "🏪 市场模式",
+        "toast_config_confirmed": "✅ 配置已确认！请切换到「辩论」Tab开始",
     },
     "en": {
         "title": "🧠 AI Consensus Pipeline",
@@ -608,6 +623,21 @@ LANG = {
         "config_clarification": "⚠️ AI needs more information",
         "config_error": "❌ Configuration error",
         "config_current": "Current Config",
+        # --- Tab restructure keys ---
+        "tab_setup": "🔬 Setup",
+        "tab_setup_req": "📋 Requirement",
+        "tab_setup_config": "🧠 Smart Config",
+        "tab_setup_input": "📝 Input",
+        "tab_debate_combined": "🗣️ Debate",
+        "tab_dept_debate": "🗣️ Dept. Debate",
+        "tab_cross_debate_sub": "⚔️ Cross Debate",
+        "tab_output_combined": "🎬 Output",
+        "tab_final_output": "🎬 Final Output",
+        "tab_proofread_sub": "🔍 Proofread",
+        "tab_tools": "📊 Tools",
+        "tab_compare_sub": "📊 Compare",
+        "tab_market_sub": "🏪 Market",
+        "toast_config_confirmed": "✅ Config confirmed! Switch to Debate tab",
     }
 }
 
@@ -833,6 +863,36 @@ def render_sidebar():
             help=t("step_mode_hint"),
         )
 
+        st.divider()
+        
+        # Advanced settings
+        with st.expander("🔧 " + ("高级设置" if is_zh else "Advanced"), expanded=False):
+            _es_key = st.text_input(
+                "easyScholar API Key" + ("（可选，国内用户增强期刊排名）" if is_zh else " (optional, CN users only)"),
+                value=st.session_state.get("easyscholar_key", ""),
+                type="password",
+                help="https://www.easyscholar.cc/ → 用户中心 → 开放API" if is_zh else "Optional. Only useful for Chinese journal rankings.",
+            )
+            if _es_key:
+                st.session_state.easyscholar_key = _es_key
+                os.environ["EASYSCHOLAR_SECRET_KEY"] = _es_key
+            
+            st.markdown("---")
+            
+            # .env file generator
+            st.markdown("📄 " + ("CLI配置文件生成" if is_zh else "CLI Config (.env)"))
+            if st.session_state.get("api_key"):
+                if st.button("💾 " + ("保存到.env文件" if is_zh else "Save .env file"), key="save_env_btn"):
+                    env_content = f"DEEPSEEK_API_KEY={st.session_state.api_key}\n"
+                    if st.session_state.get("easyscholar_key"):
+                        env_content += f"EASYSCHOLAR_SECRET_KEY={st.session_state.easyscholar_key}\n"
+                    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+                    with open(env_path, "w") as ef:
+                        ef.write(env_content)
+                    st.success(("✅ .env已保存！CLI模式可直接运行" if is_zh else "✅ .env saved! CLI mode ready"))
+            else:
+                st.caption(("请先在上方填写API Key" if is_zh else "Fill API Key above first"))
+        
         st.divider()
         
         # Archive management
@@ -3609,6 +3669,9 @@ def render_requirement_tab():
                     # Write to current config
                     apply_config(final_config)
                     
+                    # Set auto-jump flag for toast notification
+                    st.session_state._auto_jump_to_debate = True
+                    
                     # Auto-fill requirement doc into script field so debate tab can start directly
                     req_doc = st.session_state.get("req_document")
                     req_structured = st.session_state.get("req_structured")
@@ -3641,7 +3704,7 @@ def render_requirement_tab():
                     st.session_state.req_discussion = None
                     st.session_state.req_config = None
                     
-                    st.success("✅ " + ("配置已确认！请切换到「输入」Tab检查内容，再进入「部门辩论」开始辩论" if is_zh else "Config confirmed! Check Input tab, then go to Debate tab"))
+                    st.success("✅ " + ("配置已确认！请切换到「辩论」Tab开始" if is_zh else "Config confirmed! Switch to Debate tab"))
                     st.balloons()
             
             with col2:
@@ -3730,36 +3793,53 @@ def main():
     st.title(t("title"))
     st.caption(t("subtitle"))
     
-    tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
-        t("tab_requirement"),
-        t("tab_config"),
-        t("tab_input"),
-        t("tab_debate"),
-        t("tab_cross"),
-        t("tab_output"),
-        t("tab_proofread"),
-        t("tab_compare"),
-        t("tab_market"),
+    tab0, tab1, tab2, tab3 = st.tabs([
+        t("tab_setup"),
+        t("tab_debate_combined"),
+        t("tab_output_combined"),
+        t("tab_tools"),
     ])
     
+    # Tab0: 需求与配置 — sub-tabs
     with tab0:
-        render_requirement_tab()
+        sub_tab0, sub_tab1, sub_tab2 = st.tabs([
+            t("tab_setup_req"),
+            t("tab_setup_config"),
+            t("tab_setup_input"),
+        ])
+        with sub_tab0:
+            render_requirement_tab()
+        with sub_tab1:
+            render_config_tab()
+        with sub_tab2:
+            render_input_tab()
+    
+    # Tab1: 辩论 — expanders
     with tab1:
-        render_config_tab()
+        with st.expander(t("tab_dept_debate"), expanded=True):
+            render_debate_tab()
+        with st.expander(t("tab_cross_debate_sub"), expanded=False):
+            render_cross_tab()
+    
+    # Tab2: 产出 — expanders
     with tab2:
-        render_input_tab()
+        with st.expander(t("tab_final_output"), expanded=True):
+            render_output_tab()
+        with st.expander(t("tab_proofread_sub"), expanded=False):
+            render_proofread_tab()
+    
+    # Tab3: 工具 — expanders
     with tab3:
-        render_debate_tab()
-    with tab4:
-        render_cross_tab()
-    with tab5:
-        render_output_tab()
-    with tab6:
-        render_proofread_tab()
-    with tab7:
-        render_compare_tab()
-    with tab8:
-        render_market_tab()
+        with st.expander(t("tab_compare_sub"), expanded=True):
+            render_compare_tab()
+        with st.expander(t("tab_market_sub"), expanded=False):
+            render_market_tab()
+    
+    # Auto-jump toast after tab rendering
+    if st.session_state.get("_auto_jump_to_debate"):
+        st.session_state._auto_jump_to_debate = False
+        is_zh = st.session_state.get("lang", "zh") == "zh"
+        st.toast(t("toast_config_confirmed"))
 
 
 if __name__ == "__main__":
