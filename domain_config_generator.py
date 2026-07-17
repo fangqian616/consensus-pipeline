@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Domain Configuration Generator — Consensus Pipeline v6.0
+Domain Configuration Generator — Consensus Pipeline v0.6.2
 
 Dynamically generates domain configuration based on research topic, ensuring pipeline generality.
 No more hardcoded domain-specific keywords (e.g., exclusion signals, energy keywords).
