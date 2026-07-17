@@ -1,5 +1,7 @@
 """
-Report Generator — Consensus Pipeline v5.1
+Report Generator — Consensus Pipeline v5.2
+
+v5.2: --lang parameter support (zh/en output)
 
 v5.1: Dual template separation
   - Final deliverable report (<=2000 words, user-facing): information-density-first, layered presentation
@@ -33,7 +35,7 @@ class ReportGenerator:
     - internal_doc.md: Internal working document, complete process record
     """
 
-    def __init__(self, output_dir: str = "./output", llm_call_fn=None):
+    def __init__(self, output_dir: str = "./output", llm_call_fn=None, output_lang: str = "zh"):
         self.output_dir = output_dir
         self.llm_call_fn = llm_call_fn
 
@@ -140,7 +142,7 @@ class ReportGenerator:
         debate_outputs: Optional[Dict[str, str]] = None,
     ) -> str:
         """Build final deliverable report. If llm_call_fn exists, use AI to write review; otherwise fallback to template."""
-        now = datetime.now().strftime("%Y年%m月%d日")
+        now = datetime.now().strftime("%B %d, %Y" if self.output_lang == "en" else "%Y年%m月%d日")
 
         s_papers = [p for p in papers if p.quality_level == "S"]
         a_papers = [p for p in papers if p.quality_level == "A"]
@@ -183,7 +185,38 @@ class ReportGenerator:
         method_dist = self._compute_method_distribution(qualified)
         consensus_text = "\n".join([f"- {c}" for c in (consensus_points or [])])
 
-        system_prompt = """你是一位资深学术综述撰写专家。你的任务是基于给定的论文数据和辩论组共识撰写一篇结构完整的学术动向综述报告。
+        if self.output_lang == "en":
+            system_prompt = """You are a senior academic review writing expert. Your task is to write a structured academic trend review report based on given paper data and debate group consensus.
+
+            Writing guidelines:
+            1. Each section must have substantive content paragraphs, not bare bullet points
+            2. Cite specific papers to support arguments, marked with [number]
+            3. Methodology comparison must have depth: pros/cons, applicable scenarios, computational costs, data requirements
+            4. Trend analysis based on year distribution data, explain evolution trajectory
+            5. Counter-evidence must be included: valid criticisms, failure cases, applicability boundaries
+            6. Research gaps analyzed from "why hasn't anyone done this" and "what value would it bring" perspectives
+            7. Academic but accessible language, avoid filler and vague statements
+            8. Only cite papers from the provided list, do not fabricate citations
+            9. Papers marked with warning sign are not relevant, do not cite them
+            10. The list may contain irrelevant papers, cite only those directly related
+            11. [Relevance Rule] Cited papers [N] must have both domain-specific AND methodology keywords
+            12. [Counter-evidence] Each mainstream conclusion must have opposing evidence with confidence level
+            13. [No placeholder] "see [N]" as content substitute is strictly forbidden
+            14. [Continuation Rule] Continuation must include specific descriptions, not placeholders
+            15. [Debate Integration] Prioritize verified department conclusions over your own inference
+            16. [Quantitative Rule] Include at least one quantitative metric per method description
+            17. [Debate Focus Required] Cite disagreement points in at least 3 places
+            18. [Comparison Matrix] Each cell must contain specific content, trend uses direction symbols
+            19. [Data Card First] The review must begin with a structured data card
+            20. [Paragraph Coherence] Each paragraph must be a complete academic argument
+            21. [Abstract-driven Citation] Citation descriptions must match the paper's abstract
+            22. [Irrelevant Paper Filtering] Do not cite papers with clearly unrelated abstracts
+            23. [No "see" prefix] Adding "see" before [N] is forbidden in body text and tables
+            24. [Citation Constraint] All citations from paper list only, each conclusion indicates supporting count
+            25. [Confidence Label] Each core conclusion has confidence label with supporting paper count
+            26. [Limitations Required] Include "Search Boundary and Limitations" section covering: search source coverage, paper quantity limits, methodology boundary conditions, conclusion applicability and extrapolation risks"""
+        else:
+            system_prompt = """你是一位资深学术综述撰写专家。你的任务是基于给定的论文数据和辩论组共识撰写一篇结构完整的学术动向综述报告。
 
 写作规范：
 1. 每个章节要有实质内容段落，不是干巴巴的要点列表
@@ -213,7 +246,53 @@ class ReportGenerator:
 25. 【v0.7.0置信度标注】每个核心结论后面必须标注置信度：(N/M篇支撑，置信度🟢高/🟡中/🔴低)，评判标准：N≥5且方法论一致→🟢；3≤N<5或存在争议→🟡；N<3→🔴
 26. 【v0.7.0局限性必现】综述必须包含"检索边界与局限性"章节，说明：(a)检索源覆盖范围与盲区；(b)论文数量与代表性限制；(c)方法论评估的边界条件；(d)结论适用范围与外推风险"""
 
-        user_prompt = f"""请撰写「{topic}」领域的学术动向综述报告。
+        if self.output_lang == "en":
+            user_prompt = f"""Please write an academic trend review report on "{topic}".
+
+            ## Available Paper Data
+
+            ### Year Distribution
+            {year_dist}
+
+            ### Method Distribution (extracted from title/abstract)
+            {method_dist}
+
+            ### Paper List ({len(qualified)} S/A/B-tier papers: {len(s_papers)} S-tier, {len(a_papers)} A-tier, {len(b_papers)} B-tier)
+            {paper_list}
+
+            ### Department Debate Consensus
+            {consensus_text if consensus_text else "No debate data"}
+
+            {self._format_debate_outputs(debate_outputs)}
+
+            ---
+
+            Please write according to the following structure:
+
+            # {topic}
+
+            > Academic Trend Review | Consensus Pipeline v5 | {now}
+
+            ## Data Card
+
+            | Metric | Value |
+            |--------|-------|
+            | Papers retrieved | {len(qualified)} |
+            | S-tier | {len(s_papers)} |
+            | A-tier | {len(a_papers)} |
+            | B-tier | {len(b_papers)} |
+            | Time span | {self._compute_year_span(qualified)} |
+            | Method categories | {len(method_dist.split(chr(10)))} |
+            | Preprints | {len(papers) - len(qualified)} |
+
+            ## 1. Research Overview and Development
+            ## 2. Methodology Evolution and Quantitative Comparison
+            ## 3. Core Findings and Controversies
+            ## 4. Research Gaps and Bibliometric Evidence
+            ## 5. Search Boundary and Limitations
+            ## 6. References (APA format, grouped by S/A/B)"""
+        else:
+            user_prompt = f"""请撰写「{topic}」领域的学术动向综述报告。
 
 ## 可用论文数据
 
@@ -800,9 +879,10 @@ class ReportGenerator:
         return "\n".join(lines)
 
     def _build_final_title(self, topic: str, now: str) -> str:
+        subtitle = "Academic Trend Review" if self.output_lang == "en" else "学术动向调研报告"
         return f"""# {topic}
 
-> 学术动向调研报告 | Consensus Pipeline v5.1 | {now}"""
+> {subtitle} | Consensus Pipeline v5.1 | {now}"""
 
     def _build_final_summary(
         self,
@@ -937,7 +1017,7 @@ class ReportGenerator:
         consensus_points: Optional[List[str]],
     ) -> str:
         """Core findings: 3-5 items, each with confidence, compressed from debate consensus to one sentence"""
-        lines = ["## 一、核心发现", ""]
+        lines = ["## 1. Core Findings" if self.output_lang == "en" else "## 一、核心发现", ""]
 
         findings = []
 
@@ -1005,15 +1085,15 @@ class ReportGenerator:
                         method_items.append(f"- **{cat}**: {count}篇")
 
         if not method_items:
-            return "## 二、方法论分布\n\n*待方法论审查部门产出后补充*"
+            return "## 2. Methodology Distribution\n\n*To be supplemented after methodology review*" if self.output_lang == "en" else "## 二、方法论分布\n\n*待方法论审查部门产出后补充*"
 
-        lines = ["## 二、方法论分布", ""]
+        lines = ["## 2. Methodology Distribution" if self.output_lang == "en" else "## 二、方法论分布", ""]
         lines.extend(method_items)
         return "\n".join(lines)
 
     def _build_final_trends(self, papers: List[PaperCandidate]) -> str:
         """Hot trends: concise 3 items"""
-        lines = ["## 三、热点趋势", ""]
+        lines = ["## 3. Hot Trends" if self.output_lang == "en" else "## 三、热点趋势", ""]
 
         year_counts = {}
         for p in papers:
@@ -1035,7 +1115,7 @@ class ReportGenerator:
         a_papers: List[PaperCandidate],
     ) -> str:
         """Representative papers Top 5, title+journal+year only"""
-        lines = ["## 四、代表性论文", ""]
+        lines = ["## 4. Representative Papers" if self.output_lang == "en" else "## 四、代表性论文", ""]
 
         top = (s_papers + a_papers)[:5]
         if not top:
@@ -1056,7 +1136,7 @@ class ReportGenerator:
         consensus_points: Optional[List[str]],
     ) -> str:
         """Research gaps and opportunities"""
-        lines = ["## 五、研究空白与机会", ""]
+        lines = ["## 5. Research Gaps and Opportunities" if self.output_lang == "en" else "## 五、研究空白与机会", ""]
 
         gaps = [
             {"gap": "多任务联合建模", "detail": "碳排放-电价-负荷缺乏联合优化框架", "suggestion": "多任务学习(MTL)"},
@@ -1083,8 +1163,8 @@ class ReportGenerator:
 
         lines.append("### 检索源覆盖范围与盲区")
         lines.append("- 检索源：arXiv（预印本）、Semantic Scholar（跨学科）、OpenAlex（全面覆盖）")
-        lines.append("- 盲区：可能遗漏部分中文核心期刊、行业技术报告、会议论文集")
-        lines.append("- 非英语文献覆盖有限，中文CSSCI期刊可能未被充分检索")
+        lines.append("- Blind spots: may miss some core journals, industry technical reports, conference proceedings" if self.output_lang == "en" else "- 盲区：可能遗漏部分中文核心期刊、行业技术报告、会议论文集")
+        lines.append("- Non-English literature coverage is limited" if self.output_lang == "en" else "- 非英语文献覆盖有限，中文CSSCI期刊可能未被充分检索")
         lines.append("")
 
         lines.append("### 论文数量与代表性限制")
@@ -1112,7 +1192,7 @@ class ReportGenerator:
         a_papers: List[PaperCandidate],
     ) -> str:
         """References: list all S-tier + A-tier papers"""
-        lines = ["## 六、参考文献", ""]
+        lines = ["## 6. References" if self.output_lang == "en" else "## 六、参考文献", ""]
 
         top = s_papers + a_papers
         if not top:
