@@ -1,5 +1,5 @@
 """
-Department Configuration Recommendation Module — Consensus Pipeline v4.0
+Department Configuration Recommendation Module — Consensus Pipeline v0.7.0
 
 Recommends complete department configuration (PresetConfig format) based on structured requirements + discussion group input,
 presented in full for user review.
@@ -302,10 +302,26 @@ class ConfigRecommender:
         requirement: StructuredRequirement,
         discussion: DiscussionResult,
     ) -> dict:
-        """Adjust configuration using LLM"""
+        """Adjust configuration using LLM, with structural integrity protection.
+
+        Critical: The LLM must preserve the complete department structure including
+        all debaters. If the LLM fails to preserve debaters, we fall back to the
+        original config for affected departments.
+        """
+        # Snapshot original debaters for integrity check
+        original_debaters = {}
+        for dept_name, dept_data in config.get("departments", {}).items():
+            if "debaters" in dept_data:
+                original_debaters[dept_name] = dept_data["debaters"]
+
         system_prompt = """You are a configuration optimization expert. Adjust the department configuration based on the requirement document and discussion group input.
-Keep the PresetConfig format unchanged; only adjust content and parameters.
-Output the complete adjusted configuration JSON, no other text."""
+
+CRITICAL STRUCTURAL RULES:
+1. Keep the PresetConfig format unchanged; only adjust content and parameters.
+2. You MUST preserve ALL departments and ALL debaters in the output.
+3. Do NOT remove, rename, or empty any department or debater entry.
+4. You may adjust debater styles (zh_style/en_style) to better fit the topic, but keep debater names (zh_name/en_name) and keys (A, B, C) intact.
+5. Output the complete adjusted configuration JSON, no other text."""
 
         user_msg = f"""Requirement document:
 {requirement.to_json()}
@@ -316,13 +332,33 @@ Discussion group input:
 Current configuration:
 {json.dumps(config, ensure_ascii=False)}
 
-Please adjust the configuration to better match the requirement, focusing on supplementary suggestions from the discussion group."""
+Please adjust the configuration to better match the requirement, focusing on supplementary suggestions from the discussion group. Remember: preserve ALL departments and debaters."""
 
         response = self.llm_call_fn(system_prompt, user_msg)
         try:
-            return json.loads(response)
+            adjusted = json.loads(response)
         except json.JSONDecodeError:
             return config
+
+        # Integrity check: restore debaters if LLM emptied them
+        for dept_name, original_dept_debaters in original_debaters.items():
+            adjusted_dept = adjusted.get("departments", {}).get(dept_name, {})
+            adjusted_debaters = adjusted_dept.get("debaters", {})
+
+            # If debaters were removed or emptied, restore from original
+            if not adjusted_debaters or not isinstance(adjusted_debaters, dict):
+                if dept_name not in adjusted.get("departments", {}):
+                    adjusted.setdefault("departments", {})[dept_name] = config["departments"][dept_name]
+                else:
+                    adjusted["departments"][dept_name]["debaters"] = original_dept_debaters
+
+        # Ensure dept_order is preserved if LLM removed entries
+        original_order = config.get("dept_order", [])
+        adjusted_order = adjusted.get("dept_order", [])
+        if len(adjusted_order) < len(original_order):
+            adjusted["dept_order"] = original_order
+
+        return adjusted
 
     def _generate_default_config(self, requirement: StructuredRequirement) -> dict:
         """Generate default configuration (when no matching template exists)"""
