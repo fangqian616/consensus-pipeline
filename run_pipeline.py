@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Consensus Pipeline v0.6.2 — End-to-end CLI Runner
+Consensus Pipeline v0.7.0 — End-to-end CLI Runner
 
 Usage:
     python run_pipeline.py --topic "Your Research Topic"
 
-v0.6.2 Changes:
+v0.7.0 Changes:
 - Phase 0.5: Dynamic domain config generation (replaces hardcoded keywords)
 - Phase 3.5: QC department (hard_filter → llm_classify → tag_layer) + supplemental search
 - search_engine: Config-driven relevance filtering (exclusion_signals return 0.0)
@@ -254,27 +254,27 @@ def phase4_search():
     return all_papers, all_preprints, relevance_log
 
 
-# ============ Phase 4 v0.6.2: Config-Driven Academic Search ============
+# ============ Phase 4 v0.7.0: Config-Driven Academic Search ============
 def phase4_search_v6(domain_config=None):
     """
-    v0.6.2: Execute academic search using domain_config to drive queries and filter logic.
+    v0.7.0: Execute academic search using domain_config to drive queries and filter logic.
 
     If domain_config provides query_rotation, use dynamic search queries;
     Otherwise fallback to hardcoded search queries.
     """
-    log("Phase4", "Starting academic search (v0.6.2: config-driven)")
+    log("Phase4", "Starting academic search (v0.7.0: config-driven)")
     from academic.search_engine import AcademicSearchEngine
 
-    # v0.6.2: Pass domain_config to search_engine to enable config-driven relevance filtering
+    # v0.7.0: Pass domain_config to search_engine to enable config-driven relevance filtering
     engine = AcademicSearchEngine(
         quality_levels=["S", "A", "B"],
         min_citations=5,
         min_results=20,
         include_preprints=True,
-        domain_config=domain_config,  # v0.6.2: Pass domain_config
+        domain_config=domain_config,  # v0.7.0: Pass domain_config
     )
 
-    # v0.6.2: Use query_rotation from domain_config as search queries
+    # v0.7.0: Use query_rotation from domain_config as search queries
     if domain_config and domain_config.get("query_rotation"):
         queries = domain_config["query_rotation"]
         log("Phase4", f"Using domain_config query_rotation: {queries[:3]}...")
@@ -343,7 +343,7 @@ def phase4_search_v6(domain_config=None):
     save_json({"papers": papers_data, "preprints": preprints_data, "level_counts": level_counts},
               "phase4_search_results.json")
 
-    # v0.6.2: Relevance filter log (domain_config-driven exclusions already applied)
+    # v0.7.0: Relevance filter log (domain_config-driven exclusions already applied)
     relevance_log = {
         "total_before": len(all_papers),
         "total_after": len(all_papers),
@@ -659,7 +659,7 @@ def reclassify_papers(papers):
 
 def backfill_abstracts(papers):
     """
-    v0.6.2: 对S/A级论文回填abstract。
+    v0.7.0: 对S/A级论文回填abstract。
     优先使用OpenAlex（礼貌池10次/秒，基本不限流），
     OpenAlex失败时回退Semantic Scholar（1次/秒，容易429）。
     """
@@ -691,7 +691,7 @@ def backfill_abstracts(papers):
                 else:
                     oa_url = f"https://api.openalex.org/works?search={_urlp.quote_plus(p.title[:200])}&per_page=1&select=id,abstract_inverted_index"
                 oa_req = urllib.request.Request(oa_url, headers={
-                    "User-Agent": "ConsensusPipeline/0.6.2",
+                    "User-Agent": "ConsensusPipeline/0.7.0",
                     "mailto": "consensus-pipeline@research.org"  # 礼貌池
                 })
                 with urllib.request.urlopen(oa_req, timeout=15) as resp:
@@ -731,7 +731,7 @@ def backfill_abstracts(papers):
                     ss_url = f"https://api.semanticscholar.org/graph/v1/paper/DOI:{_urlp.quote_plus(p.doi)}?fields=abstract"
                 else:
                     ss_url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={_urlp.quote_plus(p.title[:100])}&limit=1&fields=abstract"
-                ss_req = urllib.request.Request(ss_url, headers={"User-Agent": "ConsensusPipeline/0.6.2"})
+                ss_req = urllib.request.Request(ss_url, headers={"User-Agent": "ConsensusPipeline/0.7.0"})
                 with urllib.request.urlopen(ss_req, timeout=15) as resp:
                     ss_data = json.loads(resp.read())
 
@@ -1029,7 +1029,7 @@ def supplement_search(domain_config, dedup_registry, round_num):
     """
     Supplemental search: use different queries from query_rotation, excluding seen papers.
 
-    v0.6.2: When QC-reviewed valid papers < 15, use query_rotation from domain_config
+    v0.7.0: When QC-reviewed valid papers < 15, use query_rotation from domain_config
     for supplemental search to avoid search exhaustion.
 
     Args:
@@ -1065,7 +1065,7 @@ def supplement_search(domain_config, dedup_registry, round_num):
         min_citations=3,  # Supplemental search relaxes citation requirements
         min_results=10,
         include_preprints=True,
-        domain_config=domain_config,  # v0.6.2: Pass domain_config
+        domain_config=domain_config,  # v0.7.0: Pass domain_config
     )
 
     try:
@@ -1129,12 +1129,12 @@ def self_evaluation(report, papers, dept_outputs):
 # ============ Main Flow ============
 def main():
     start_time = time.time()
-    log("MAIN", f"========== Consensus Pipeline v0.6.2 End-to-End Run ==========")
+    log("MAIN", f"========== Consensus Pipeline v0.7.0 End-to-End Run ==========")
     log("MAIN", f"Topic: {TOPIC}")
     log("MAIN", f"Model: {MODEL}")
     log("MAIN", f"Output directory: {OUTPUT_DIR}")
 
-    # v0.6.2: Domain config, initially empty, populated after Phase 0.5
+    # v0.7.0: Domain config, initially empty, populated after Phase 0.5
     domain_config = None
 
     try:
@@ -1148,7 +1148,7 @@ def main():
         save_json(domain_config, "phase0.5_domain_config.json")
         log("Phase0.5", f"Domain config generation complete: exclusion_signals={len(domain_config.get('exclusion_signals', []))}, "
              f"query_rotation={len(domain_config.get('query_rotation', []))}, "
-             f"tier_layers={list(domain_config.get('tier_definitions', {}).keys())}")
+             f"tier_layers={list(domain_config.get('tier_definitions', {}).keys())}, categorization_dims={list(domain_config.get('categorization_schema', {}).keys())}")
 
         # Phase 1: Structuring
         structured = phase1_structure(doc)
@@ -1159,7 +1159,7 @@ def main():
         # Phase 3: Configuration recommendation
         config = phase3_config(structured, discussion)
 
-        # Phase 4: Academic search (v0.6.2: pass domain_config)
+        # Phase 4: Academic search (v0.7.0: pass domain_config)
         # Modified phase4_search to use domain_config
         papers, preprints, relevance_log = phase4_search_v6(domain_config)
 
@@ -1236,7 +1236,7 @@ def main():
                                      prog_output=prog_output, tut_output=tut_output,
                                      relevance_log=relevance_log)
 
-        # v0.6.2: Citation validation (after report generation, compare CSV to remove invalid citations)
+        # v0.7.0: Citation validation (after report generation, compare CSV to remove invalid citations)
         log("Phase7.5", "Citation validation...")
         from quality_controller import QualityController
         qc_validate = QualityController(llm_call_fn=llm_call, domain_config=domain_config, output_dir=OUTPUT_DIR)
