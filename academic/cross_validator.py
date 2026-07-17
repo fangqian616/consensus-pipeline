@@ -1,5 +1,5 @@
 """
-Cross-Validation + Topic Clustering — Consensus Pipeline v4.0
+Cross-Validation + Topic Clustering — Consensus Pipeline v0.7.0
 
 Performs cross-validation on search results and 9-dimension topic clustering.
 """
@@ -60,8 +60,10 @@ class CrossValidator:
     2. Topic clustering: classify papers along 9 dimensions
     """
 
-    def __init__(self, llm_call_fn=None):
+    def __init__(self, llm_call_fn=None, domain_config: Optional[Dict[str, Any]] = None):
         self.llm_call_fn = llm_call_fn
+        self.domain_config = domain_config or {}
+        self._categorization_schema = self.domain_config.get("categorization_schema", {})
 
     def validate(self, papers: List[PaperCandidate]) -> List[ValidationResult]:
         """
@@ -172,49 +174,64 @@ class CrossValidator:
         return results
 
     def _categorize_by_dimension(self, dimension: str, paper: PaperCandidate) -> str:
-        """Categorize a paper by the given dimension"""
+        """Categorize a paper by the given dimension.
+
+        Reads categorization rules from domain_config["categorization_schema"] if available,
+        otherwise falls back to generic keyword matching.
+        """
         text = f"{paper.title} {paper.abstract}".lower()
 
-        category_map = {
+        # Use categorization_schema from domain_config if available
+        dim_schema = self._categorization_schema.get(dimension, {})
+
+        if dim_schema:
+            for category, keywords in dim_schema.items():
+                if category == "Other":
+                    continue
+                if not keywords:
+                    continue
+                if any(kw.lower() in text for kw in keywords):
+                    return category
+            return "Other"
+
+        # Fallback: generic keyword matching for known dimensions
+        _generic_fallback = {
             "research_area": {
-                "Carbon Pricing/Market": ["carbon price", "carbon market", "emission trading", "碳价", "碳市场"],
-                "Energy Efficiency": ["energy efficiency", "能源效率", "节能"],
-                "Renewable Energy": ["renewable", "solar", "wind", "可再生", "光伏", "风电"],
-                "Energy Policy": ["energy policy", "能源政策", "政策评估"],
+                "Primary Research": ["research", "study", "analysis", "investigation"],
+                "Review/Survey": ["review", "survey", "meta-analysis", "overview"],
                 "Other": [],
             },
             "methodology": {
-                "Econometrics": ["econometric", "panel", "regression", "iv", "did", "计量", "面板", "回归"],
-                "Machine Learning": ["machine learning", "deep learning", "neural", "lstm", "机器学习", "深度学习"],
-                "Hybrid Methods": ["hybrid", "ensemble", "混合", "组合"],
-                "Optimization": ["optimization", "linear programming", "优化", "规划"],
+                "Empirical": ["empirical", "quantitative", "statistical", "econometric"],
+                "Computational": ["simulation", "computational", "modeling", "numerical"],
+                "Qualitative": ["qualitative", "interview", "case study"],
                 "Other": [],
             },
             "data_type": {
-                "Panel Data": ["panel data", "面板数据"],
-                "Time Series": ["time series", "时间序列", "序列"],
-                "Cross-Section": ["cross-section", "截面"],
-                "Text Data": ["text", "nlp", "文本", "自然语言"],
+                "Quantitative": ["quantitative", "numerical", "panel", "time series"],
+                "Qualitative": ["qualitative", "text", "interview"],
+                "Mixed": ["mixed methods", "triangulation"],
                 "Other": [],
             },
             "geographic_scope": {
-                "China": ["china", "chinese", "中国"],
-                "Global": ["global", "worldwide", "全球"],
-                "Europe": ["europe", "eu", "欧洲"],
-                "United States": ["united states", "usa", "美国"],
+                "Global": ["global", "worldwide", "international"],
+                "Regional": ["regional", "cross-country", "multi-country"],
+                "National": ["national", "country-specific"],
                 "Other": [],
             },
         }
 
-        if dimension in category_map:
-            for category, keywords in category_map.items():
+        if dimension in _generic_fallback:
+            for category, keywords in _generic_fallback[dimension].items():
                 if category == "Other":
+                    continue
+                if not keywords:
                     continue
                 if any(kw in text for kw in keywords):
                     return category
             return "Other"
 
-        # Dimensions without rules default to "Uncategorized"
+        # Dimensions without any rules default to "Uncategorized"
         return "Uncategorized"
 
     def _cluster_with_llm(
