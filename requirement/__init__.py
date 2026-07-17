@@ -1,7 +1,7 @@
 """
-需求调研通用模块 — Consensus Pipeline v4.0
+Requirement Research Module — Consensus Pipeline v0.7.0
 
-对话式需求调研 → 结构化 → 讨论组 → 配置推荐 → 事实校验
+Conversational requirement gathering → Structuring → Discussion group → Config recommendation → Fact checking
 """
 
 from .interviewer import RequirementInterviewer, RequirementDocument
