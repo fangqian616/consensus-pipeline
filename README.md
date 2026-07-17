@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit" alt="Streamlit">
-  <img src="https://img.shields.io/badge/Latest-v0.7.1-brightgreen" alt="Version">
+  <img src="https://img.shields.io/badge/Latest-v0.7.3-brightgreen" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
@@ -18,9 +18,17 @@
 
 ---
 
+## ❓ Why Not Just Ask ChatGPT?
+
+A single LLM produces confident-sounding answers with no cross-validation — hallucinations slip through, conflicting perspectives get flattened, and you can't tell which conclusions are solid vs. speculative. This framework replaces one-shot generation with **structured multi-agent debate as a quality gate**: every claim is challenged by independent "departments," contradictions are surfaced explicitly, and final conclusions carry **confidence annotations** (e.g., "42/77 papers, high confidence"). Think of it as built-in peer review — not a single author, but an adversarial committee.
+
+---
+
 ## 🎯 What Does It Do?
 
 Consensus Pipeline replaces single-AI generation with **structured multi-agent debate**. Different AI "departments" argue from their professional perspectives, challenge each other's assumptions, and converge on a high-quality consensus output.
+
+**Core design philosophy:** structured multi-agent debate as a quality gate — every claim is contested, every assumption is challenged, and the output carries explicit confidence levels rather than false certainty.
 
 **Two pipelines, one framework:**
 
@@ -29,12 +37,12 @@ Consensus Pipeline replaces single-AI generation with **structured multi-agent d
 | **Input** | A research topic | A script / story |
 | **Process** | Search → QC → Debate → Review | 8-dept debate → Storyboard → Video prompts |
 | **Output** | Literature review + paper metadata | 9-grid storyboard + per-shot video prompts |
-| **Maturity** | 🧪 v0.7.1 — early stage, seeking feedback | 🔄 v3.0 — actively iterating |
+| **Maturity** | 🧪 v0.7.3 — early stage, seeking feedback | 🔄 v3.0 — actively iterating |
 | **Best for** | Researchers, students, analysts | Animators, content creators |
 
 ---
 
-## 🆕 What's New in v0.7.1
+## 🆕 What's New in v0.7.3
 
 | Feature | Description |
 |---------|-------------|
@@ -43,6 +51,8 @@ Consensus Pipeline replaces single-AI generation with **structured multi-agent d
 | **🔗 Citation Validation** | Auto-verify all `[N]` references against CSV; remove dangling citations |
 | **📊 Confidence Annotation** | Every conclusion tagged with `(N/M papers, confidence level)` — no more unsupported claims |
 | **🔧 OpenAlex Priority** | Abstract backfill uses OpenAlex first (no 429 rate limits), falls back to Semantic Scholar |
+| **🌐 English Report (`--lang en`)** | v0.7.2: Full English report output via `--lang en` flag |
+| **🔄 Rounds Fix** | v0.7.3: Fixed debate rounds parameter handling for consistent multi-round behavior |
 
 ### v0.7.1 vs Legacy Version
 
@@ -61,9 +71,27 @@ Full changelog: [GitHub Releases](https://github.com/fangqian616/consensus-pipel
 
 ---
 
+## 📸 Demo / Screenshots
+
+> Screenshots coming soon. Below is a description of each Streamlit tab:
+
+| Tab | What It Does |
+|-----|-------------|
+| 🧠 Smart Config | Describe your goal → AI auto-configures departments & debaters |
+| 📝 Input | Enter script/topic, positive/negative prompts, character refs |
+| 🗣️ Dept. Debate | Watch departments debate in real-time, review each debater's arguments |
+| ⚔️ Cross Debate | Resolve contradictions between departments |
+| 🔍 Proofread | Multi-department review & auto-correction of final output |
+| 🎬 Output | Export 9-grid storyboard + per-shot video prompts |
+| 📊 Compare | Side-by-side runs with different models/architectures |
+| 🏪 Market | Candidate campaigns → voting election → patch correction |
+| 📚 Academic | Full academic pipeline: search → QC → debate → literature review |
+
+---
+
 ## 🏗️ Architecture
 
-### Academic Pipeline (v0.7.1)
+### Academic Pipeline (v0.7.3)
 
 ```
 Research Topic
@@ -81,9 +109,9 @@ Research Topic
              │
      ▼
 ┌─────────────────────────┐
-│ Phase 2: QC Department│  ← 3-layer sieve:
+│ Phase 2: QC Department  │  ← 3-layer sieve:
 │ Quality Control         │     hard_filter → LLM_classify → tag_layer
-│ (NEW in v0.7.1)           │     219 papers → 77 relevant (core/method/background)
+│ (NEW in v0.7.1)         │     219 papers → 77 relevant (core/method/background)
 └────────────┬────────────┘
              │
      ▼
@@ -143,31 +171,100 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-### Academic Pipeline (CLI)
+### 🔬 Academic Pipeline (CLI)
 
 ```bash
-# Set your DeepSeek API key
+# 1️⃣ Set your DeepSeek API key
 export DEEPSEEK_API_KEY=your_key_here
 
-# Run the full pipeline
+# 2️⃣ Run the full pipeline (Chinese report, default)
 python run_pipeline.py --topic "Machine Learning in Energy Economics"
+
+# 3️⃣ Run with English report output
+python run_pipeline.py --topic "Machine Learning in Energy Economics" --lang en
 ```
 
-### Academic Pipeline (Streamlit)
+**CLI parameters:**
 
-1. Configure API key in sidebar
-2. Enter your research topic
-3. AI generates domain config → confirm
-4. Watch papers retrieved, filtered, debated
-5. Get your literature review with confidence annotations
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `--topic` | ✅ Yes | — | Research topic (e.g., "LLM in Healthcare") |
+| `--lang` | No | `zh` | Output language: `zh` (Chinese) or `en` (English) |
 
-### Creative Pipeline
+### 🔬 Academic Pipeline (Streamlit)
 
-1. Select "Animation Mode" in sidebar
-2. Enter your script
-3. AI auto-configures 8 departments
-4. Watch departments debate in real-time
-5. Export 9-grid storyboard + video prompts
+1️⃣ **Configure API** — Enter your DeepSeek/OpenAI key in the sidebar
+2️⃣ **Enter topic** — Type your research topic in the 📚 Academic tab
+3️⃣ **Confirm config** — AI generates domain config (exclusion signals, query terms); review & confirm
+4️⃣ **Watch pipeline run** — Papers are retrieved → QC-filtered → debated across 11 departments
+5️⃣ **Get results** — Download literature review with confidence annotations, PDF/DOCX exports
+
+### 🎬 Creative Pipeline (Streamlit)
+
+1️⃣ **Smart Config** — Go to 🧠 Smart Config tab, describe your content goal (or pick a preset)
+2️⃣ **Enter script** — Switch to 📝 Input tab, fill in script + positive/negative prompts
+3️⃣ **Run debate** — Click "一键全辩" (auto-run all) or use step-by-step mode
+4️⃣ **Review output** — Check 🗣️ Dept. Debate and ⚔️ Cross Debate tabs for intermediate results
+5️⃣ **Export** — Go to 🎬 Output tab for 9-grid storyboard + per-shot video prompts
+
+---
+
+## 📖 Usage
+
+### CLI Reference
+
+The `run_pipeline.py` script provides headless execution of the academic pipeline:
+
+```bash
+python run_pipeline.py --topic "Your Research Topic" --lang en
+```
+
+| Flag | Type | Default | Choices | Description |
+|------|------|---------|---------|-------------|
+| `--topic` | str | *(required)* | — | Research topic for literature review |
+| `--lang` | str | `zh` | `zh`, `en` | Output language for the final report |
+
+You can also set the topic via environment variable:
+
+```bash
+export DEEPSEEK_TOPIC="Machine Learning in Energy Economics"
+python run_pipeline.py
+```
+
+### Streamlit Tab Guide
+
+The Streamlit UI (`streamlit run app.py`) organizes the workflow across tabs:
+
+| # | Tab | Pipeline | Purpose |
+|---|-----|----------|---------|
+| 1 | 🧠 Smart Config | Both | AI auto-configures departments & debaters; load/save presets |
+| 2 | 📝 Input | Creative | Enter script, prompts, character references |
+| 3 | 🗣️ Dept. Debate | Creative | Run & monitor department-level debates |
+| 4 | ⚔️ Cross Debate | Creative | Resolve inter-department contradictions |
+| 5 | 🔍 Proofread | Creative | Multi-dept review and auto-correction |
+| 6 | 🎬 Output | Creative | View & export storyboard + video prompts |
+| 7 | 📊 Compare | Creative | Side-by-side comparison of different runs |
+| 8 | 🏪 Market | Creative | Candidate generation → voting → patch correction |
+| 9 | 📚 Academic | Academic | Full pipeline: search → QC → debate → report |
+
+### Environment Configuration
+
+**API Keys (required):**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DEEPSEEK_API_KEY` | ✅ Yes | DeepSeek API key for LLM calls |
+| `EASYSCHOLAR_SECRET_KEY` | No | easyScholar key for enhanced journal ranking |
+
+**Model Selection:**
+
+| Provider | API URL | Recommended Model |
+|----------|--------|-------------------|
+| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` or `deepseek-v4-pro` |
+| OpenAI | `https://api.openai.com/v1` | `gpt-4o` |
+| Custom | Any OpenAI-compatible endpoint | Any model |
+
+Set API key and model in the Streamlit sidebar, or via environment variables.
 
 ---
 
@@ -189,30 +286,17 @@ python run_pipeline.py --topic "Machine Learning in Energy Economics"
 | **Programming** | Analyze mainstream models/tools, output runnable code |
 | **Tutorial** | Teach how to use research tools & methods |
 
-### QC Department (v0.7.1 New)
+### QC Department (v0.7.1+)
 
 The biggest quality leap in v0.7.1. Three-layer filtering ensures zero pollution:
 
-```
-Input: 219 papers (from multi-source retrieval)
-  │
-  ├── Layer 1: Hard Filter (exclusion signals)
-  │   → Removes obviously off-topic papers (e.g., carbon nanotube, botany)
-  │   → Excluded: 5 papers
-  │
-  ├── Layer 2: LLM Classify (domain membership)
-  │   → LLM judges each paper: "belongs to domain?" Yes/No
-  │   → Excluded: 137 papers
-  │
-  └── Layer 3: Layer Tagging (importance tier)
-      → core (68) / method (6) / background (3)
-      → Final output: 77 papers
+- **Layer 1 — Hard Filter**: Remove obviously off-topic papers via exclusion signals (e.g., carbon nanotube, botany)
+- **Layer 2 — LLM Classify**: LLM judges each paper's domain membership; excluded 137/219 papers
+- **Layer 3 — Layer Tagging**: Classify remaining papers into importance tiers: core (68) / method (6) / background (3)
 
-Exclusion rate: 64.8%
-Off-topic rate in final output: 0%
-```
+Result: 219 → 77 papers, 64.8% exclusion rate, 0% off-topic in final output.
 
-### Dynamic Domain Config (v0.7.1 New)
+### Dynamic Domain Config (v0.7.1+)
 
 No more hardcoded keywords. LLM generates everything based on your topic:
 
@@ -221,8 +305,7 @@ No more hardcoded keywords. LLM generates everything based on your topic:
   "domain_definition": "Application of ML methods to energy economics...",
   "exclusion_signals": ["carbon nanotube", "botany", "materials science"],
   "query_rotation": ["machine learning energy forecasting", "deep learning electricity pricing", ...],
-  "tier_definitions": {"core": "...", "method": "...", "background": "..."},
-  "llm_classify_prompt": "Given a paper with title and abstract..."
+  "tier_definitions": {"core": "...", "method": "...", "background": "..."}
 }
 ```
 
@@ -367,6 +450,8 @@ consensus-pipeline/
 
 | Version | Date | Changes |
 |---------|------|---------|
+| **v0.7.3** | 2026-07-18 | Fixed debate rounds parameter handling |
+| **v0.7.2** | 2026-07-18 | English report output (`--lang en`) |
 | **v0.7.1** | 2026-07-17 | QC department, dynamic domain config, citation validation, confidence annotation, OpenAlex priority |
 | v5.1.8-fix2 | 2026-07-16 | Reference section regex fix, carbon keyword filter *(legacy)* |
 | v5.1.8 | 2026-07-15 | "See [N]" prefix ban, out-of-scope citation removal *(legacy)* |
@@ -389,8 +474,34 @@ All versions available as [GitHub Releases](https://github.com/fangqian616/conse
 | P1 | Semantic citation verification (embedding-based) | Planned |
 | P1 | Sub-topic query splitting | Planned |
 | P1 | Publication bias detection (funnel plot) | Planned |
+| P1 | Multi-round debate | ✅ Done (v0.7.3) |
 | P2 | Cross-language retrieval (CNKI + bilingual alignment) | Planned |
 | P2 | Incremental update capability | Planned |
+
+---
+
+## ❓ FAQ / Troubleshooting
+
+**Q: How long does a full pipeline run take?**
+A: Academic pipeline: 10-30 minutes depending on topic and paper count. Creative pipeline: 5-15 minutes for 8-department debate. Use Expert Pool mode to cut time ~50%.
+
+**Q: Token consumption seems high — how much does it cost?**
+A: Full 8-department creative debate costs ~10k-30k tokens (varies by debate rounds). Expert Pool mode reduces this by ~50%. With DeepSeek pricing, a full run costs under $0.10.
+
+**Q: Which APIs are supported?**
+A: Any OpenAI-compatible API. DeepSeek (recommended, best value), OpenAI, or locally deployed models via custom endpoints.
+
+**Q: What languages does the output support?**
+A: Academic pipeline: Chinese (`--lang zh`, default) and English (`--lang en`). Creative pipeline: output prompts are always in English; the Streamlit UI supports both Chinese and English.
+
+**Q: Debate quality is inconsistent — what can I do?**
+A: (1) Increase debate rounds, (2) use a stronger model, (3) add specific constraints in debater prompts, (4) use director rejection to force re-debate.
+
+**Q: Can I run only some departments?**
+A: Yes. In Smart Config, disable departments you don't need. For CLI, the full pipeline runs all departments.
+
+**Q: How do I switch to a different research domain?**
+A: Just change the `--topic` argument. Dynamic Domain Config (v0.7.1+) auto-generates new exclusion signals, query rotation, and tier definitions — no code changes needed.
 
 ---
 
