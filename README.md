@@ -29,7 +29,7 @@ Consensus Pipeline replaces single-AI generation with **structured multi-agent d
 | **Input** | A research topic | A script / story |
 | **Process** | Search → QC → Debate → Review | 8-dept debate → Storyboard → Video prompts |
 | **Output** | Literature review + paper metadata | 9-grid storyboard + per-shot video prompts |
-| **Maturity** | ✅ v0.7.1 — production-ready | 🔄 v3.0 — actively iterating |
+| **Maturity** | 🧪 v0.7.1 — early stage, seeking feedback | 🔄 v3.0 — actively iterating |
 | **Best for** | Researchers, students, analysts | Animators, content creators |
 
 ---
@@ -45,6 +45,8 @@ Consensus Pipeline replaces single-AI generation with **structured multi-agent d
 | **🔧 OpenAlex Priority** | Abstract backfill uses OpenAlex first (no 429 rate limits), falls back to Semantic Scholar |
 
 ### v0.7.1 vs Legacy Version
+
+*Baseline test: energy economics domain*
 
 | Metric | Legacy | v0.7.1 |
 |--------|:------:|:----:|
@@ -68,7 +70,7 @@ Research Topic
      │
      ▼
 ┌─────────────────────────┐
-│ Phase 0.5: Domain Config │  ← LLM generates exclusion signals, query terms, tier rules
+│ Phase 0: Domain Config │  ← LLM generates exclusion signals, query terms, tier rules
 └────────────┬────────────┘
              │
      ▼
@@ -79,26 +81,26 @@ Research Topic
              │
      ▼
 ┌─────────────────────────┐
-│ Phase 3.5: QC Department│  ← 3-layer sieve:
+│ Phase 2: QC Department│  ← 3-layer sieve:
 │ Quality Control         │     hard_filter → LLM_classify → tag_layer
 │ (NEW in v0.7.1)           │     219 papers → 77 relevant (core/method/background)
 └────────────┬────────────┘
              │
      ▼
 ┌─────────────────────────┐
-│ Phase 4: Department     │  ← 11 research departments debate
+│ Phase 3: Department     │  ← 11 research departments debate
 │ Debate (serial)         │     Each dept: 3-4 debaters → consensus
 └────────────┬────────────┘
              │
      ▼
 ┌─────────────────────────┐
-│ Phase 5: Cross-Dept     │  ← Resolve contradictions between departments
+│ Phase 4: Cross-Dept     │  ← Resolve contradictions between departments
 │ Debate                  │
 └────────────┬────────────┘
              │
      ▼
 ┌─────────────────────────┐
-│ Phase 7: Report         │  ← Literature review with confidence annotations
+│ Phase 5: Report         │  ← Literature review with confidence annotations
 │ Generation              │     Citation validation, PDF/DOCX export
 └─────────────────────────┘
 ```
