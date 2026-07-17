@@ -644,7 +644,7 @@ class AcademicSearchEngine:
 
         # Title hits weighted 2x, phrase hits weighted 3x
         raw_score = (title_hits * 2 + abstract_hits + phrase_hits * 3)
-        max_score = len(query_tokens) * 2 + len(query_phrases) * 3  # 标题全命中的满分
+        max_score = len(query_tokens) * 2 + len(query_phrases) * 3  # Max score when all query tokens hit the title
 
         if max_score == 0:
             return 0.5
