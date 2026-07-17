@@ -1,13 +1,17 @@
 """
-Department Configuration Recommendation Module — Consensus Pipeline v0.7.0
+Department Configuration Recommendation Module — Consensus Pipeline v0.7.5
 
 Recommends complete department configuration (PresetConfig format) based on structured requirements + discussion group input,
 presented in full for user review.
+
+v0.7.5 fix: cross-debates fallback — if LLM or default config leaves p2_cross_debates/p5_cross_debates empty,
+auto-generate pairs from available departments to prevent Phase 6 from producing empty output.
 """
 import json
 import os
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
+from itertools import combinations
 
 from .structurer import StructuredRequirement
 from .discussion_group import DiscussionResult
@@ -26,6 +30,42 @@ def _load_template(name: str) -> dict:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
+
+
+def _auto_generate_cross_debates(dept_order: List[str], max_pairs: int = 3) -> List[dict]:
+    """Auto-generate cross-debate pairs from available departments.
+
+    Fallback when LLM or default config leaves p2_cross_debates empty.
+    Generates up to max_pairs pairs from departments with debaters > 1,
+    or from all departments if none have multiple debaters.
+
+    Args:
+        dept_order: List of department keys in execution order
+        max_pairs: Maximum number of cross-debate pairs to generate
+
+    Returns:
+        List of cross-debate config dicts with side_a, side_b, zh_topic, en_topic
+    """
+    if len(dept_order) < 2:
+        return []
+
+    # Prefer pairing departments that are not adjacent (cross-domain validation)
+    # e.g., pair early-phase depts with late-phase depts
+    pairs = []
+    n = len(dept_order)
+    # Strategy: pair i-th from start with i-th from end
+    for i in range(min(n // 2, max_pairs)):
+        a = dept_order[i]
+        b = dept_order[n - 1 - i]
+        if a != b:
+            pairs.append({
+                "side_a": a,
+                "side_b": b,
+                "zh_topic": f"{a} 与 {b} 的交叉验证",
+                "en_topic": f"Cross-validation: {a} vs {b}",
+            })
+
+    return pairs
 
 
 # ============ Academic Research Department Template (embedded default) ============
@@ -271,6 +311,10 @@ class ConfigRecommender:
         # Adjust based on discussion group input
         config = self._adjust_with_discussion(base_config, requirement, discussion)
 
+        # === v0.7.5: Cross-debates fallback ===
+        # If cross-debates are empty after all adjustments, auto-generate from departments
+        config = self._ensure_cross_debates(config)
+
         # Inject requirement info into configuration description
         config["name"] = f"{requirement.topic} - {config.get('name', 'Custom Configuration')}"
         config["description"] = self._build_description(requirement, discussion)
@@ -280,6 +324,27 @@ class ConfigRecommender:
     def _deep_copy_config(self, config: dict) -> dict:
         """Deep-copy configuration"""
         return json.loads(json.dumps(config))
+
+    def _ensure_cross_debates(self, config: dict) -> dict:
+        """Ensure cross-debates are populated. Auto-generate from departments if empty.
+
+        v0.7.5 fix: prevents Phase 6 from producing empty output when LLM or
+        default config leaves p2_cross_debates/p5_cross_debates empty.
+        """
+        dept_order = config.get("dept_order", [])
+
+        # Fix p2_cross_debates
+        p2 = config.get("p2_cross_debates", [])
+        if not p2 and len(dept_order) >= 2:
+            config["p2_cross_debates"] = _auto_generate_cross_debates(dept_order, max_pairs=3)
+
+        # Fix p5_cross_debates
+        p5 = config.get("p5_cross_debates", [])
+        if not p5 and len(dept_order) >= 2:
+            # Generate at least 1 pair for final consensus check
+            config["p5_cross_debates"] = _auto_generate_cross_debates(dept_order, max_pairs=1)
+
+        return config
 
     def _adjust_with_discussion(
         self,
@@ -305,14 +370,18 @@ class ConfigRecommender:
         """Adjust configuration using LLM, with structural integrity protection.
 
         Critical: The LLM must preserve the complete department structure including
-        all debaters. If the LLM fails to preserve debaters, we fall back to the
-        original config for affected departments.
+        all debaters and cross-debates. If the LLM fails to preserve them, we fall
+        back to the original config for affected sections.
         """
         # Snapshot original debaters for integrity check
         original_debaters = {}
         for dept_name, dept_data in config.get("departments", {}).items():
             if "debaters" in dept_data:
                 original_debaters[dept_name] = dept_data["debaters"]
+
+        # Snapshot original cross-debates for integrity check
+        original_p2_cross = config.get("p2_cross_debates", [])
+        original_p5_cross = config.get("p5_cross_debates", [])
 
         system_prompt = """You are a configuration optimization expert. Adjust the department configuration based on the requirement document and discussion group input.
 
@@ -321,7 +390,8 @@ CRITICAL STRUCTURAL RULES:
 2. You MUST preserve ALL departments and ALL debaters in the output.
 3. Do NOT remove, rename, or empty any department or debater entry.
 4. You may adjust debater styles (zh_style/en_style) to better fit the topic, but keep debater names (zh_name/en_name) and keys (A, B, C) intact.
-5. Output the complete adjusted configuration JSON, no other text."""
+5. You MUST preserve p2_cross_debates and p5_cross_debates entries. You may adjust topics (zh_topic/en_topic) but do NOT remove pairs.
+6. Output the complete adjusted configuration JSON, no other text."""
 
         user_msg = f"""Requirement document:
 {requirement.to_json()}
@@ -332,7 +402,7 @@ Discussion group input:
 Current configuration:
 {json.dumps(config, ensure_ascii=False)}
 
-Please adjust the configuration to better match the requirement, focusing on supplementary suggestions from the discussion group. Remember: preserve ALL departments and debaters."""
+Please adjust the configuration to better match the requirement, focusing on supplementary suggestions from the discussion group. Remember: preserve ALL departments, debaters, and cross-debate pairs."""
 
         response = self.llm_call_fn(system_prompt, user_msg)
         try:
@@ -358,6 +428,16 @@ Please adjust the configuration to better match the requirement, focusing on sup
         if len(adjusted_order) < len(original_order):
             adjusted["dept_order"] = original_order
 
+        # v0.7.5: Integrity check for cross-debates
+        # If LLM removed cross-debates pairs that existed in original, restore them
+        adjusted_p2 = adjusted.get("p2_cross_debates", [])
+        if original_p2_cross and (not adjusted_p2 or len(adjusted_p2) < len(original_p2_cross)):
+            adjusted["p2_cross_debates"] = original_p2_cross
+
+        adjusted_p5 = adjusted.get("p5_cross_debates", [])
+        if original_p5_cross and (not adjusted_p5 or len(adjusted_p5) < len(original_p5_cross)):
+            adjusted["p5_cross_debates"] = original_p5_cross
+
         return adjusted
 
     def _generate_default_config(self, requirement: StructuredRequirement) -> dict:
@@ -381,13 +461,18 @@ Please adjust the configuration to better match the requirement, focusing on sup
             }
             dept_order.append(key)
 
+        # v0.7.5: Auto-generate cross-debates from departments
+        # (will also be ensured by _ensure_cross_debates, but generate here for completeness)
+        auto_p2 = _auto_generate_cross_debates(dept_order, max_pairs=3) if len(dept_order) >= 2 else []
+        auto_p5 = _auto_generate_cross_debates(dept_order, max_pairs=1) if len(dept_order) >= 2 else []
+
         return {
             "name": "Custom Configuration",
             "description": requirement.topic,
             "departments": depts,
             "dept_order": dept_order,
-            "p2_cross_debates": [],
-            "p5_cross_debates": [],
+            "p2_cross_debates": auto_p2,
+            "p5_cross_debates": auto_p5,
             "proofread_departments": [dept_order[-1]] if dept_order else [],
             "debate_rounds": 2,
             "negative_prompts": "",
