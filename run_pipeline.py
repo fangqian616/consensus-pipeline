@@ -421,9 +421,9 @@ def _build_papers_summary(papers, max_abstract=300):
         abstract_text = (p.abstract or 'N/A')[:max_abstract]
         lines.append(
             f"[{i}] {p.title}\n"
-            f"    作者: {authors} | 期刊: {p.journal} | 年份: {p.year} | "
+            f"    Author/作者: {authors} | Journal/期刊: {p.journal} | Year/年份: {p.year} | "
             f"被引: {p.citation_count} | 等级: {p.quality_level}\n"
-            f"    摘要: {abstract_text}"
+            f"    Abstract/摘要: {abstract_text}"
         )
     return "\n".join(lines)
 
@@ -579,7 +579,7 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
 # ============ Phase 6: Cross-Debate ============
 def phase6_cross_debate(config, dept_outputs):
     """Cross-debate"""
-    log("Phase6", "开始交叉辩论")
+    log("Phase6", "Starting cross-debate / 开始交叉辩论")
 
     p2_debates = config.get("p2_cross_debates", [])
     cross_results = []
@@ -593,10 +593,10 @@ def phase6_cross_debate(config, dept_outputs):
         side_b_output = dept_outputs.get(side_b_key, {})
 
         if not side_a_output.get("consensus") or not side_b_output.get("consensus"):
-            log("Phase6", f"跳过 {side_a_key} vs {side_b_key}：缺少产出")
+            log("Phase6", f"Skipping {side_a_key} vs {side_b_key}: no output / 跳过 {side_a_key} vs {side_b_key}：缺少产出")
             continue
 
-        log("Phase6", f"交叉辩论: {side_a_key} vs {side_b_key} — {topic}")
+        log("Phase6", f"Cross-debate / 交叉辩论: {side_a_key} vs {side_b_key} — {topic}")
 
         cross_prompt = f"""你是交叉辩论协调员。两组部门就以下主题展开辩论：
 
@@ -634,7 +634,7 @@ def reclassify_papers(papers):
     用最新注册表+easyScholar重新分级论文。
     解决phase4检索时等级写死到JSON的问题——注册表更新后无需重新检索。
     """
-    log("Phase4.5", "用最新注册表重新分级论文...")
+    log("Phase4.5", "Re-grading papers with latest registry / 用最新注册表重新分级论文...")
 
     from academic.journal_classifier import classify_journal_enhanced
 
@@ -645,14 +645,14 @@ def reclassify_papers(papers):
         result = classify_journal_enhanced(p.journal or "", use_easyscholar=True)
         new_level = result.get("level", old_level)
         if new_level != old_level:
-            log("Phase4.5", f"  等级变更: [{old_level}→{new_level}] {p.title[:50]}... ({p.journal})")
+            log("Phase4.5", f"  Grade change / 等级变更: [{old_level}→{new_level}] {p.title[:50]}... ({p.journal})")
             p.quality_level = new_level
             changed += 1
 
     # 统计
     from collections import Counter
     level_counts = Counter(p.quality_level for p in papers)
-    log("Phase4.5", f"重新分级完成: {changed}篇变更, 分级分布: {dict(level_counts)}")
+    log("Phase4.5", f"Re-grading complete / 重新分级完成: {changed} papers changed, distribution / 分级分布: {dict(level_counts)}")
 
     return papers
 
@@ -663,14 +663,14 @@ def backfill_abstracts(papers):
     优先使用OpenAlex（礼貌池10次/秒，基本不限流），
     OpenAlex失败时回退Semantic Scholar（1次/秒，容易429）。
     """
-    log("Phase4.7", "回填S/A级论文abstract...")
+    log("Phase4.7", "Backfilling S/A paper abstracts / 回填S/A级论文abstract...")
 
     to_fill = [p for p in papers if p.quality_level in ("S", "A") and not p.abstract]
     if not to_fill:
-        log("Phase4.7", "无需回填，所有S/A级论文已有abstract")
+        log("Phase4.7", "No backfill needed, all S/A papers have abstracts / 无需回填，所有S/A级论文已有abstract")
         return papers
 
-    log("Phase4.7", f"需要回填: {len(to_fill)}篇")
+    log("Phase4.7", f"Need backfill / 需要回填: {len(to_fill)} papers")
 
     import urllib.request
     import urllib.parse as _urlp
