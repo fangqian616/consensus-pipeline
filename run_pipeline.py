@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """
-Consensus Pipeline v0.7.0 — End-to-end CLI Runner
+Consensus Pipeline v0.7.2 — End-to-end CLI Runner
 
 Usage:
     python run_pipeline.py --topic "Your Research Topic"
+
+v0.7.2 Changes:
+- --lang parameter for output language control (zh/en)
 
 v0.7.0 Changes:
 - Phase 0.5: Dynamic domain config generation (replaces hardcoded keywords)
@@ -32,6 +35,7 @@ API_URL = "https://api.deepseek.com/v1/chat/completions"
 API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 MODEL = "deepseek-v4-pro"
 TOPIC = ""  # Set via --topic argument or DEEPSEEK_TOPIC env var
+OUTPUT_LANG = "zh"  # Output language: "zh" (default) or "en"
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_output")
 
 # easyScholar API key (v5.0: real-time journal grading) — read from env var
@@ -84,6 +88,17 @@ def save_text(text, filename):
         f.write(text)
     log("SAVE", f"→ {path}")
     return path
+
+
+def _lang_instr() -> str:
+    """Return output language instruction for LLM prompts"""
+    if OUTPUT_LANG == "en":
+        return "Output in English, structured format"
+    return "中文输出，结构化格式"
+
+def _lang_user_msg(zh_msg: str, en_msg: str) -> str:
+    """Return user message in the appropriate language"""
+    return en_msg if OUTPUT_LANG == "en" else zh_msg
 
 
 # ============ Phase 0: Requirement Interview ============
@@ -537,7 +552,7 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
 1. 基于论文列表中的具体证据，不要空泛
 2. 明确指出关键发现和问题
 3. 给出可操作的建议
-4. 中文输出，结构化格式"""
+4. {_lang_instr()}"""
 
         user_msg = f"论文列表：\n{papers_summary[:12000]}"
 
@@ -561,10 +576,10 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
 2. **分歧点**：各方存在分歧的地方
 3. **最终建议**：综合各方观点的最佳建议
 
-中文输出，结构化格式。"""
+{_lang_instr()}。"""
 
         log("Phase5", f"  {dept_name} consensus integration...")
-        consensus = llm_call(consensus_prompt, "请整合以上观点", temperature=0.2)
+        consensus = llm_call(consensus_prompt, _lang_user_msg("请整合以上观点", "Please integrate the above viewpoints"), temperature=0.2)
     else:
         consensus = arguments[0]["argument"] if arguments else ""
 
@@ -613,9 +628,9 @@ def phase6_cross_debate(config, dept_outputs):
 2. **共识基础**：双方都认同的要点
 3. **协调建议**：如何在分歧中找到最优解
 
-中文输出，结构化格式。"""
+{_lang_instr()}。"""
 
-        result = llm_call(cross_prompt, f"请就「{topic}」展开交叉辩论分析", temperature=0.3)
+        result = llm_call(cross_prompt, _lang_user_msg(f"请就「{topic}」展开交叉辩论分析", f"Please conduct cross-debate analysis on '{topic}'"), temperature=0.3)
 
         cross_results.append({
             "side_a": side_a_key,
@@ -857,7 +872,7 @@ def phase7_final_report(papers, preprints, dept_outputs, cross_results,
 
     from academic.report_generator import ReportGenerator
 
-    rg = ReportGenerator(output_dir=OUTPUT_DIR, llm_call_fn=llm_call)
+    rg = ReportGenerator(output_dir=OUTPUT_DIR, llm_call_fn=llm_call, output_lang=OUTPUT_LANG)
 
     # Extract consensus conclusions
     consensus_points = []
@@ -981,7 +996,7 @@ def generate_programming_output(papers):
 相关论文：
 {json.dumps([{'title': p.title, 'journal': p.journal, 'year': p.year, 'level': p.quality_level} for p in papers[:15]], ensure_ascii=False, indent=2)}"""
 
-    result = llm_call(prompt, "请完成以上三大任务，中文输出，Markdown格式", temperature=0.3)
+    result = llm_call(prompt, _lang_user_msg("请完成以上三大任务，中文输出，Markdown格式", "Please complete the above three tasks, output in English, Markdown format"), temperature=0.3)
     save_text(result, "programming_output.md")
     return result
 
@@ -1019,7 +1034,7 @@ def generate_tutorial_output(papers):
 相关论文：
 {json.dumps([{'title': p.title, 'journal': p.journal, 'year': p.year} for p in papers[:10]], ensure_ascii=False, indent=2)}"""
 
-    result = llm_call(prompt, "请完成以上三大教程，中文输出，Markdown格式，代码块用python标记", temperature=0.3)
+    result = llm_call(prompt, _lang_user_msg("请完成以上三大教程，中文输出，Markdown格式，代码块用python标记", "Please complete the above three tutorials, output in English, Markdown format, code blocks marked with python"), temperature=0.3)
     save_text(result, "tutorial_output.md")
     return result
 
@@ -1121,7 +1136,7 @@ def self_evaluation(report, papers, dept_outputs):
 
 中文输出，每条不足给出改进建议。"""
 
-    result = llm_call(prompt, "请给出客观的自我评估", temperature=0.2)
+    result = llm_call(prompt, _lang_user_msg("请给出客观的自我评估", "Please provide an objective self-assessment"), temperature=0.2)
     save_text(result, "self_evaluation.md")
     return result
 
@@ -1129,7 +1144,7 @@ def self_evaluation(report, papers, dept_outputs):
 # ============ Main Flow ============
 def main():
     start_time = time.time()
-    log("MAIN", f"========== Consensus Pipeline v0.7.0 End-to-End Run ==========")
+    log("MAIN", f"========== Consensus Pipeline v0.7.2 End-to-End Run ==========")
     log("MAIN", f"Topic: {TOPIC}")
     log("MAIN", f"Model: {MODEL}")
     log("MAIN", f"Output directory: {OUTPUT_DIR}")
@@ -1268,6 +1283,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Consensus Pipeline CLI Runner")
     parser.add_argument("--topic", type=str, help="Research topic (required)")
+    parser.add_argument("--lang", type=str, default="zh", choices=["zh", "en"], help="Output language: zh (default) or en")
     args = parser.parse_args()
     if args.topic:
         TOPIC = args.topic
@@ -1277,4 +1293,6 @@ if __name__ == "__main__":
         print("Error: --topic argument or DEEPSEEK_TOPIC env var required")
         print('Example: python run_pipeline.py --topic "Machine Learning in Energy Economics"')
         sys.exit(1)
+    OUTPUT_LANG = args.lang
     main()
+
