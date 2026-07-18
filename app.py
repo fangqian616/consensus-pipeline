@@ -3674,12 +3674,22 @@ def render_requirement_tab():
                     d_en = st.text_input("English name", value=en_name, key=f"req_dept_en_{dept_key}")
                     
                     debaters = dept.get("debaters", {}) if isinstance(dept, dict) else {}
+                    # Track deletions in session_state
+                    del_key = f"_req_del_{dept_key}"
+                    if del_key not in st.session_state:
+                        st.session_state[del_key] = []
+                    active_debaters = {k: v for k, v in debaters.items() if k not in st.session_state[del_key] and isinstance(v, dict)}
                     edited_debaters = {}
                     
-                    for debater_key, debater in debaters.items():
-                        if not isinstance(debater, dict):
-                            continue
-                        st.markdown(f"**Debater {debater_key}**: {debater.get('zh_name', '')}")
+                    for debater_key, debater in active_debaters.items():
+                        db_col1, db_col2 = st.columns([6, 1])
+                        with db_col1:
+                            st.markdown(f"**Debater {debater_key}**: {debater.get('zh_name', '')}")
+                        with db_col2:
+                            can_delete = len(active_debaters) > 2
+                            if st.button("\U0001f5d1\ufe0f", key=f"req_db_del_{dept_key}_{debater_key}", disabled=not can_delete, help=("至少保留2位辩手" if can_delete else "至少保留2位辩手") if not can_delete else ("删除辩手" if is_zh else "Remove debater")):
+                                st.session_state[del_key].append(debater_key)
+                                st.rerun()
                         
                         db_zh_name = st.text_input("Debater Chinese name", value=debater.get("zh_name", ""), key=f"req_db_zh_{dept_key}_{debater_key}")
                         db_en_name = st.text_input("Debater English name", value=debater.get("en_name", ""), key=f"req_db_en_{dept_key}_{debater_key}")
@@ -3692,6 +3702,27 @@ def render_requirement_tab():
                             "zh_style": db_zh_style,
                             "en_style": db_en_style,
                         }
+                    
+                    # Add debater button
+                    if st.button("\u2795 " + ("添加辩手" if is_zh else "Add Debater"), key=f"req_db_add_{dept_key}", use_container_width=True):
+                        existing_keys = set(active_debaters.keys())
+                        next_key = None
+                        for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+                            if c not in existing_keys and c not in st.session_state[del_key]:
+                                next_key = c
+                                break
+                        if next_key:
+                            new_debater = {
+                                "zh_name": f"\u65b0\u8fa9\u624b{next_key}" if is_zh else f"New Debater {next_key}",
+                                "en_name": f"New Debater {next_key}",
+                                "zh_style": "\u8bf7\u8865\u5145\u8fa9\u624b\u98ce\u683c\u63cf\u8ff0" if is_zh else "Describe debater style",
+                                "en_style": "Describe debater style",
+                            }
+                            if isinstance(st.session_state.req_config, dict):
+                                depts = st.session_state.req_config.get("departments", {})
+                                if dept_key in depts and isinstance(depts[dept_key], dict):
+                                    depts[dept_key].setdefault("debaters", {})[next_key] = new_debater
+                            st.rerun()
                     
                     edited_departments[dept_key] = {
                         "zh_name": d_zh,
