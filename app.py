@@ -3074,7 +3074,7 @@ def render_config_tab():
     is_zh = st.session_state.lang == "zh"
     
     # Detect academic vs animation mode for conditional UI
-    _cfg_depts = st.session_state.get("workgroup_config", get_current_config()).get("departments", {})
+    _cfg_depts = (st.session_state.get("workgroup_config") or get_current_config() or {}).get("departments", {})
     _dept_keys = list(_cfg_depts.keys()) if _cfg_depts else []
     is_academic = any(k in _dept_keys for k in ["literature_search", "methodology_review", "report_integration", "programming", "tutorial", "metadata_inspector", "citation_network", "data_validation", "counter_evidence", "topic_clustering"])
     is_animation = any(k in _dept_keys for k in ["screenwriter", "storyboard", "spatial", "dp", "lighting", "vfx", "sound", "editing"])
@@ -3085,7 +3085,7 @@ def render_config_tab():
     # Display current config
     _cur_name = get_current_config_name()
     # Use workgroup_config from session_state when available (more accurate than global DEPARTMENTS)
-    _display_depts = st.session_state.get("workgroup_config", {}).get("departments", DEPARTMENTS)
+    _display_depts = (st.session_state.get("workgroup_config") or {}).get("departments", DEPARTMENTS)
     _total_debaters = sum(len(d.get("debaters", {})) if isinstance(d, dict) else 0 for d in _display_depts.values()) if _display_depts else 0
     st.info(f"{'当前配置' if is_zh else 'Current config'}: **{_cur_name}**  |  {'部门数' if is_zh else 'Depts'}: {len(_display_depts)}  |  {'辩手总数' if is_zh else 'Total debaters'}: {_total_debaters}")
     
