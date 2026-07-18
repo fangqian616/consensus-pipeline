@@ -940,8 +940,9 @@ def render_sidebar():
                         _cfg = load_preset(_clean_name)
                     else:
                         _cfg = load_profile(_clean_name)
-                    apply_config(_cfg)
-                    st.session_state.workgroup_config = _cfg
+                    if _cfg is not None:
+                        apply_config(_cfg)
+                        st.session_state.workgroup_config = _cfg
                     st.session_state.workgroup_name = _clean_name
                     set_last_used(_clean_name)
                     st.rerun()
@@ -3321,7 +3322,7 @@ def render_config_tab():
             key="config_save_name",
         )
         if st.button(t("config_save"), use_container_width=True):
-            config = st.session_state.get("workgroup_config", get_current_config())
+            config = (st.session_state.get("workgroup_config") or get_current_config())
             if save_name:
                 save_profile(save_name, config)
                 set_last_used(save_name)
@@ -3332,7 +3333,7 @@ def render_config_tab():
     with col2:
         # Export config
         if st.button(t("config_export"), use_container_width=True):
-            config = st.session_state.get("workgroup_config", get_current_config())
+            config = (st.session_state.get("workgroup_config") or get_current_config())
             json_str = export_config(config)
             st.code(json_str, language="json")
             st.download_button(
@@ -3369,7 +3370,7 @@ def render_config_tab():
     with col4:
         # Confirm and start
         if st.button(t("config_apply"), type="primary", use_container_width=True):
-            config = st.session_state.get("workgroup_config", get_current_config())
+            config = (st.session_state.get("workgroup_config") or get_current_config())
             if config is not None:
                 apply_config(config)
             cfg_name = config.get("name", "自定义配置")
