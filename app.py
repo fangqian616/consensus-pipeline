@@ -3078,6 +3078,10 @@ def run_market():
 def render_config_tab():
     """🧠 Smart Grouping — Consensus Pipeline v3.0 Entry"""
     is_zh = st.session_state.lang == "zh"
+
+    # Ensure workgroup_config is initialized
+    if not st.session_state.get("workgroup_config"):
+        st.session_state.workgroup_config = get_current_config() or {}
     
     # Detect academic vs animation mode for conditional UI
     _cfg_depts = (st.session_state.get("workgroup_config") or get_current_config() or {}).get("departments", {})
