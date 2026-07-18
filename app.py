@@ -1340,6 +1340,7 @@ def render_input_tab():
         st.session_state.script = st.text_area(
             "📋 " + ("研究主题与需求" if is_zh else "Research Topic & Requirements"),
             value=st.session_state.script,
+            key="script_input",
             height=200,
             placeholder="例如：\n研究主题：碳价预测\n方法论：机器学习\n时间范围：近5年\n质量标准：CSSCI及以上" if is_zh else "e.g.:\nTopic: Carbon price prediction\nMethodology: Machine Learning\nTime: Last 5 years\nQuality: CSSCI+",
             label_visibility="collapsed",
@@ -1373,6 +1374,7 @@ def render_input_tab():
         st.session_state.script = st.text_area(
             _input_label,
             value=st.session_state.script,
+            key="script_input",
             height=150,
             placeholder=_input_hint,
             label_visibility="collapsed",
@@ -3742,6 +3744,7 @@ def render_requirement_tab():
                     
                     if script_parts:
                         st.session_state.script = "\n".join(script_parts)
+                        st.session_state.script_input = st.session_state.script
                     
                     st.session_state.req_phase = 0  # 重置
                     st.session_state.req_interview_history = []
