@@ -999,10 +999,14 @@ def build_dept_input(dept_key: str) -> str:
     
     else:
         prev = []
-        for pk in DEPT_ORDER[:DEPT_ORDER.index(dept_key)]:
+        try:
+            _idx = DEPT_ORDER.index(dept_key)
+        except ValueError:
+            _idx = len(DEPT_ORDER)
+        for pk in DEPT_ORDER[:_idx]:
             if pk in dept_results:
-                p = DEPARTMENTS[pk]
-                pn = p["zh_name"] if is_zh else p["en_name"]
+                p = DEPARTMENTS.get(pk, {})
+                pn = p.get("zh_name" if is_zh else "en_name", pk)
                 prev.append(f"{pn}：\n{dept_results[pk]['consensus']}")
         return "\n\n---\n\n".join(prev)
 
@@ -1072,7 +1076,7 @@ def run_all_debates():
     else:
         # P1-P4: Department debates (Pipeline of Consensus)
         for dept_key in DEPT_ORDER:
-            dept = DEPARTMENTS[dept_key]
+            dept = DEPARTMENTS.get(dept_key, {})
             dept_name = dept["zh_name"] if is_zh else dept["en_name"]
             dept_input = build_dept_input(dept_key)
         
@@ -1236,7 +1240,7 @@ def step_generate_consensus():
         "consensus": consensus,
     }
     st.session_state.step_phase = "dept_done"
-    dept_name = DEPARTMENTS[dept_key]["zh_name"] if st.session_state.lang == "zh" else DEPARTMENTS[dept_key]["en_name"]
+    dept_name = DEPARTMENTS.get(dept_key, {}).get("zh_name" if st.session_state.lang == "zh" else "en_name", dept_key)
     notify_stage_complete(dept_name)
 
 
@@ -1334,7 +1338,7 @@ def step_run_summary():
 
 def render_input_tab():
     is_zh = st.session_state.get("lang", "zh") == "zh"
-    current_config = get_current_config()
+    current_config = get_current_config() or {}
     # Determine if current config is academic/programming (non-animation)
     dept_keys = list(current_config.get("departments", {}).keys())
     is_academic = any(k in dept_keys for k in ["literature_search", "methodology_review", "report_integration", "programming", "tutorial"])
@@ -1501,7 +1505,7 @@ def render_debate_tab():
         if dept_key not in dept_results:
             continue
         
-        dept = DEPARTMENTS[dept_key]
+        dept = DEPARTMENTS.get(dept_key, {})
         result = dept_results[dept_key]
         dept_name = dept["zh_name"] if is_zh else dept["en_name"]
         
@@ -1549,7 +1553,7 @@ def render_step_mode():
     
     if phase == "round_done":
         dept_key = DEPT_ORDER[dept_index]
-        dept = DEPARTMENTS[dept_key]
+        dept = DEPARTMENTS.get(dept_key, {})
         dept_name = dept["zh_name"] if is_zh else dept["en_name"]
         
         st.subheader(t("step_round_title", round=st.session_state.step_round) + f" — {dept_name}")
@@ -1594,7 +1598,7 @@ def render_step_mode():
     
     elif phase == "dept_done":
         dept_key = DEPT_ORDER[dept_index]
-        dept = DEPARTMENTS[dept_key]
+        dept = DEPARTMENTS.get(dept_key, {})
         dept_name = dept["zh_name"] if is_zh else dept["en_name"]
         result = st.session_state.dept_results.get(dept_key, {})
         
@@ -1643,7 +1647,7 @@ def render_step_mode():
         
         for dept_key in DEPT_ORDER:
             if dept_key in st.session_state.dept_results:
-                dept = DEPARTMENTS[dept_key]
+                dept = DEPARTMENTS.get(dept_key, {})
                 dept_name = dept["zh_name"] if is_zh else dept["en_name"]
                 result = st.session_state.dept_results[dept_key]
                 with st.expander(f"📋 **{dept_name}**"):
@@ -1671,9 +1675,9 @@ def render_step_mode():
         # P5 cross-debate result
         for cr in st.session_state.cross_results:
             a_dept = DEPARTMENTS.get(cr.get("side_a", ""), {})
-            b_dept = DEPARTMENTS[cr["side_b"]]
-            a_name = a_dept["zh_name"] if is_zh else a_dept["en_name"]
-            b_name = b_dept["zh_name"] if is_zh else b_dept["en_name"]
+            b_dept = DEPARTMENTS.get(cr.get("side_b", ""), {})
+            a_name = a_dept.get("zh_name" if is_zh else "en_name", cr.get("side_a", "?"))
+            b_name = b_dept.get("zh_name" if is_zh else "en_name", cr.get("side_b", "?"))
             with st.expander(f"⚔️ **{a_name} vs {b_name}** — {cr['topic']}"):
                 st.markdown(cr.get("debate_result", ""))
         
@@ -1748,7 +1752,7 @@ def render_cross_tab():
     
     for cr in cross_results:
         a_dept = DEPARTMENTS.get(cr.get("side_a", ""), {})
-        b_dept = DEPARTMENTS[cr["side_b"]]
+        b_dept = DEPARTMENTS.get(cr.get("side_b", ""), {})
         a_name = a_dept["zh_name"] if is_zh else a_dept["en_name"]
         b_name = b_dept["zh_name"] if is_zh else b_dept["en_name"]
         
@@ -2070,7 +2074,7 @@ def render_output_tab():
                     with st.spinner("🧠 " + ("AI正在分析..." if is_zh else "AI analyzing...")):
                         impact = analyze_revision_impact(
                             revision_feedback=revision_feedback,
-                            current_config=st.session_state.get("current_config", {}),
+                            current_config=(st.session_state.get("workgroup_config") or get_current_config() or {}),
                             api_url=st.session_state.api_url,
                             api_key=st.session_state.api_key,
                             model=st.session_state.model_name,
@@ -2118,7 +2122,7 @@ def render_output_tab():
             cross_pairs = impact.get("cross_debate_pairs", [])
             if cross_pairs:
                 pairs_text = ", ".join(
-                    f"{DEPARTMENTS[p['side_a']]['zh_name'] if is_zh else DEPARTMENTS[p['side_a']]['en_name']} ↔ {DEPARTMENTS[p['side_b']]['zh_name'] if is_zh else DEPARTMENTS[p['side_b']]['en_name']}"
+                    f"{DEPARTMENTS.get(p.get('side_a',''),{}).get('zh_name' if is_zh else 'en_name', p.get('side_a','?'))} ↔ {DEPARTMENTS.get(p.get('side_b',''),{}).get('zh_name' if is_zh else 'en_name', p.get('side_b','?'))}"
                     for p in cross_pairs
                 )
                 st.info("⚔️ " + (f"将重新交叉辩论：{pairs_text}" if is_zh else f"Will re-run cross-debates: {pairs_text}"))
@@ -2126,7 +2130,7 @@ def render_output_tab():
             # Execute button
             final_selected = [dk for dk, v in selected_depts.items() if v]
             if final_selected:
-                dept_names = ", ".join(DEPARTMENTS[dk]["zh_name"] if is_zh else DEPARTMENTS[dk]["en_name"] for dk in final_selected)
+                dept_names = ", ".join(DEPARTMENTS.get(dk, {}).get("zh_name" if is_zh else "en_name", dk) for dk in final_selected)
                 
                 if st.button("🚀 " + (f"执行智能回炉（{len(final_selected)}个部门）" if is_zh else f"Execute Smart Re-roll ({len(final_selected)} depts)"), type="primary", use_container_width=True, key="run_smart_reroll"):
                     dept_results = st.session_state.get("dept_results", {})
@@ -2432,7 +2436,7 @@ def render_proofread_tab():
             st.warning(pr.get("overall", ""))
         
         for dept_key in PROOFREAD_DEPARTMENTS:
-            dept = DEPARTMENTS[dept_key]
+            dept = DEPARTMENTS.get(dept_key, {})
             dept_name = dept["zh_name"] if is_zh else dept["en_name"]
             review = pr.get("reviews", {}).get(dept_key, "")
             with st.expander(f"🔍 **{dept_name}**"):
@@ -3370,9 +3374,8 @@ def render_config_tab():
     with col4:
         # Confirm and start
         if st.button(t("config_apply"), type="primary", use_container_width=True):
-            config = (st.session_state.get("workgroup_config") or get_current_config())
-            if config is not None:
-                apply_config(config)
+            config = (st.session_state.get("workgroup_config") or get_current_config()) or {}
+            apply_config(config)
             cfg_name = config.get("name", "自定义配置")
             st.session_state.workgroup_name = cfg_name
             set_last_used(cfg_name)
