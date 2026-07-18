@@ -317,6 +317,28 @@ def _ensure_config_fields(config: dict) -> dict:
     if not config["dept_order"]:
         config["dept_order"] = list(config["departments"].keys())
     
+    # Ensure each department has at least 2 debaters (Proponent + Skeptic)
+    for dept_key, dept in config.get("departments", {}).items():
+        if not isinstance(dept, dict):
+            continue
+        debaters = dept.get("debaters", {})
+        if not debaters or not any(isinstance(v, dict) for v in debaters.values()):
+            dept_name = dept.get("zh_name", dept_key)
+            dept["debaters"] = {
+                "A": {
+                    "zh_name": f"{dept_name}正方",
+                    "en_name": "Proponent",
+                    "zh_style": f"你是{dept_name}领域的正方专家，从支持和肯定的角度分析问题，提出建设性观点。",
+                    "en_style": f"Proponent expert in {dept.get('en_name', dept_key)}, analyzing from a supportive perspective"
+                },
+                "B": {
+                    "zh_name": f"{dept_name}反方",
+                    "en_name": "Skeptic",
+                    "zh_style": f"你是{dept_name}领域的反方专家，从质疑和挑战的角度审视问题，指出潜在风险和不足。",
+                    "en_style": f"Skeptic expert in {dept.get('en_name', dept_key)}, critically examining from a challenging perspective"
+                }
+            }
+    
     return config
 # ============ Smart Re-roll: Revision Impact Analysis ============
 
