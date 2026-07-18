@@ -3234,7 +3234,7 @@ def render_config_tab():
             st.divider()
             
             # Global parameter editing — conditional on mode
-            if is_animation:
+            if is_animation and not is_academic:
                 # Animation mode: show all creative params
                 st.markdown("### " + t("config_global_params"))
                 
@@ -3370,7 +3370,8 @@ def render_config_tab():
         # Confirm and start
         if st.button(t("config_apply"), type="primary", use_container_width=True):
             config = st.session_state.get("workgroup_config", get_current_config())
-            apply_config(config)
+            if config is not None:
+                apply_config(config)
             cfg_name = config.get("name", "自定义配置")
             st.session_state.workgroup_name = cfg_name
             set_last_used(cfg_name)
@@ -3765,6 +3766,7 @@ def render_requirement_tab():
                     
                     # Write to current config
                     apply_config(final_config)
+                    st.session_state.workgroup_config = final_config
                     
                     # Set auto-jump flag for toast notification
                     st.session_state._auto_jump_to_debate = True
