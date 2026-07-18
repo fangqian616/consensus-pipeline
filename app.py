@@ -1120,7 +1120,9 @@ def run_all_debates():
     # P5: Cross-debate
     cross_results = []
     for cd in P5_CROSS_DEBATES:
-        a_key, b_key = cd["side_a"], cd["side_b"]
+        a_key, b_key = cd.get("side_a"), cd.get("side_b")
+        if not a_key or not b_key:
+            continue
         if a_key in dept_results and b_key in dept_results:
             cr = run_cross_debate(
                 cross_config=cd,
@@ -1280,7 +1282,9 @@ def step_run_cross_debates():
     
     # P5: Cross-debate
     for cd in P5_CROSS_DEBATES:
-        a_key, b_key = cd["side_a"], cd["side_b"]
+        a_key, b_key = cd.get("side_a"), cd.get("side_b")
+        if not a_key or not b_key:
+            continue
         if a_key in dept_results and b_key in dept_results:
             cr = run_cross_debate(
                 cross_config=cd,
@@ -1665,7 +1669,7 @@ def render_step_mode():
         
         # P5 cross-debate result
         for cr in st.session_state.cross_results:
-            a_dept = DEPARTMENTS[cr["side_a"]]
+            a_dept = DEPARTMENTS.get(cr.get("side_a", ""), {})
             b_dept = DEPARTMENTS[cr["side_b"]]
             a_name = a_dept["zh_name"] if is_zh else a_dept["en_name"]
             b_name = b_dept["zh_name"] if is_zh else b_dept["en_name"]
@@ -1742,7 +1746,7 @@ def render_cross_tab():
         return
     
     for cr in cross_results:
-        a_dept = DEPARTMENTS[cr["side_a"]]
+        a_dept = DEPARTMENTS.get(cr.get("side_a", ""), {})
         b_dept = DEPARTMENTS[cr["side_b"]]
         a_name = a_dept["zh_name"] if is_zh else a_dept["en_name"]
         b_name = b_dept["zh_name"] if is_zh else b_dept["en_name"]
@@ -3074,7 +3078,7 @@ def render_config_tab():
     
     # Display current config
     _cur_name = get_current_config_name()
-    st.info(f"{'当前配置' if is_zh else 'Current config'}: **{_cur_name}**  |  {'部门数' if is_zh else 'Depts'}: {len(DEPARTMENTS)}  |  {'辩手总数' if is_zh else 'Total debaters'}: {sum(len(d.get('debaters', {})) for d in DEPARTMENTS.values())}")
+    st.info(f"{'当前配置' if is_zh else 'Current config'}: **{_cur_name}**  |  {'部门数' if is_zh else 'Depts'}: {len(DEPARTMENTS)}  |  {'辩手总数' if is_zh else 'Total debaters'}: {sum(len(d.get("debaters", {})) if isinstance(d, dict) else 0 for d in DEPARTMENTS.values())}")
     
     left_col, right_col = st.columns([2, 3])
     
