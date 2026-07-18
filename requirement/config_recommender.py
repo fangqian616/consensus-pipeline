@@ -452,10 +452,16 @@ Please adjust the configuration to better match the requirement, focusing on sup
                 "en_name": hint["type"].replace("_", " ").title(),
                 "debaters": {
                     "A": {
-                        "zh_name": f"{hint['description']} Expert A",
-                        "en_name": f"Expert A",
-                        "zh_style": f"You are a {hint['description']} expert, reviewing and analyzing from a professional perspective.",
-                        "en_style": f"Expert in {hint['description']}"
+                        "zh_name": f"{hint['description']}正方",
+                        "en_name": f"Proponent",
+                        "zh_style": f"你是{hint['description']}领域的正方专家，从支持和肯定的角度分析问题，提出建设性观点。",
+                        "en_style": f"Proponent expert in {hint['description']}, analyzing from a supportive perspective"
+                    },
+                    "B": {
+                        "zh_name": f"{hint['description']}反方",
+                        "en_name": f"Skeptic",
+                        "zh_style": f"你是{hint['description']}领域的反方专家，从质疑和挑战的角度审视问题，指出潜在风险和不足。",
+                        "en_style": f"Skeptic expert in {hint['description']}, critically examining from a challenging perspective"
                     }
                 }
             }
