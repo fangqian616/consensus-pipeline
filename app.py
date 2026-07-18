@@ -723,8 +723,9 @@ def init_state():
                 apply_config(cfg)
                 st.session_state.workgroup_config = cfg
                 st.session_state.workgroup_name = last_used
-            except Exception:
-                pass  # 静默失败，使用默认配置
+            except Exception as e:
+                import streamlit as _st
+                _st.toast(f"⚠️ 配置加载失败: {e}", icon="⚠️")
 
 
 
@@ -992,7 +993,7 @@ def build_dept_input(dept_key: str) -> str:
         parts = []
         for pk in ["screenwriter", "spatial", "storyboard", "dp", "lighting", "vfx", "sound"]:
             if pk in dept_results:
-                p = DEPARTMENTS[pk]
+                p = DEPARTMENTS.get(pk, {})
                 pn = p["zh_name"] if is_zh else p["en_name"]
                 parts.append(f"{pn}共识：\n{dept_results[pk]['consensus']}")
         return "\n\n---\n\n".join(parts)
@@ -1082,7 +1083,7 @@ def run_all_debates():
         
             def on_progress(dk, rn, total_r, debater):
                 nonlocal step
-                d = DEPARTMENTS[dk]
+                d = DEPARTMENTS.get(dk, {})
                 dn = d["zh_name"] if is_zh else d["en_name"]
                 if debater == "consensus":
                     # Consensus generation phase
@@ -1544,7 +1545,7 @@ def render_step_mode():
     dept_index = st.session_state.step_dept_index
     
     if dept_index < len(DEPT_ORDER):
-        current_dept = DEPARTMENTS[DEPT_ORDER[dept_index]]
+        current_dept = DEPARTMENTS.get(DEPT_ORDER[dept_index] if dept_index < len(DEPT_ORDER) else "", {})
         dept_name = current_dept["zh_name"] if is_zh else current_dept["en_name"]
     else:
         dept_name = "---"
@@ -1666,7 +1667,7 @@ def render_step_mode():
             with st.expander(f"🔍 **{t('p2_cross_title')}**"):
                 sr = st.session_state.spatial_review_result
                 for dk, rv in sr.get("reviews", {}).items():
-                    dept = DEPARTMENTS[dk]
+                    dept = DEPARTMENTS.get(dk, {})
                     dept_name = dept["zh_name"] if is_zh else dept["en_name"]
                     st.markdown(f"**{dept_name}** Review feedback:")
                     st.markdown(rv)
@@ -1694,7 +1695,7 @@ def render_step_mode():
         st.divider()
         for dk in DEPT_ORDER:
             if dk in st.session_state.dept_results and DEPT_ORDER.index(dk) < dept_index:
-                dept = DEPARTMENTS[dk]
+                dept = DEPARTMENTS.get(dk, {})
                 dept_name = dept["zh_name"] if is_zh else dept["en_name"]
                 result = st.session_state.dept_results[dk]
                 with st.expander(f"✅ **{dept_name}**"):
@@ -1735,7 +1736,7 @@ def render_cross_tab():
         sr = st.session_state.spatial_review_result
         st.subheader(t("p2_cross_title"))
         for dk, rv in sr.get("reviews", {}).items():
-            dept = DEPARTMENTS[dk]
+            dept = DEPARTMENTS.get(dk, {})
             dept_name = dept["zh_name"] if is_zh else dept["en_name"]
             with st.expander(f"🔍 **{dept_name}** " + ("审核反馈" if is_zh else "Review")):
                 st.markdown(rv)
@@ -2090,7 +2091,7 @@ def render_output_tab():
             # Department selection
             available_depts = []
             for dk in DEPT_ORDER:
-                dept = DEPARTMENTS[dk]
+                dept = DEPARTMENTS.get(dk, {})
                 name = dept["zh_name"] if is_zh else dept["en_name"]
                 available_depts.append((dk, name))
             
@@ -2180,7 +2181,7 @@ def render_output_tab():
         
         dept_options = {}
         for dk in DEPT_ORDER:
-            dept = DEPARTMENTS[dk]
+            dept = DEPARTMENTS.get(dk, {})
             dept_options[dk] = dept["zh_name"] if is_zh else dept["en_name"]
         
         col_dept_edit, col_spatial = st.columns([3, 2])
@@ -2496,7 +2497,7 @@ def render_proofread_tab():
         
         dept_options = {}
         for dk in DEPT_ORDER:
-            dept = DEPARTMENTS[dk]
+            dept = DEPARTMENTS.get(dk, {})
             dept_options[dk] = dept["zh_name"] if is_zh else dept["en_name"]
         
         col_dept, col_rounds = st.columns([3, 1])
@@ -3206,6 +3207,8 @@ def render_config_tab():
                 dept = depts[dept_key]
                 dept_name = dept.get("zh_name", dept_key) if is_zh else dept.get("en_name", dept_key)
                 debaters = dept.get("debaters", {})
+                if not isinstance(debaters, dict):
+                    debaters = {}
                 num_debaters = len(debaters)
                 
                 with st.expander(f"**{dept_name}** ({num_debaters}{'位辩手' if is_zh else ' debaters'})", expanded=False):
@@ -3692,7 +3695,9 @@ def render_requirement_tab():
                     d_zh = st.text_input("Chinese name", value=zh_name, key=f"req_dept_zh_{dept_key}")
                     d_en = st.text_input("English name", value=en_name, key=f"req_dept_en_{dept_key}")
                     
-                    debaters = dept.get("debaters", {}) if isinstance(dept, dict) else {}
+                    debaters = dept.get("debaters", {})
+                if not isinstance(debaters, dict):
+                    debaters = {} if isinstance(dept, dict) else {}
                     # Track deletions in session_state
                     del_key = f"_req_del_{dept_key}"
                     if del_key not in st.session_state:
