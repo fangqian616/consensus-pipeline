@@ -1153,6 +1153,13 @@ def run_all_debates():
 
 def step_run_round(correction: str = ""):
     """Step mode: execute current department current round debate"""
+    # Bounds check: config may have changed, making step_dept_index stale
+    if st.session_state.step_dept_index >= len(DEPT_ORDER):
+        is_zh_local = st.session_state.get("lang", "zh") == "zh"
+        st.session_state.step_dept_index = 0
+        st.session_state.step_phase = "idle"
+        st.warning("⚠️ " + ("部门配置已变更，步骤已重置" if is_zh_local else "Config changed, steps reset"))
+        return
     dept_key = DEPT_ORDER[st.session_state.step_dept_index]
     dept_input = build_dept_input(dept_key)
     
@@ -1192,6 +1199,13 @@ def step_run_round(correction: str = ""):
 
 def step_generate_consensus():
     """Step mode: generate consensus for current department"""
+    # Bounds check: config may have changed, making step_dept_index stale
+    if st.session_state.step_dept_index >= len(DEPT_ORDER):
+        is_zh_local = st.session_state.get("lang", "zh") == "zh"
+        st.session_state.step_dept_index = 0
+        st.session_state.step_phase = "idle"
+        st.warning("⚠️ " + ("部门配置已变更，步骤已重置" if is_zh_local else "Config changed, steps reset"))
+        return
     dept_key = DEPT_ORDER[st.session_state.step_dept_index]
     dept_input = build_dept_input(dept_key)
     
@@ -3066,6 +3080,12 @@ def render_config_tab():
         st.markdown("### " + ("需求输入" if is_zh else "Requirement Input"))
         
         # User requirement description
+        # Allow using input tab content as config input
+        if st.session_state.get("script", "") and not st.session_state.get("config_user_input", ""):
+            if st.button("📋 " + ("使用输入Tab内容" if is_zh else "Use Input Tab Content"), use_container_width=True):
+                st.session_state.config_user_input = st.session_state.script
+                st.rerun()
+
         user_input = st.text_area(
             t("config_input_label"),
             height=150,
