@@ -3073,12 +3073,21 @@ def render_config_tab():
     """🧠 Smart Grouping — Consensus Pipeline v3.0 Entry"""
     is_zh = st.session_state.lang == "zh"
     
+    # Detect academic vs animation mode for conditional UI
+    _cfg_depts = st.session_state.get("workgroup_config", get_current_config()).get("departments", {})
+    _dept_keys = list(_cfg_depts.keys()) if _cfg_depts else []
+    is_academic = any(k in _dept_keys for k in ["literature_search", "methodology_review", "report_integration", "programming", "tutorial", "metadata_inspector", "citation_network", "data_validation", "counter_evidence", "topic_clustering"])
+    is_animation = any(k in _dept_keys for k in ["screenwriter", "storyboard", "spatial", "dp", "lighting", "vfx", "sound", "editing"])
+    
     st.subheader(t("config_title"))
     st.caption(t("config_subtitle"))
     
     # Display current config
     _cur_name = get_current_config_name()
-    st.info(f"{'当前配置' if is_zh else 'Current config'}: **{_cur_name}**  |  {'部门数' if is_zh else 'Depts'}: {len(DEPARTMENTS)}  |  {'辩手总数' if is_zh else 'Total debaters'}: {sum(len(d.get("debaters", {})) if isinstance(d, dict) else 0 for d in DEPARTMENTS.values())}")
+    # Use workgroup_config from session_state when available (more accurate than global DEPARTMENTS)
+    _display_depts = st.session_state.get("workgroup_config", {}).get("departments", DEPARTMENTS)
+    _total_debaters = sum(len(d.get("debaters", {})) if isinstance(d, dict) else 0 for d in _display_depts.values()) if _display_depts else 0
+    st.info(f"{'当前配置' if is_zh else 'Current config'}: **{_cur_name}**  |  {'部门数' if is_zh else 'Depts'}: {len(_display_depts)}  |  {'辩手总数' if is_zh else 'Total debaters'}: {_total_debaters}")
     
     left_col, right_col = st.columns([2, 3])
     
@@ -3224,32 +3233,37 @@ def render_config_tab():
             
             st.divider()
             
-            # Global parameter editing
-            st.markdown("### " + t("config_global_params"))
-            
-            vd = config.get("visual_directive", {})
-            vd_zh = vd.get("zh", "") if isinstance(vd, dict) else ""
-            new_vd_zh = st.text_area(
-                t("config_visual_directive") + " (中文)",
-                value=vd_zh,
-                height=100,
-                key="config_visual_directive_zh",
-            )
-            if new_vd_zh != vd_zh:
-                if not isinstance(config.get("visual_directive"), dict):
-                    config["visual_directive"] = {"zh": "", "en": ""}
-                config["visual_directive"]["zh"] = new_vd_zh
-                st.session_state.workgroup_config = config
-            
-            neg = config.get("negative_prompts", "")
-            new_neg = st.text_input(
-                t("config_negative_prompts"),
-                value=neg,
-                key="config_negative_prompts",
-            )
-            if new_neg != neg:
-                config["negative_prompts"] = new_neg
-                st.session_state.workgroup_config = config
+            # Global parameter editing — conditional on mode
+            if is_animation:
+                # Animation mode: show all creative params
+                st.markdown("### " + t("config_global_params"))
+                
+                vd = config.get("visual_directive", {})
+                vd_zh = vd.get("zh", "") if isinstance(vd, dict) else ""
+                new_vd_zh = st.text_area(
+                    t("config_visual_directive") + " (中文)",
+                    value=vd_zh,
+                    height=100,
+                    key="config_visual_directive_zh",
+                )
+                if new_vd_zh != vd_zh:
+                    if not isinstance(config.get("visual_directive"), dict):
+                        config["visual_directive"] = {"zh": "", "en": ""}
+                    config["visual_directive"]["zh"] = new_vd_zh
+                    st.session_state.workgroup_config = config
+                
+                neg = config.get("negative_prompts", "")
+                new_neg = st.text_input(
+                    t("config_negative_prompts"),
+                    value=neg,
+                    key="config_negative_prompts",
+                )
+                if new_neg != neg:
+                    config["negative_prompts"] = new_neg
+                    st.session_state.workgroup_config = config
+            else:
+                # Academic/generic mode: simplified global params
+                st.markdown("### " + ("辩论参数" if is_zh else "Debate Parameters"))
             
             dr = config.get("debate_rounds", 3)
             new_dr = st.slider(
@@ -3949,3 +3963,4 @@ def main():
 if __name__ == "__main__":
     init_state()
     main()
+
