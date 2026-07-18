@@ -455,7 +455,7 @@ def phase5_debate(config, papers, preprints):
 
     for dept_key in dept_order:
         dept_info = departments.get(dept_key, {})
-        dept_name = dept_info.get("zh_name", dept_key)
+        dept_name = dept_info.get("en_name" if OUTPUT_LANG == "en" else "zh_name", dept_key)
         debaters = dept_info.get("debaters", {})
 
         # v5.1.5: Filter relevant papers by department
@@ -480,8 +480,8 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
     for key, info in debaters.items():
         debater_list.append({
             "key": key,
-            "name": info.get("zh_name", key),
-            "style": info.get("zh_style", ""),
+            "name": info.get("en_name" if OUTPUT_LANG == "en" else "zh_name", key),
+            "style": info.get("en_style" if OUTPUT_LANG == "en" else "zh_style", ""),
         })
 
     # Build department debate prompt
@@ -649,7 +649,7 @@ def phase6_cross_debate(config, dept_outputs):
     for debate_config in p2_debates:
         side_a_key = debate_config.get("side_a", "")
         side_b_key = debate_config.get("side_b", "")
-        topic = debate_config.get("zh_topic", "")
+        topic = debate_config.get("en_topic" if OUTPUT_LANG == "en" else "zh_topic", "")
 
         side_a_output = dept_outputs.get(side_a_key, {})
         side_b_output = dept_outputs.get(side_b_key, {})
@@ -660,7 +660,25 @@ def phase6_cross_debate(config, dept_outputs):
 
         log("Phase6", f"Cross-debate / 交叉辩论: {side_a_key} vs {side_b_key} — {topic}")
 
-        cross_prompt = f"""你是交叉辩论协调员。两组部门就以下主题展开辩论：
+        if OUTPUT_LANG == "en":
+            cross_prompt = f"""You are the cross-debate coordinator. Two departments debate the following topic:
+
+**Debate Topic**: {topic}
+
+**{side_a_key} Position**:
+{side_a_output['consensus'][:3000]}
+
+**{side_b_key} Position**:
+{side_b_output['consensus'][:3000]}
+
+Analyze the disagreements and consensus between both sides:
+1. **Core Disagreements**: The 3 most critical points of disagreement
+2. **Consensus Basis**: Points both sides agree on
+3. **Reconciliation Suggestions**: How to find optimal solutions despite disagreements
+
+{_lang_instr()}."""
+        else:
+            cross_prompt = f"""你是交叉辩论协调员。两组部门就以下主题展开辩论：
 
 **辩论主题**: {topic}
 
