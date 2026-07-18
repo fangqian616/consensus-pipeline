@@ -729,6 +729,7 @@ def init_state():
 
 def render_sidebar():
     with st.sidebar:
+        is_zh = st.session_state.lang == "zh"
         # Language switch
         # Language switch (compact)
         _lang_opts = {"zh": "🇨🇳 中文", "en": "🇬🇧 English"}
