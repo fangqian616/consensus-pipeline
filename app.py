@@ -702,6 +702,7 @@ def init_state():
         # v3.0 Smart grouping
         "workgroup_config": None,  # 当前工作组配置（PresetConfig dict）
         "workgroup_name": "动画辩论",  # 当前配置名称
+        "_lang_selected": False,  # Language welcome page flag
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -1318,6 +1319,7 @@ def render_input_tab():
     # Determine if current config is academic/programming (non-animation)
     dept_keys = list(current_config.get("departments", {}).keys())
     is_academic = any(k in dept_keys for k in ["literature_search", "methodology_review", "report_integration", "programming", "tutorial"])
+    is_animation = any(k in dept_keys for k in ["screenwriter", "storyboard", "spatial", "dp", "lighting", "vfx", "sound", "editing"])
     
     if is_academic:
         st.subheader("📋 " + ("研究需求输入" if is_zh else "Research Requirements"))
@@ -1347,45 +1349,67 @@ def render_input_tab():
             st.session_state.character_refs = ""  # 学术模式不需要角色引用
         st.info("💡 " + ("学术调研模式：输入研究主题和需求，各部门将围绕学术辩论展开" if is_zh else "Academic mode: Enter research topic, departments will debate academically"))
     else:
-        st.subheader(t("script_label"))
+        # Generic input for non-academic modes
+        _input_label = "📝 输入内容" if is_zh else "📝 Input Content"
+        _input_hint = "描述你的需求、主题或场景..." if is_zh else "Describe your requirements, topic or scene..."
+        if is_animation:
+            _input_label = "🎬 基础剧本" if is_zh else "🎬 Script"
+            _input_hint = "输入你的场景、角色、情节骨架" if is_zh else "Enter scene, characters, plot skeleton..."
+        st.subheader(_input_label)
         st.session_state.script = st.text_area(
-            t("script_label"),
+            _input_label,
             value=st.session_state.script,
             height=150,
-            placeholder=t("script_hint"),
+            placeholder=_input_hint,
             label_visibility="collapsed",
         )
         
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader(t("positive_prompt_label"))
-            st.session_state.positive_prompt = st.text_area(
-                t("positive_prompt_label"),
-                value=st.session_state.positive_prompt,
-                height=120,
-                placeholder=t("positive_prompt_hint"),
+        # Animation-specific fields (only show for animation configs)
+        if is_animation:
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader(t("positive_prompt_label"))
+                st.session_state.positive_prompt = st.text_area(
+                    t("positive_prompt_label"),
+                    value=st.session_state.positive_prompt,
+                    height=120,
+                    placeholder=t("positive_prompt_hint"),
+                    label_visibility="collapsed",
+                )
+            with col2:
+                st.subheader(t("negative_prompt_label"))
+                st.session_state.negative_prompt = st.text_area(
+                    t("negative_prompt_label"),
+                    value=st.session_state.negative_prompt,
+                    height=120,
+                    placeholder=t("negative_prompt_hint"),
+                    label_visibility="collapsed",
+                )
+            st.subheader(t("character_refs_label"))
+            st.session_state.character_refs = st.text_area(
+                t("character_refs_label"),
+                value=st.session_state.character_refs,
+                height=100,
+                placeholder=t("character_refs_hint"),
                 label_visibility="collapsed",
             )
-        with col2:
-            st.subheader(t("negative_prompt_label"))
-            st.session_state.negative_prompt = st.text_area(
-                t("negative_prompt_label"),
-                value=st.session_state.negative_prompt,
-                height=120,
-                placeholder=t("negative_prompt_hint"),
-                label_visibility="collapsed",
-            )
-        
-        st.subheader(t("character_refs_label"))
-        st.session_state.character_refs = st.text_area(
-            t("character_refs_label"),
-            value=st.session_state.character_refs,
-            height=100,
-            placeholder=t("character_refs_hint"),
-            label_visibility="collapsed",
-        )
-        
-        st.info(t("segment_note"))
+            st.info(t("segment_note"))
+        else:
+            # Generic mode: supplementary details in expander
+            with st.expander("⚙️ " + ("补充设置" if is_zh else "Additional Settings"), expanded=False):
+                st.session_state.positive_prompt = st.text_area(
+                    "🔍 " + ("关键词/重点方向" if is_zh else "Keywords / Focus"),
+                    value=st.session_state.positive_prompt,
+                    height=80,
+                    placeholder="补充关键词或重点..." if is_zh else "Additional keywords or focus...",
+                )
+                st.session_state.negative_prompt = st.text_area(
+                    "🚫 " + ("排除项" if is_zh else "Exclusions"),
+                    value=st.session_state.negative_prompt,
+                    height=60,
+                    placeholder="排除的内容..." if is_zh else "Items to exclude...",
+                )
+                st.session_state.character_refs = ""  # 非动画模式不需要角色参考
     
     # Carry-forward document input
     st.divider()
@@ -3790,6 +3814,26 @@ def main():
         layout="wide",
     )
     
+    # Language welcome page (first visit)
+    if not st.session_state.get("_lang_selected", False):
+        st.markdown("---")
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("<h2 style=\"text-align: center;\">🌐 Choose Language / 选择语言</h2>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+            _welcome_lang = st.radio(
+                "",
+                options=["zh", "en"],
+                format_func=lambda x: "🇨🇳 中文" if x == "zh" else "🇬🇧 English",
+                horizontal=True,
+                key="_welcome_lang_radio"
+            )
+            if st.button("▶️ 进入 / Enter", type="primary", use_container_width=True, key="_welcome_enter"):
+                st.session_state.lang = _welcome_lang
+                st.session_state._lang_selected = True
+                st.rerun()
+        st.stop()
+
     render_sidebar()
     
     st.title(t("title"))
