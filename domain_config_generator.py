@@ -48,11 +48,20 @@ You must output a valid JSON object containing the following fields:
    - Must also cover non-hard-science noise: education/teaching (curriculum, pedagogy, course design, textbook, teaching, education, 教学, 课程, 教育), nutrition/dietary (obesity, dietary, calorie, nutrition), book reviews
 
 3. "query_rotation": A list of strings (6-10 items) for search query rotation.
-   Each search term should cover a different retrieval angle:
-   - Core method + domain combination (e.g., "machine learning energy price forecasting")
-   - Specific sub-domain (e.g., "deep learning carbon market prediction")
-   - Synonym variants (e.g., "artificial intelligence electricity demand")
-   - Methodological angle (e.g., "neural network load forecasting")
+   CRITICAL CONSTRAINTS:
+   - Each query MUST be a DISTINCT keyword phrase of 4-8 words, NOT a copy of the original topic with appended suffixes.
+   - FORBIDDEN: taking the full topic sentence and adding "review survey" / "methodology comparison" / "recent advances" at the end. This produces garbage results.
+   - Each query must target a DIFFERENT retrieval angle. Examples of angles:
+     (1) Core phenomenon: "environmental regulation carbon emission causal effect"
+     (2) Specific methodology: "difference-in-differences carbon policy evaluation"
+     (3) Policy instrument: "emission trading scheme causal inference"
+     (4) Estimation strategy: "carbon tax instrumental variable estimation"
+     (5) Theoretical framework: "Porter hypothesis environmental regulation productivity"
+     (6) Heterogeneity analysis: "environmental regulation energy efficiency heterogeneity"
+     (7) Data/measurement angle: "energy intensity convergence panel data"
+     (8) Synonym variant: "pollution haven hypothesis empirical evidence"
+   - GOOD: "difference-in-differences carbon policy evaluation" (distinct angle, keyword-based)
+   - BAD: "Causal Effects of Environmental Regulations on Carbon Emissions: DID and IV Evidence review survey" (copy + suffix)
 
 4. "tier_definitions": An object containing three tier definitions:
    - "core": The most central papers in this domain (directly researching the topic + methodology)
