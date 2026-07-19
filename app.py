@@ -23,7 +23,7 @@ from debate_engine import (
     MODEL_PROFILES, ARCHITECTURE_MODES,
     MARKET_CONFIG,
     apply_config, get_current_config, get_current_config_name,
-    run_department_debate, run_cross_debate, run_summary,
+    run_department_debate, run_cross_debate, run_summary, run_academic_summary,
     run_spatial_review, run_proofreading, run_spatial_diagram,
     run_auto_revision, run_director_revision, run_output_edit,
     run_smart_reroll,
@@ -1140,20 +1140,34 @@ def run_all_debates():
             cross_results.append(cr)
     st.session_state.cross_results = cross_results
     
-    # P6: Summary AI
-    final = run_summary(
-        all_consensus={k: v["consensus"] for k, v in dept_results.items()},
-        cross_results=cross_results,
-        user_script=script, positive_prompt=positive,
-        negative_prompt=negative, character_refs=chars,
-        api_url=api_url, api_key=api_key, model=model, lang=lang,
-        stats=stats,
-    )
+    # P6: Summary AI — branch on academic vs animation mode
+    _cfg = (st.session_state.get("workgroup_config") or get_current_config() or {})
+    _dept_keys = list(_cfg.get("departments", {}).keys())
+    _is_academic = any(k in _dept_keys for k in ["literature_search", "methodology_review", "report_integration", "programming", "tutorial", "metadata_inspector", "citation_network", "data_validation", "counter_evidence", "topic_clustering"])
+
+    if _is_academic:
+        final = run_academic_summary(
+            user_topic=script or st.session_state.get("config_user_input", ""),
+            all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+            cross_results=cross_results,
+            api_url=api_url, api_key=api_key, model=model, lang=lang,
+            stats=stats,
+        )
+        notify_stage_complete("学术综述报告生成" if is_zh else "Academic Report")
+    else:
+        final = run_summary(
+            all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+            cross_results=cross_results,
+            user_script=script, positive_prompt=positive,
+            negative_prompt=negative, character_refs=chars,
+            api_url=api_url, api_key=api_key, model=model, lang=lang,
+            stats=stats,
+        )
+        notify_stage_complete("分镜表+视频提示词生成" if is_zh else "Storyboard+Video Prompt")
     st.session_state.final_output = final
     st.session_state.debate_completed = True
     st.session_state.current_end_time = time.time()
     autosave_result("normal_result", final)
-    notify_stage_complete("分镜表+视频提示词生成" if is_zh else "Storyboard+Video Prompt")
     progress.progress(1.0, text="✅ " + ("全部辩论完成！" if is_zh else "All debates complete!"))
 
 
@@ -1793,14 +1807,14 @@ def render_output_tab():
 
 
 def _render_academic_output(final, is_zh):
-    """Academic mode output: research report + department consensus + cross-debate + PDF export"""
+    """Academic mode output: research report + department consensus + cross-debate + Word export"""
     dept_results = st.session_state.get("dept_results", {})
     cross_results = st.session_state.get("cross_results", [])
     
     # ---- Final Research Report ----
     st.subheader("📋 " + ("最终研究报告" if is_zh else "Final Research Report"))
     
-    # Try to get the final report text
+    # Get the final report text — prioritize the academic summary output
     report_text = final.get("final_report", "") or final.get("consensus_report", "") or ""
     if not report_text and dept_results:
         # Fallback: assemble from department consensus
@@ -1827,25 +1841,58 @@ def _render_academic_output(final, is_zh):
                 key="dl_academic_report_md",
             )
         with col_dl2:
-            # PDF export
-            import tempfile as _tf
-            _pdf_dir = _tf.mkdtemp()
-            _pdf_path = os.path.join(_pdf_dir, "research_report.pdf")
+            # Word export using python-docx
             try:
-                _title = "研究报告" if is_zh else "Research Report"
-                markdown_to_pdf(report_text, _pdf_path, title=_title)
-                with open(_pdf_path, "rb") as _pf:
-                    _pdf_bytes = _pf.read()
+                from docx import Document
+                from docx.shared import Pt, Inches
+                from io import BytesIO
+                
+                doc = Document()
+                # Parse markdown into docx paragraphs (basic conversion)
+                for line in report_text.split("\n"):
+                    line_stripped = line.strip()
+                    if not line_stripped:
+                        continue
+                    if line_stripped.startswith("# "):
+                        doc.add_heading(line_stripped[2:], level=1)
+                    elif line_stripped.startswith("## "):
+                        doc.add_heading(line_stripped[3:], level=2)
+                    elif line_stripped.startswith("### "):
+                        doc.add_heading(line_stripped[4:], level=3)
+                    elif line_stripped.startswith("#### "):
+                        doc.add_heading(line_stripped[5:], level=4)
+                    elif line_stripped.startswith("- ") or line_stripped.startswith("* "):
+                        doc.add_paragraph(line_stripped[2:], style="List Bullet")
+                    elif line_stripped.startswith("---"):
+                        doc.add_paragraph("─" * 40)
+                    else:
+                        # Handle bold markers
+                        p = doc.add_paragraph()
+                        # Simple bold handling: split by ** and alternate
+                        parts = line_stripped.split("**")
+                        for idx, part in enumerate(parts):
+                            if not part:
+                                continue
+                            run = p.add_run(part)
+                            if idx % 2 == 1:
+                                run.bold = True
+                
+                buf = BytesIO()
+                doc.save(buf)
+                docx_bytes = buf.getvalue()
+                
                 st.download_button(
-                    "📄 " + ("下载研究报告 (PDF)" if is_zh else "Download Report (PDF)"),
-                    data=_pdf_bytes,
-                    file_name="research_report.pdf",
-                    mime="application/pdf",
+                    "📝 " + ("下载研究报告 (Word)" if is_zh else "Download Report (Word)"),
+                    data=docx_bytes,
+                    file_name="research_report.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     use_container_width=True,
-                    key="dl_academic_report_pdf",
+                    key="dl_academic_report_docx",
                 )
+            except ImportError:
+                st.caption("💡 " + ("安装 python-docx 可导出 Word: pip install python-docx" if is_zh else "Install python-docx for Word export: pip install python-docx"))
             except Exception as _e:
-                st.warning(f"PDF export failed: {_e}")
+                st.warning(f"Word export failed: {_e}")
     else:
         st.info("📝 " + ("暂无最终报告，请先完成辩论流程" if is_zh else "No final report yet, complete debate first"))
     
@@ -1872,46 +1919,6 @@ def _render_academic_output(final, is_zh):
             if cr_content:
                 with st.expander(f"🔀 {cr_title}", expanded=False):
                     st.markdown(cr_content)
-    
-    st.divider()
-    
-    # ---- Full Debate PDF Export ----
-    st.subheader("📄 " + ("辩论产出PDF导出" if is_zh else "Export Debate PDF"))
-    if dept_results:
-        all_md_parts = []
-        for dept_key, dept_data in dept_results.items():
-            name = dept_data.get("zh_name", dept_key) if is_zh else dept_data.get("en_name", dept_key)
-            consensus = dept_data.get("consensus", "")
-            if consensus:
-                all_md_parts.append(f"## {name}\n\n{consensus}")
-        
-        if all_md_parts:
-            all_md = "# " + ("辩论产出汇总报告" if is_zh else "Debate Summary Report") + "\n\n" + "\n\n---\n\n".join(all_md_parts)
-            import tempfile as _tf
-            _pdf_dir = _tf.mkdtemp()
-            _pdf_path = os.path.join(_pdf_dir, "debate_summary.pdf")
-            try:
-                _title = "辩论产出汇总报告" if is_zh else "Debate Summary Report"
-                markdown_to_pdf(all_md, _pdf_path, title=_title)
-                with open(_pdf_path, "rb") as _pf:
-                    _pdf_bytes = _pf.read()
-                st.download_button(
-                    "📥 " + ("下载全部辩论PDF" if is_zh else "Download Full Debate PDF"),
-                    data=_pdf_bytes,
-                    file_name="debate_summary.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key="dl_academic_full_pdf",
-                )
-            except Exception as _e:
-                st.warning(f"PDF export failed: {_e}")
-    
-    st.divider()
-    
-    # ---- Smart Re-roll (mode-agnostic) ----
-    with st.expander("🧠 " + ("智能回炉" if is_zh else "Smart Re-roll"), expanded=False):
-        _render_smart_reroll(is_zh, is_academic=True)
-
 
 def _render_animation_output(final, is_zh):
     """Animation mode output: storyboard + video prompt + spatial diagram + asset checklist + PDF + carry-forward + re-roll"""
