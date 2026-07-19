@@ -180,13 +180,29 @@ class RequirementStructurer:
         return structured
 
     def _infer_domain_code(self, domain_name: str) -> str:
-        """Infer domain code from domain name"""
+        """Infer domain code from domain name (supports EN/CN/code)"""
         mapping = {
-            "学术调研": "academic_research",  # Chinese domain name from interviewer output
-            "动画创作": "animation",  # Chinese domain name from interviewer output
-            "通用": "general",  # Chinese domain name from interviewer output
+            # Chinese
+            "学术调研": "academic_research",
+            "动画创作": "animation",
+            "通用": "general",
+            # English (from DOMAIN_INTERVIEW_TEMPLATES domain_name)
+            "Academic Research": "academic_research",
+            "Animation": "animation",
+            "General": "general",
+            # Code (direct)
+            "academic_research": "academic_research",
+            "animation": "animation",
+            "general": "general",
         }
-        return mapping.get(domain_name, "general")
+        if domain_name in mapping:
+            return mapping[domain_name]
+        # Fallback: keyword-based detection
+        name_lower = domain_name.lower()
+        academic_kw = ["学术", "研究", "论文", "文献", "调研", "综述", "academic", "research", "paper", "literature"]
+        if any(kw in name_lower for kw in academic_kw):
+            return "academic_research"
+        return "general"
 
     def _is_role_relevant(self, role: str, doc: RequirementDocument) -> bool:
         """Determine whether a domain-specific role is relevant to the requirement"""
