@@ -42,6 +42,26 @@ from router import analyze_and_configure, analyze_revision_impact
 
 # v4.0 Requirement research module
 from requirement import (
+
+def _detect_pipeline_mode(cfg=None):
+    """Detect pipeline mode: 'academic' or 'animation'.
+    Priority: session_state.pipeline_mode > department key detection.
+    """
+    explicit = st.session_state.get("pipeline_mode")
+    if explicit in ("academic", "animation"):
+        return explicit
+    # Fallback: detect from department keys
+    if cfg is None:
+        cfg = (st.session_state.get("workgroup_config") or get_current_config() or {})
+    dept_keys = list(cfg.get("departments", {}).keys()) if isinstance(cfg, dict) else []
+    academic_keys = {"literature_search", "methodology_review", "report_integration", 
+                     "programming", "tutorial", "metadata_inspector", "citation_network",
+                     "data_validation", "counter_evidence", "topic_clustering"}
+    if any(k in dept_keys for k in academic_keys):
+        return "academic"
+    return "animation"
+
+
     RequirementDocument, RequirementInterviewer,
     StructuredRequirement, RequirementStructurer,
     DiscussionGroup, DiscussionResult,
@@ -701,6 +721,7 @@ def init_state():
         "market_rounds": 3,
         # v3.0 Smart grouping
         "workgroup_config": None,  # 当前工作组配置（PresetConfig dict）
+        "pipeline_mode": None,  # "academic" or "animation", set by Phase4 confirm
         "workgroup_name": "动画辩论",  # 当前配置名称
         "_lang_selected": False,  # Language welcome page flag
     }
@@ -944,6 +965,7 @@ def render_sidebar():
                     if _cfg is not None:
                         apply_config(_cfg)
                         st.session_state.workgroup_config = _cfg
+                        st.session_state.pipeline_mode = None  # reset, will be detected on next use
                     st.session_state.workgroup_name = _clean_name
                     set_last_used(_clean_name)
                     st.rerun()
@@ -1142,8 +1164,7 @@ def run_all_debates():
     
     # P6: Summary AI — branch on academic vs animation mode
     _cfg = (st.session_state.get("workgroup_config") or get_current_config() or {})
-    _dept_keys = list(_cfg.get("departments", {}).keys())
-    _is_academic = any(k in _dept_keys for k in ["literature_search", "methodology_review", "report_integration", "programming", "tutorial", "metadata_inspector", "citation_network", "data_validation", "counter_evidence", "topic_clustering"])
+    _is_academic = _detect_pipeline_mode(_cfg) == "academic"
 
     if _is_academic:
         final = run_academic_summary(
@@ -1331,8 +1352,7 @@ def step_run_summary():
     dept_results = st.session_state.dept_results
     _is_zh = st.session_state.lang == "zh"
     _cfg = (st.session_state.get("workgroup_config") or get_current_config() or {})
-    _dept_keys = list(_cfg.get("departments", {}).keys())
-    _is_academic = any(k in _dept_keys for k in ["literature_search", "methodology_review", "report_integration", "programming", "tutorial", "metadata_inspector", "citation_network", "data_validation", "counter_evidence", "topic_clustering"])
+    _is_academic = _detect_pipeline_mode(_cfg) == "academic"
 
     if _is_academic:
         final = run_academic_summary(
@@ -1380,7 +1400,7 @@ def render_input_tab():
     current_config = get_current_config() or {}
     # Determine if current config is academic/programming (non-animation)
     dept_keys = list(current_config.get("departments", {}).keys())
-    is_academic = any(k in dept_keys for k in ["literature_search", "methodology_review", "report_integration", "programming", "tutorial"])
+    is_academic = _detect_pipeline_mode() == "academic"
     is_animation = any(k in dept_keys for k in ["screenwriter", "storyboard", "spatial", "dp", "lighting", "vfx", "sound", "editing"])
     
     if is_academic:
@@ -1723,6 +1743,8 @@ def render_step_mode():
         if st.button(t("step_run_summary"), type="primary", use_container_width=True, key="step_run_summary"):
             with st.spinner("🎬 " + ("生成最终产出中..." if is_zh else "Generating final output...")):
                 step_run_summary()
+                _mode_label = "学术综述" if st.session_state.get("pipeline_mode") == "academic" else "动画分镜"
+                st.toast(f"📋 {'产出模式' if is_zh else 'Output mode'}: {_mode_label}", icon="📋")
             st.rerun()
     
     elif phase == "completed":
@@ -1807,9 +1829,8 @@ def render_output_tab():
     
     # Detect mode
     _cfg = (st.session_state.get("workgroup_config") or get_current_config() or {})
-    _dept_keys = list(_cfg.get("departments", {}).keys())
-    is_academic = any(k in _dept_keys for k in ["literature_search", "methodology_review", "report_integration", "programming", "tutorial", "metadata_inspector", "citation_network", "data_validation", "counter_evidence", "topic_clustering"])
-    is_animation = any(k in _dept_keys for k in ["screenwriter", "storyboard", "spatial", "dp", "lighting", "vfx", "sound", "editing"])
+    is_academic = _detect_pipeline_mode(_cfg) == "academic"
+    is_animation = not is_academic
     
     # 🔧 Auto-restore normal mode results
     if not final:
@@ -3088,9 +3109,8 @@ def render_config_tab():
     
     # Detect academic vs animation mode for conditional UI
     _cfg_depts = (st.session_state.get("workgroup_config") or get_current_config() or {}).get("departments", {})
-    _dept_keys = list(_cfg_depts.keys()) if _cfg_depts else []
-    is_academic = any(k in _dept_keys for k in ["literature_search", "methodology_review", "report_integration", "programming", "tutorial", "metadata_inspector", "citation_network", "data_validation", "counter_evidence", "topic_clustering"])
-    is_animation = any(k in _dept_keys for k in ["screenwriter", "storyboard", "spatial", "dp", "lighting", "vfx", "sound", "editing"])
+    is_academic = _detect_pipeline_mode() == "academic"
+    is_animation = not is_academic
     
     st.subheader(t("config_title"))
     st.caption(t("config_subtitle"))
@@ -3167,6 +3187,7 @@ def render_config_tab():
                     cfg = load_preset(selected_preset)
                     st.session_state.workgroup_config = cfg
                     st.session_state.workgroup_name = selected_preset
+                    st.session_state.pipeline_mode = None  # reset, will be detected on next use
                     st.success(f"✅ {'已加载预设' if is_zh else 'Loaded preset'}: {selected_preset}")
                 except Exception as e:
                     st.error(str(e))
@@ -3786,6 +3807,13 @@ def render_requirement_tab():
                     # Write to current config
                     apply_config(final_config)
                     st.session_state.workgroup_config = final_config
+                    
+                    # Set pipeline_mode explicitly based on department keys
+                    _p4_dept_keys = set(final_config.get("departments", {}).keys())
+                    _academic_keys = {"literature_search", "methodology_review", "report_integration", 
+                                     "programming", "tutorial", "metadata_inspector", "citation_network",
+                                     "data_validation", "counter_evidence", "topic_clustering"}
+                    st.session_state.pipeline_mode = "academic" if _p4_dept_keys & _academic_keys else "animation"
                     
                     # Set auto-jump flag for toast notification
                     st.session_state._auto_jump_to_debate = True
