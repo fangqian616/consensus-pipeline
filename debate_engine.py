@@ -2986,7 +2986,7 @@ def run_academic_summary(
     # === Step 1: Search for real papers ===
     paper_references = ""
     papers_found = []
-    
+
     # Extract core search query from user_topic (which may be a structured plan)
     search_query = user_topic
     if "\n" in user_topic or "：" in user_topic or ":" in user_topic:
@@ -3001,9 +3001,36 @@ def run_academic_summary(
             search_query = re.sub(r'^[^：:]+[：:]\s*', '', first_line)
         # Clean up: remove newlines for API query
         search_query = search_query.replace("\n", " ").strip()
-    
+
+    # v4.5: Bilingual search — also search with English keywords for better arXiv/S2 coverage
+    _ZH_EN_MAP = {
+        "能源": "energy", "经济": "economics", "经济学": "economics",
+        "环境": "environmental", "规制": "regulation", "政策": "policy",
+        "效率": "efficiency", "碳": "carbon", "排放": "emission",
+        "电力": "electricity", "可再生": "renewable", "气候": "climate",
+        "金融": "finance", "管理": "management", "市场": "market",
+        "创新": "innovation", "技术": "technology", "产业": "industry",
+        "发展": "development", "可持续": "sustainable", "绿色": "green",
+        "转型": "transition", "投资": "investment", "消费": "consumption",
+        "贸易": "trade", "全球化": "globalization", "数字化": "digital",
+        "机器学习": "machine learning", "人工智能": "artificial intelligence",
+        "预测": "forecasting", "优化": "optimization", "评估": "assessment",
+    }
+    en_query = ""
+    if any('\u4e00' <= c <= '\u9fff' for c in search_query):
+        en_parts = []
+        remaining = search_query
+        for zh, en in sorted(_ZH_EN_MAP.items(), key=lambda x: -len(x[0])):
+            if zh in remaining:
+                en_parts.append(en)
+                remaining = remaining.replace(zh, " ")
+        remaining_words = [w.strip() for w in remaining.split() if w.strip() and len(w.strip()) > 1]
+        en_parts.extend(remaining_words)
+        en_query = " ".join(en_parts[:5]) if en_parts else search_query
     print(f"Academic search query: \"{search_query}\" (extracted from user_topic of {len(user_topic)} chars)")
-    
+    if en_query and en_query != search_query:
+        print(f"Academic search (English): \"{en_query}\"")
+
     try:
         from academic.search_engine import AcademicSearchEngine
         se = AcademicSearchEngine(
@@ -3011,9 +3038,39 @@ def run_academic_summary(
             min_results=10,
             include_preprints=True,
         )
+        # Search with original query
         search_result = se.search(search_query, max_results_per_source=30)
         papers_found = search_result.get("papers", [])
         preprints = search_result.get("preprints", [])
+
+        # v4.5: Also search with English query and merge
+        if en_query and en_query != search_query:
+            en_result = se.search(en_query, max_results_per_source=30)
+            en_papers = en_result.get("papers", [])
+            en_preprints = en_result.get("preprints", [])
+            # Merge: deduplicate by DOI and title
+            existing_dois = {p.doi for p in papers_found if p.doi}
+            existing_titles = {p.title[:30].lower() for p in papers_found}
+            for p in en_papers:
+                if p.doi and p.doi in existing_dois:
+                    continue
+                if p.title[:30].lower() in existing_titles:
+                    continue
+                papers_found.append(p)
+            for p in en_preprints:
+                if p.doi and p.doi in existing_dois:
+                    continue
+                if p.title[:30].lower() in existing_titles:
+                    continue
+                preprints.append(p)
+            # Update stats
+            se_stats = search_result.get("stats", {})
+            en_stats = en_result.get("stats", {})
+            se_stats["total_fetched"] = se_stats.get("total_fetched", 0) + en_stats.get("total_fetched", 0)
+            se_stats["after_filter"] = len(papers_found)
+            se_stats["preprint_count"] = len(preprints)
+            search_result["stats"] = se_stats
+
         all_papers = papers_found + preprints[:5]  # Include top 5 preprints
 
         if all_papers:
@@ -3061,7 +3118,7 @@ def run_academic_summary(
 10. 学术但可读的语言，避免空话套话和模糊表述
 11. 报告字数 >= 2000字"""
 
-            user_prompt = f"""请撰写「{user_topic}」领域的学术动向综述报告。
+            user_prompt = f"""请撰写「{search_query}」领域的学术动向综述报告。
 
 以下为各部门辩论共识：
 
@@ -3097,7 +3154,7 @@ def run_academic_summary(
 9. 学术但可读的语言，避免空话套话和模糊表述
 10. 报告字数 >= 2000字"""
 
-            user_prompt = f"""请撰写「{user_topic}」领域的学术动向综述报告。
+            user_prompt = f"""请撰写「{search_query}」领域的学术动向综述报告。
 
 以下为各部门辩论共识：
 
@@ -3131,7 +3188,7 @@ def run_academic_summary(
 10. Academic but accessible language, avoid filler and vague statements
 11. Report length >= 2000 words"""
 
-            user_prompt = f"""Please write an academic trend review report on "{user_topic}".
+            user_prompt = f"""Please write an academic trend review report on "{search_query}".
 
 Department debate consensus:
 
@@ -3167,7 +3224,7 @@ Based on the above debate content and real literature, write a structured academ
 9. Academic but accessible language, avoid filler and vague statements
 10. Report length >= 2000 words"""
 
-            user_prompt = f"""Please write an academic trend review report on "{user_topic}".
+            user_prompt = f"""Please write an academic trend review report on "{search_query}".
 
 Department debate consensus:
 
