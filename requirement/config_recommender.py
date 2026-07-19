@@ -300,7 +300,13 @@ class ConfigRecommender:
 
         # Select base template
         if domain_code == "academic_research":
-            base_config = self._deep_copy_config(ACADEMIC_DEPARTMENT_TEMPLATE)
+            # v0.8.0: Use topic-specific department hints from structurer when available
+            # (structurer now generates research sub-topics via LLM instead of hardcoded
+            # pipeline module names like "文献检索组"/"元数据精查组")
+            if requirement.department_hints:
+                base_config = self._generate_default_config(requirement)
+            else:
+                base_config = self._deep_copy_config(ACADEMIC_DEPARTMENT_TEMPLATE)
         else:
             # Try loading from template file
             base_config = _load_template(f"{domain_code}_departments")
