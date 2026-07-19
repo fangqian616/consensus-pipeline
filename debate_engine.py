@@ -2036,7 +2036,7 @@ Please revise the winning candidate to address these contested issues. Requireme
 Output the revised storyboard and video prompt."""
     
     messages = [{"role": "user", "content": prompt}]
-    response = call_api(messages, api_url, api_key, model, temperature=0.5, max_tokens=8192, stats=stats)
+    response = call_api(messages, api_url, api_key, model, temperature=0.5, max_tokens=16384, stats=stats)
     
     if response and not response.startswith("ERROR:"):
         # Try splitting
@@ -2570,7 +2570,7 @@ Negative prompt:
             {"role": "user", "content": storyboard_prompt},
         ],
         api_url=api_url, api_key=api_key, model=model,
-        temperature=0.3, max_tokens=8192, timeout=180,
+        temperature=0.3, max_tokens=16384, timeout=180,
         stats=stats,
     )
     
@@ -2592,7 +2592,7 @@ Negative prompt:
                     {"role": "user", "content": retry_prompt.split("\n\n⚠️", 1)[1] if "⚠️" in retry_prompt else retry_prompt},
                 ],
                 api_url=api_url, api_key=api_key, model=model,
-                temperature=0.3, max_tokens=8192, timeout=180,
+                temperature=0.3, max_tokens=16384, timeout=180,
                 stats=stats,
             )
     
@@ -2908,7 +2908,7 @@ IMPORTANT:
             {"role": "user", "content": video_prompt},
         ],
         api_url=api_url, api_key=api_key, model=model,
-        temperature=0.3, max_tokens=8192, timeout=180,
+        temperature=0.3, max_tokens=16384, timeout=180,
         stats=stats,
     )
     
@@ -2931,7 +2931,7 @@ IMPORTANT:
                     {"role": "user", "content": retry_video_msg},
                 ],
                 api_url=api_url, api_key=api_key, model=model,
-                temperature=0.3, max_tokens=8192, timeout=180,
+                temperature=0.3, max_tokens=16384, timeout=180,
                 stats=stats,
             )
     
@@ -3361,7 +3361,7 @@ Based on the above debate content, write a structured academic review report. Re
             {"role": "user", "content": user_prompt},
         ],
         api_url=api_url, api_key=api_key, model=model,
-        temperature=0.25, max_tokens=8192, timeout=180,
+        temperature=0.25, max_tokens=16384, timeout=180,
         stats=stats,
     )
 
@@ -3619,7 +3619,7 @@ Output format:
 [List each change you made]"""
     
     messages = [{"role": "user", "content": revise_prompt}]
-    result = call_api(messages, api_url, api_key, model, temperature=0.2, max_tokens=8192, timeout=180, stats=stats)
+    result = call_api(messages, api_url, api_key, model, temperature=0.2, max_tokens=16384, timeout=180, stats=stats)
     
     # Parse correction results
     revised_storyboard = storyboard
@@ -4569,7 +4569,7 @@ Output format:
 [List each change you made]"""
     
     messages = [{"role": "user", "content": prompt}]
-    result = call_api(messages, api_url, api_key, model, temperature=0.2, max_tokens=8192, timeout=180, stats=stats)
+    result = call_api(messages, api_url, api_key, model, temperature=0.2, max_tokens=16384, timeout=180, stats=stats)
     
     # Parse modification results
     revised_storyboard = current_storyboard
