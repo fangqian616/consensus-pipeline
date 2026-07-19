@@ -2986,6 +2986,24 @@ def run_academic_summary(
     # === Step 1: Search for real papers ===
     paper_references = ""
     papers_found = []
+    
+    # Extract core search query from user_topic (which may be a structured plan)
+    search_query = user_topic
+    if "\n" in user_topic or "：" in user_topic or ":" in user_topic:
+        # user_topic is a structured plan, extract the research topic line
+        import re
+        topic_match = re.search(r'(?:研究主题|Research Topic|Topic)\s*[:：]\s*(.+)', user_topic)
+        if topic_match:
+            search_query = topic_match.group(1).strip()
+        else:
+            # Fallback: use first non-empty line, strip labels
+            first_line = user_topic.split("\n")[0].strip()
+            search_query = re.sub(r'^[^：:]+[：:]\s*', '', first_line)
+        # Clean up: remove newlines for API query
+        search_query = search_query.replace("\n", " ").strip()
+    
+    print(f"Academic search query: \"{search_query}\" (extracted from user_topic of {len(user_topic)} chars)")
+    
     try:
         from academic.search_engine import AcademicSearchEngine
         se = AcademicSearchEngine(
@@ -2993,7 +3011,7 @@ def run_academic_summary(
             min_results=10,
             include_preprints=True,
         )
-        search_result = se.search(user_topic, max_results_per_source=30)
+        search_result = se.search(search_query, max_results_per_source=30)
         papers_found = search_result.get("papers", [])
         preprints = search_result.get("preprints", [])
         all_papers = papers_found + preprints[:5]  # Include top 5 preprints
