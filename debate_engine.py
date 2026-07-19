@@ -3228,7 +3228,9 @@ def run_academic_summary(
 8. 反证必须包含：有效批评、失败案例、适用边界
 9. 研究空白从"为什么没人做"和"做了有什么价值"两个角度分析
 10. 学术但可读的语言，避免空话套话和模糊表述
-11. 报告字数 >= 6000字，确保每个章节有充分的论述深度，尽量详细展开每个章节"""
+11. 报告字数 >= 6000字，确保每个章节有充分的论述深度，尽量详细展开每个章节
+12. 第6章「代码实现」必须包含实际的代码块（用markdown代码块格式），不能只描述代码思路，要输出可运行的关键代码片段
+13. 第7章「教程」必须是分步骤的实操指南，包含环境配置命令、基础示例代码、进阶用法说明"""
 
             user_prompt = f"""请撰写「{search_query}」领域的学术动向综述报告。
 
@@ -3250,7 +3252,9 @@ def run_academic_summary(
 3. 趋势分析与演进路径
 4. 研究空白与未来方向
 5. 结论与建议
-6. 参考文献（使用上方真实论文列表，格式：作者. (年份). 标题. 期刊.）"""
+6. 代码实现（基于程序部辩论共识，输出该领域核心方法的可运行代码片段，使用代码块格式，包含关键函数和数据流）
+7. 教程（基于教程部辩论共识，输出分步骤的入门到进阶教程，包含环境配置、基础用法、进阶技巧）
+8. 参考文献（使用上方真实论文列表，格式：作者. (年份). 标题. 期刊。）"""
         else:
             system_prompt = """你是一位资深学术综述撰写专家。你的任务是将多个学术辩论组的共识结果整合为一篇结构完整的学术动向综述报告。
 
@@ -3264,7 +3268,9 @@ def run_academic_summary(
 7. 反证必须包含：有效批评、失败案例、适用边界
 8. 研究空白从"为什么没人做"和"做了有什么价值"两个角度分析
 9. 学术但可读的语言，避免空话套话和模糊表述
-10. 报告字数 >= 4000字，尽量详细展开每个章节"""
+10. 报告字数 >= 4000字，尽量详细展开每个章节
+11. 第6章「代码实现」必须包含实际的代码块（用markdown代码块格式），不能只描述代码思路，要输出可运行的关键代码片段
+12. 第7章「教程」必须是分步骤的实操指南，包含环境配置命令、基础示例代码、进阶用法说明"""
 
             user_prompt = f"""请撰写「{search_query}」领域的学术动向综述报告。
 
@@ -3282,7 +3288,9 @@ def run_academic_summary(
 3. 趋势分析与演进路径
 4. 研究空白与未来方向
 5. 结论与建议
-6. 辩论来源（列出参与辩论的各部门及其主要贡献）"""
+6. 代码实现（基于程序部辩论共识，输出该领域核心方法的可运行代码片段，使用代码块格式，包含关键函数和数据流）
+7. 教程（基于教程部辩论共识，输出分步骤的入门到进阶教程，包含环境配置、基础用法、进阶技巧）
+8. 辩论来源（列出参与辩论的各部门及其主要贡献）"""
     else:
         if has_papers:
             system_prompt = """You are a senior academic review writing expert. Your task is to synthesize multi-group debate consensus with real literature search results into a structured academic trend review report.
@@ -3298,7 +3306,9 @@ def run_academic_summary(
 8. Counter-evidence must be included: valid criticisms, failure cases, applicability boundaries
 9. Research gaps analyzed from "why hasn't anyone done this" and "what value would it bring" perspectives
 10. Academic but accessible language, avoid filler and vague statements
-11. Report length >= 5000 words, ensure each section has sufficient depth, expand each section thoroughly with 3-4 substantive paragraphs"""
+11. Report length >= 5000 words, ensure each section has sufficient depth, expand each section thoroughly with 3-4 substantive paragraphs
+12. Section 6 "Code Implementation" must include actual code blocks (in markdown code block format), not just descriptions of code ideas - output runnable key code snippets
+13. Section 7 "Tutorial" must be a step-by-step hands-on guide, including environment setup commands, basic example code, and advanced usage notes"""
 
             user_prompt = f"""Please write an academic trend review report on "{search_query}".
 
@@ -3320,7 +3330,9 @@ Based on the above debate content and real literature, write a structured academ
 3. Trend Analysis & Evolution Path
 4. Research Gaps & Future Directions
 5. Conclusions & Recommendations
-6. References (use the real paper list above, format: Authors. (Year). Title. Journal.)"""
+6. Code Implementation (based on programming department consensus, output runnable code snippets for core methods in the field, use code block format, include key functions and data flow)
+7. Tutorial (based on tutorial department consensus, output step-by-step beginner-to-advanced tutorial, include environment setup, basic usage, advanced techniques)
+8. References (use the real paper list above, format: Authors. (Year). Title. Journal.)"""
         else:
             system_prompt = """You are a senior academic review writing expert. Your task is to synthesize multi-group debate consensus into a structured academic trend review report.
 
@@ -3334,7 +3346,9 @@ Based on the above debate content and real literature, write a structured academ
 7. Counter-evidence must be included: valid criticisms, failure cases, applicability boundaries
 8. Research gaps analyzed from "why hasn't anyone done this" and "what value would it bring" perspectives
 9. Academic but accessible language, avoid filler and vague statements
-10. Report length >= 4500 words, ensure each section has sufficient depth, expand each section thoroughly with 3-4 substantive paragraphs"""
+10. Report length >= 4500 words, ensure each section has sufficient depth, expand each section thoroughly with 3-4 substantive paragraphs
+11. Section 6 "Code Implementation" must include actual code blocks (in markdown code block format), not just descriptions of code ideas - output runnable key code snippets
+12. Section 7 "Tutorial" must be a step-by-step hands-on guide, including environment setup commands, basic example code, and advanced usage notes"""
 
             user_prompt = f"""Please write an academic trend review report on "{search_query}".
 
@@ -3352,7 +3366,9 @@ Based on the above debate content, write a structured academic review report. Re
 3. Trend Analysis & Evolution Path
 4. Research Gaps & Future Directions
 5. Conclusions & Recommendations
-6. Debate Sources (list participating departments and their main contributions)"""
+6. Code Implementation (based on programming department consensus, output runnable code snippets for core methods in the field, use code block format, include key functions and data flow)
+7. Tutorial (based on tutorial department consensus, output step-by-step beginner-to-advanced tutorial, include environment setup, basic usage, advanced techniques)
+8. Debate Sources (list participating departments and their main contributions)"""
 
     # Call LLM
     report = call_api(
