@@ -1370,6 +1370,13 @@ def step_run_summary():
 
 def render_input_tab():
     is_zh = st.session_state.get("lang", "zh") == "zh"
+    
+    # Sync pending auto-fill content (from requirement research Phase 4)
+    _pending = st.session_state.pop("_pending_script_fill", None)
+    if _pending:
+        st.session_state.script = _pending
+        st.session_state.script_input = _pending
+    
     current_config = get_current_config() or {}
     # Determine if current config is academic/programming (non-animation)
     dept_keys = list(current_config.get("departments", {}).keys())
@@ -3102,9 +3109,11 @@ def render_config_tab():
         
         # User requirement description
         # Allow using input tab content as config input
-        if st.session_state.get("script", "") and not st.session_state.get("config_user_input", ""):
-            if st.button("📋 " + ("使用输入Tab内容" if is_zh else "Use Input Tab Content"), use_container_width=True):
-                st.session_state.config_user_input = st.session_state.script
+        _script_content = st.session_state.get("script", "")
+        if _script_content:
+            _btn_label = "📋 " + ("使用输入Tab内容" if is_zh else "Use Input Tab Content")
+            if st.button(_btn_label, use_container_width=True, key="btn_use_input_tab"):
+                st.session_state.config_user_input = _script_content
                 st.rerun()
 
         user_input = st.text_area(
@@ -3785,29 +3794,72 @@ def render_requirement_tab():
                     req_doc = st.session_state.get("req_document")
                     req_structured = st.session_state.get("req_structured")
                     script_parts = []
-                    if req_doc:
-                        if hasattr(req_doc, "topic") and req_doc.topic:
-                            script_parts.append(f"研究主题：{req_doc.topic}")
-                        if hasattr(req_doc, "objectives") and req_doc.objectives:
-                            script_parts.append(f"研究目标：{'；'.join(req_doc.objectives)}")
-                        if hasattr(req_doc, "constraints") and req_doc.constraints:
-                            for k, v in req_doc.constraints.items():
-                                script_parts.append(f"{k}：{v}")
-                        if hasattr(req_doc, "key_questions") and req_doc.key_questions:
-                            script_parts.append(f"关键问题：{'；'.join(req_doc.key_questions)}")
-                        if hasattr(req_doc, "domain_specific") and req_doc.domain_specific:
-                            for k, v in req_doc.domain_specific.items():
-                                script_parts.append(f"{k}：{v}")
-                    if req_structured and hasattr(req_structured, "department_hints"):
-                        hints = [h["description"] for h in req_structured.department_hints if isinstance(h, dict)]
-                        if hints:
-                            script_parts.append(f"部门方向：{'；'.join(hints)}")
                     
-                    if script_parts:
-                        st.session_state.script = "\n".join(script_parts)
-                        st.session_state.script_input = st.session_state.script
-                        # Auto-fill config tab input too
-                        st.session_state.config_user_input = st.session_state.script
+                    # Extract from req_document (supports both object and dict)
+                    if req_doc:
+                        # Get attributes from object or dict
+                        def _get(obj, key, default=None):
+                            if isinstance(obj, dict):
+                                return obj.get(key, default)
+                            return getattr(obj, key, default) if hasattr(obj, key) else default
+                        
+                        _topic = _get(req_doc, "topic")
+                        if _topic:
+                            script_parts.append(f"研究主题：{_topic}")
+                        _objectives = _get(req_doc, "objectives") or []
+                        if _objectives:
+                            script_parts.append(f"研究目标：{'；'.join(str(o) for o in _objectives)}")
+                        _constraints = _get(req_doc, "constraints") or {}
+                        if isinstance(_constraints, dict):
+                            for k, v in _constraints.items():
+                                script_parts.append(f"{k}：{v}")
+                        _key_questions = _get(req_doc, "key_questions") or []
+                        if _key_questions:
+                            script_parts.append(f"关键问题：{'；'.join(str(q) for q in _key_questions)}")
+                        _domain_specific = _get(req_doc, "domain_specific") or {}
+                        if isinstance(_domain_specific, dict):
+                            for k, v in _domain_specific.items():
+                                script_parts.append(f"{k}：{v}")
+                        # Fallback: raw_text if no structured fields
+                        _raw = _get(req_doc, "raw_text")
+                        if not script_parts and _raw:
+                            script_parts.append(_raw[:500])
+                    
+                    # Extract from req_structured
+                    if req_structured:
+                        _hints = None
+                        if isinstance(req_structured, dict):
+                            _hints = req_structured.get("department_hints")
+                        elif hasattr(req_structured, "department_hints"):
+                            _hints = req_structured.department_hints
+                        if _hints:
+                            hints = [h["description"] for h in _hints if isinstance(h, dict) and "description" in h]
+                            if hints:
+                                script_parts.append(f"部门方向：{'；'.join(hints)}")
+                    
+                    # Fallback: use interview history if script_parts still empty
+                    if not script_parts:
+                        _history = st.session_state.get("req_interview_history", [])
+                        for turn in _history:
+                            if turn.get("role") == "user" and turn.get("content"):
+                                script_parts.append(turn["content"])
+                                if len(script_parts) >= 3:
+                                    break
+                    
+                    # Final fallback: use req_topic_input
+                    if not script_parts:
+                        _topic_input = st.session_state.get("req_topic_input", "")
+                        if _topic_input:
+                            script_parts.append(_topic_input)
+                    
+                    # Always set script content (even if empty, to clear stale state)
+                    _fill_content = "\n".join(script_parts) if script_parts else ""
+                    if _fill_content:
+                        st.session_state.script = _fill_content
+                        st.session_state.script_input = _fill_content
+                        st.session_state.config_user_input = _fill_content
+                        # Set pending fill flag for render_input_tab to pick up
+                        st.session_state._pending_script_fill = _fill_content
                     
                     st.session_state.req_phase = 0  # 重置
                     st.session_state.req_interview_history = []
