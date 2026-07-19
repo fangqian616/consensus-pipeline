@@ -15,13 +15,11 @@ def generate_domain_config(topic: str, llm_call_fn: Callable, output_dir: str = 
     """
     Dynamically generate domain configuration based on research topic.
 
-    Calls the LLM with the topic, returning a JSON containing:
-    - domain_definition: Domain boundary description
-    - exclusion_signals: Exclusion signal word list
-    - query_rotation: Search query rotation list
-    - tier_definitions: core/method/background tier definitions
-    - llm_classify_prompt: LLM binary classification prompt template
-    - categorization_schema: Auto-generated classification dimensions, buckets, and keywords
+    Uses TWO LLM calls to avoid max_tokens overflow:
+    1. First call: generates domain_definition, exclusion_signals, query_rotation,
+       tier_definitions, llm_classify_prompt (compact, ~8192 tokens safe)
+    2. Second call: generates categorization_schema separately (tightly constrained,
+       ≤3 categories per dimension, 3-5 keywords each, ≤8000 chars)
 
     Args:
         topic: Research topic (e.g., "Machine Learning in Energy Economics")
@@ -31,108 +29,18 @@ def generate_domain_config(topic: str, llm_call_fn: Callable, output_dir: str = 
     Returns:
         Domain configuration dict
     """
-    system_prompt = """You are an academic domain analysis expert. Your task is to generate a precise domain configuration JSON based on the given research topic.
-
-This configuration will be used for automatic filtering in an academic literature research pipeline. It must be precise enough to exclude irrelevant papers, yet broad enough not to miss relevant ones.
-
-You must output a valid JSON object containing the following fields:
-
-1. "domain_definition": A domain boundary description within 100 words, clarifying the core research objects and methodological scope of this domain.
-
-2. "exclusion_signals": A list of strings (15-25 items) containing exclusion signal words that do not belong to this domain.
-   When these words appear, the paper is likely outside the target domain. For example:
-   - If researching ML applications in energy economics, exclusion signals should include: nanotube, nanowire, plant growth, 
-     bacterial, photosynthesis, drug discovery, clinical trial, genetic, 
-     semiconductor device, quantum computing, astrophysics, etc.
-   - Must cover common cross-domain noise sources: materials science, biology, medicine, pure chemistry, pure physics, etc.
-   - Must also cover non-hard-science noise: education/teaching (curriculum, pedagogy, course design, textbook, teaching, education, 教学, 课程, 教育), nutrition/dietary (obesity, dietary, calorie, nutrition), book reviews
-
-3. "query_rotation": A list of strings (6-10 items) for search query rotation.
-   CRITICAL CONSTRAINTS:
-   - Each query MUST be a DISTINCT keyword phrase of 4-8 words, NOT a copy of the original topic with appended suffixes.
-   - FORBIDDEN: taking the full topic sentence and adding "review survey" / "methodology comparison" / "recent advances" at the end. This produces garbage results.
-   - Each query must target a DIFFERENT retrieval angle. Examples of angles:
-     (1) Core phenomenon: "environmental regulation carbon emission causal effect"
-     (2) Specific methodology: "difference-in-differences carbon policy evaluation"
-     (3) Policy instrument: "emission trading scheme causal inference"
-     (4) Estimation strategy: "carbon tax instrumental variable estimation"
-     (5) Theoretical framework: "Porter hypothesis environmental regulation productivity"
-     (6) Heterogeneity analysis: "environmental regulation energy efficiency heterogeneity"
-     (7) Data/measurement angle: "energy intensity convergence panel data"
-     (8) Synonym variant: "pollution haven hypothesis empirical evidence"
-   - GOOD: "difference-in-differences carbon policy evaluation" (distinct angle, keyword-based)
-   - BAD: "Causal Effects of Environmental Regulations on Carbon Emissions: DID and IV Evidence review survey" (copy + suffix)
-
-4. "tier_definitions": An object containing three tier definitions:
-   - "core": The most central papers in this domain (directly researching the topic + methodology)
-     - "keywords": Keyword list (10-15 items)
-     - "description": Tier description
-   - "method": Methodology supplement tier (the researched methods have applications in the target domain, but the paper itself may be from other domains)
-     - "keywords": Keyword list (8-12 items)
-     - "description": Tier description
-   - "background": Mechanism background tier (provides domain background knowledge, but does not directly involve methodological innovation)
-     - "keywords": Keyword list (8-12 items)
-     - "description": Tier description
-
-5. "llm_classify_prompt": A string that is the system prompt template for LLM binary classification.
-   Use {domain_definition} as a placeholder, which will be replaced with the actual domain_definition at runtime.
-   The prompt asks the LLM to answer "yes" or "no" for each paper — does this paper belong to the target domain?
-   Format requirement: output "Paper N: Yes/No" for each paper, with a brief reason.
-
-6. "categorization_schema": An object defining classification dimensions for topic clustering.
-   This replaces hardcoded category maps, enabling domain-agnostic paper categorization.
-   Structure:
-   {
-     "research_area": {
-       "Category1": ["keyword1", "keyword2", ...],
-       "Category2": ["keyword3", ...],
-       "Other": []
-     },
-     "methodology": {
-       "Category1": ["keyword1", ...],
-       "Category2": ["keyword2", ...],
-       "Other": []
-     },
-     "data_type": {
-       "Category1": ["keyword1", ...],
-       "Other": []
-     },
-     "geographic_scope": {
-       "Category1": ["keyword1", ...],
-       "Other": []
-     }
-   }
-   Requirements:
-   - Must include exactly these 4 dimensions: research_area, methodology, data_type, geographic_scope
-   - Each dimension must have 3-5 meaningful categories (plus "Other" as fallback)
-   - Each category must have 3-8 lowercase English keywords (and optionally Chinese equivalents for matching Chinese papers)
-   - Categories and keywords must be SPECIFIC to the research topic — do NOT use generic placeholders
-   - The "Other" bucket must always exist with an empty keyword list []
-
-Important:
-- Output only JSON, no other text
-- Ensure the JSON is valid and parseable
-- Use English lowercase for keywords
-- Exclusion signals should cover common noise domains including education/teaching and nutrition/dietary noise
-- categorization_schema must be topic-specific, not generic
-- CONCISENESS REQUIREMENT: Keep the JSON concise. categorization_schema should have at most 3 categories per dimension (plus "Other") with 3-5 keywords each. llm_classify_prompt should be under 500 characters. Total output must not exceed 12000 characters."""
-
-    user_msg = f"Research topic: {topic}\n\nPlease generate the precise domain configuration JSON."
-
-    try:
-        response = llm_call_fn(system_prompt, user_msg, temperature=0.2)
-    except Exception as e:
-        # LLM call failed, return default config
+    # ========== First Call: Core Config (domain_definition, exclusion_signals, etc.) ==========
+    core_config = _generate_core_config(topic, llm_call_fn)
+    if not core_config:
         return _default_domain_config(topic)
 
-    if not response:
-        return _default_domain_config(topic)
+    # ========== Second Call: categorization_schema (tightly constrained) ==========
+    categorization_schema = _generate_categorization_schema(topic, llm_call_fn)
+    if not categorization_schema:
+        categorization_schema = _default_categorization_schema(topic)
 
-    # Extract JSON from response
-    config = _extract_json(response)
-
-    if not config:
-        return _default_domain_config(topic)
+    # Merge
+    config = {**core_config, "categorization_schema": categorization_schema}
 
     # Validate required fields
     required_fields = ["domain_definition", "exclusion_signals", "query_rotation",
@@ -143,8 +51,15 @@ Important:
 
     # Ensure tier_definitions structure is complete
     if "tier_definitions" in config:
+        if not isinstance(config["tier_definitions"], dict):
+            config["tier_definitions"] = _default_domain_config(topic).get("tier_definitions", {})
         for tier in ["core", "method", "background"]:
             if tier not in config["tier_definitions"]:
+                config["tier_definitions"][tier] = {
+                    "keywords": [],
+                    "description": f"{tier} layer"
+                }
+            elif not isinstance(config["tier_definitions"][tier], dict):
                 config["tier_definitions"][tier] = {
                     "keywords": [],
                     "description": f"{tier} layer"
@@ -154,7 +69,7 @@ Important:
 
     # Validate categorization_schema structure
     required_dims = ["research_area", "methodology", "data_type", "geographic_scope"]
-    if "categorization_schema" not in config or not isinstance(config["categorization_schema"], dict):
+    if not isinstance(config.get("categorization_schema"), dict):
         config["categorization_schema"] = _default_categorization_schema(topic)
     else:
         for dim in required_dims:
@@ -172,6 +87,111 @@ Important:
 
     return config
 
+
+
+def _generate_core_config(topic: str, llm_call_fn: Callable) -> Dict[str, Any]:
+    """First LLM call: generate core config (domain_definition, exclusion_signals, etc.)
+
+    These fields stay compact — no risk of max_tokens overflow.
+    """
+    system_prompt = """You are an academic domain analysis expert. Generate a precise domain configuration JSON for a literature research pipeline.
+
+Output a valid JSON object with these fields ONLY:
+
+1. "domain_definition": ≤100 words. Clarify the core research objects and methodological scope.
+
+2. "exclusion_signals": 15-25 strings. Words that signal a paper is OUTSIDE the target domain.
+   Must cover common noise: materials science, biology, medicine, pure chemistry, pure physics, etc.
+   Must also cover non-hard-science noise: education/teaching (curriculum, pedagogy, course design, textbook, 教学, 课程, 教育), nutrition/dietary (obesity, dietary, calorie, nutrition), book reviews.
+
+3. "query_rotation": 6-10 strings. CRITICAL: Each query MUST be a DISTINCT keyword phrase of 4-8 words.
+   FORBIDDEN: copying the full topic and appending "review survey" / "methodology comparison" / "recent advances".
+   Each query must target a DIFFERENT angle: core phenomenon, specific methodology, policy instrument,
+   estimation strategy, theoretical framework, heterogeneity analysis, data/measurement, synonym variant.
+
+4. "tier_definitions": Object with three tiers:
+   - "core": 10-15 keywords, key papers directly on topic+methodology
+   - "method": 8-12 keywords, methodology papers applicable to domain
+   - "background": 8-12 keywords, domain background knowledge
+
+5. "llm_classify_prompt": System prompt template for binary paper classification.
+   Use {domain_definition} placeholder. Must ask LLM to output "Paper N: Yes/No — reason".
+
+Rules:
+- Output ONLY JSON, no other text
+- All keywords in English lowercase
+- Keep the entire JSON under 4000 characters"""
+
+    user_msg = f"Research topic: {topic}\n\nGenerate the core domain configuration JSON (domain_definition, exclusion_signals, query_rotation, tier_definitions, llm_classify_prompt). Do NOT include categorization_schema."
+
+    try:
+        response = llm_call_fn(system_prompt, user_msg, temperature=0.2)
+    except Exception:
+        return {}
+
+    if not response:
+        return {}
+
+    return _extract_json(response)
+
+
+def _generate_categorization_schema(topic: str, llm_call_fn: Callable) -> Dict[str, Any]:
+    """Second LLM call: generate categorization_schema separately.
+
+    Tightly constrained to avoid the max_tokens overflow that occurred when
+    the LLM generated dozens of redundant keywords.
+
+    Constraints:
+    - 4 dimensions: research_area, methodology, data_type, geographic_scope
+    - ≤3 meaningful categories + "Other" per dimension (max 4 total per dim)
+    - 3-5 lowercase English keywords per category (NO more than 5!)
+    - Entire JSON ≤2500 characters
+    """
+    system_prompt = """You are an academic taxonomy designer. Generate a categorization schema for classifying research papers.
+
+Output ONLY this JSON structure (nothing else):
+{
+  "research_area": { "Category1": ["kw1","kw2","kw3"], "Category2": ["kw1","kw2","kw3"], "Other": [] },
+  "methodology":   { "Category1": ["kw1","kw2","kw3"], "Category2": ["kw1","kw2","kw3"], "Other": [] },
+  "data_type":     { "Category1": ["kw1","kw2","kw3"], "Category2": ["kw1","kw2","kw3"], "Other": [] },
+  "geographic_scope": { "Category1": ["kw1","kw2","kw3"], "Category2": ["kw1","kw2","kw3"], "Other": [] }
+}
+
+CRITICAL RULES — violation will cause pipeline failure:
+1. Each dimension: 2-3 meaningful categories + "Other" (max 4 entries per dim). NO MORE.
+2. Each category: 3-5 lowercase English keywords. NO MORE THAN 5. NEVER use 6+.
+3. Keywords must be TOPIC-SPECIFIC, not generic. "sustainability" is OK but do NOT spawn
+   variants like "sustainability_value", "sustainability_ethics", "sustainability_justice",
+   "sustainability_equity", "sustainability_fairness", "sustainability_inclusion"...
+   Choose ONE keyword ("sustainability") and STOP.
+4. "Other" must always have an empty list [].
+5. Entire JSON must be ≤2500 characters. Be concise.
+6. Output ONLY the JSON, no markdown, no explanation."""
+
+    user_msg = (f"Research topic: {topic}\n\n"
+                "Generate the categorization_schema JSON. "
+                "Remember: ≤3 categories per dimension, 3-5 keywords each, "
+                "≤2500 chars total. Do NOT generate keyword variants — pick ONE representative keyword per concept.")
+
+    try:
+        response = llm_call_fn(system_prompt, user_msg, temperature=0.2)
+    except Exception:
+        return {}
+
+    if not response:
+        return {}
+
+    schema = _extract_json(response)
+
+    # Post-validate: strip excessive keywords per category
+    if isinstance(schema, dict):
+        for dim in schema:
+            if isinstance(schema[dim], dict):
+                for cat in schema[dim]:
+                    if isinstance(schema[dim][cat], list) and len(schema[dim][cat]) > 5:
+                        schema[dim][cat] = schema[dim][cat][:5]
+
+    return schema
 
 def _default_categorization_schema(topic: str) -> Dict[str, Any]:
     """Default categorization schema (fallback when LLM generation fails)"""
