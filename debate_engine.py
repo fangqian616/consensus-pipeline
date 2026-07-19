@@ -764,6 +764,16 @@ def apply_config(config: dict):
     if "visual_directive" in config:
         ANIME_VISUAL_DIRECTIVE.clear()
         ANIME_VISUAL_DIRECTIVE.update(config["visual_directive"])
+    
+    # Academic mode: clear visual directive (no animation terms in academic debates)
+    _academic_keys = {"literature_search", "methodology_review", "report_integration",
+                      "programming", "tutorial", "metadata_inspector", "citation_network",
+                      "data_validation", "counter_evidence", "topic_clustering",
+                      "cross_validation", "theme_clustering", "visualization", "report_writing"}
+    _dept_keys = set(config.get("departments", {}).keys())
+    if any(k in _dept_keys for k in _academic_keys):
+        ANIME_VISUAL_DIRECTIVE.clear()
+        ANIME_VISUAL_DIRECTIVE.update({"zh": "", "en": ""})
     if "p2_cross_debates" in config:
         P2_CROSS_DEBATES[:] = config["p2_cross_debates"]
     if "p5_cross_debates" in config:
@@ -2943,8 +2953,8 @@ def run_academic_summary(
     stats: dict = None,
 ) -> Dict:
     """
-    Academic mode summary: synthesize department debate consensus into a proper academic review report.
-    Unlike run_summary() which generates storyboard+video prompt, this produces an academic report.
+    Academic mode summary: search real papers + synthesize debate consensus into academic review.
+    Two-step: (1) Search real papers via AcademicSearchEngine (2) LLM synthesizes report with real references.
     """
     is_zh = lang == "zh"
 
@@ -2973,22 +2983,92 @@ def run_academic_summary(
     if not consensus_text and not cross_text:
         return {"final_report": "", "consensus_report": ""}
 
-    # LLM prompt for academic report synthesis
+    # === Step 1: Search for real papers ===
+    paper_references = ""
+    papers_found = []
+    try:
+        from academic.search_engine import AcademicSearchEngine
+        se = AcademicSearchEngine(
+            min_citations=3,
+            min_results=10,
+            include_preprints=True,
+        )
+        search_result = se.search(user_topic, max_results_per_source=30)
+        papers_found = search_result.get("papers", [])
+        preprints = search_result.get("preprints", [])
+        all_papers = papers_found + preprints[:5]  # Include top 5 preprints
+
+        if all_papers:
+            ref_lines = []
+            for i, p in enumerate(all_papers[:20], 1):
+                authors_str = ", ".join(p.authors[:3]) if p.authors else "Unknown"
+                if len(p.authors) > 3:
+                    authors_str += " et al."
+                ref_lines.append(f"{i}. {authors_str} ({p.year}). {p.title}. {p.journal}, cited by {p.citation_count}. DOI: {p.doi or 'N/A'}")
+            paper_references = "\n".join(ref_lines)
+            se_stats = search_result.get("stats", {})
+            print(f"Academic search: {se_stats.get('total_fetched', 0)} fetched, {se_stats.get('after_filter', 0)} filtered, {se_stats.get('preprint_count', 0)} preprints")
+    except Exception as e:
+        print(f"Academic search failed (non-fatal): {e}")
+        paper_references = ""
+
+    # === Step 2: Build LLM prompt with real papers ===
+    has_papers = bool(paper_references)
+
     if is_zh:
-        system_prompt = """你是一位资深学术综述撰写专家。你的任务是将多个学术辩论组的共识结果整合为一篇结构完整的学术动向综述报告。
+        if has_papers:
+            system_prompt = """你是一位资深学术综述撰写专家。你的任务是将多个学术辩论组的共识结果与真实文献检索结果整合为一篇结构完整的学术动向综述报告。
 
 【硬性规则】
 1. 这是学术综述，不是动画脚本或分镜表。严禁出现任何动画/视觉/分镜术语（如"冲击帧""蓄力-释放""速度线""残影""停帧""九宫格""分镜"等）
 2. 每个章节必须有实质性内容段落，不能只有标题或要点列表
-3. 引用具体辩论观点时标注来源部门
-4. 方法论比较要有深度：优缺点、适用场景、计算成本、数据需求
-5. 趋势分析基于辩论中揭示的演变轨迹
-6. 反证必须包含：有效批评、失败案例、适用边界
-7. 研究空白从"为什么没人做"和"做了有什么价值"两个角度分析
-8. 学术但可读的语言，避免空话套话和模糊表述
-9. 报告字数 >= 1000字"""
+3. 必须涵盖所有参与辩论的部门的贡献，不得遗漏任何部门的共识
+4. 参考文献必须使用下方提供的真实论文列表，不得自行编造任何文献
+5. 在报告中适当引用真实论文的结论来支撑辩论观点
+6. 方法论比较要有深度：优缺点、适用场景、计算成本、数据需求
+7. 趋势分析基于辩论中揭示的演变轨迹
+8. 反证必须包含：有效批评、失败案例、适用边界
+9. 研究空白从"为什么没人做"和"做了有什么价值"两个角度分析
+10. 学术但可读的语言，避免空话套话和模糊表述
+11. 报告字数 >= 2000字"""
 
-        user_prompt = f"""请撰写「{user_topic}」领域的学术动向综述报告。
+            user_prompt = f"""请撰写「{user_topic}」领域的学术动向综述报告。
+
+以下为各部门辩论共识：
+
+{consensus_text}
+
+交叉辩论结果：
+
+{cross_text}
+
+以下是真实文献检索结果（必须作为参考文献使用，不得编造其他文献）：
+
+{paper_references}
+
+请基于以上辩论内容和真实文献，撰写结构完整的学术综述报告。报告结构：
+1. 研究背景与问题定义
+2. 核心发现与方法论比较
+3. 趋势分析与演进路径
+4. 研究空白与未来方向
+5. 结论与建议
+6. 参考文献（使用上方真实论文列表，格式：作者. (年份). 标题. 期刊.）"""
+        else:
+            system_prompt = """你是一位资深学术综述撰写专家。你的任务是将多个学术辩论组的共识结果整合为一篇结构完整的学术动向综述报告。
+
+【硬性规则】
+1. 这是学术综述，不是动画脚本或分镜表。严禁出现任何动画/视觉/分镜术语
+2. 每个章节必须有实质性内容段落，不能只有标题或要点列表
+3. 必须涵盖所有参与辩论的部门的贡献，不得遗漏任何部门的共识
+4. 由于未能检索到外部文献，参考文献部分应列出"辩论来源"（各部门共识），不得编造任何不存在的文献
+5. 方法论比较要有深度：优缺点、适用场景、计算成本、数据需求
+6. 趋势分析基于辩论中揭示的演变轨迹
+7. 反证必须包含：有效批评、失败案例、适用边界
+8. 研究空白从"为什么没人做"和"做了有什么价值"两个角度分析
+9. 学术但可读的语言，避免空话套话和模糊表述
+10. 报告字数 >= 2000字"""
+
+            user_prompt = f"""请撰写「{user_topic}」领域的学术动向综述报告。
 
 以下为各部门辩论共识：
 
@@ -3004,22 +3084,61 @@ def run_academic_summary(
 3. 趋势分析与演进路径
 4. 研究空白与未来方向
 5. 结论与建议
-6. 参考文献（标注辩论来源）"""
+6. 辩论来源（列出参与辩论的各部门及其主要贡献）"""
     else:
-        system_prompt = """You are a senior academic review writing expert. Your task is to synthesize multi-group debate consensus into a structured academic trend review report.
+        if has_papers:
+            system_prompt = """You are a senior academic review writing expert. Your task is to synthesize multi-group debate consensus with real literature search results into a structured academic trend review report.
 
 [HARD RULES]
-1. This is an ACADEMIC REVIEW, NOT an animation script or storyboard. Absolutely no animation/visual/storyboard terminology (e.g., "impact frame", "charge-release", "speed lines", "afterimage", "freeze frame", "9-grid", "storyboard")
+1. This is an ACADEMIC REVIEW, NOT an animation script or storyboard. Absolutely no animation/visual/storyboard terminology
 2. Each section must have substantive content paragraphs, not bare bullet points
-3. Cite specific debate arguments with source department attribution
-4. Methodology comparison must have depth: pros/cons, applicable scenarios, computational costs, data requirements
-5. Trend analysis based on evolution trajectories revealed in debates
-6. Counter-evidence must be included: valid criticisms, failure cases, applicability boundaries
-7. Research gaps analyzed from "why hasn't anyone done this" and "what value would it bring" perspectives
-8. Academic but accessible language, avoid filler and vague statements
-9. Report length >= 1000 words"""
+3. Must cover ALL participating departments' contributions, do not omit any department's consensus
+4. References MUST use the real paper list provided below, do not fabricate any references
+5. Cite real paper conclusions appropriately to support debate arguments
+6. Methodology comparison must have depth: pros/cons, applicable scenarios, computational costs, data requirements
+7. Trend analysis based on evolution trajectories revealed in debates
+8. Counter-evidence must be included: valid criticisms, failure cases, applicability boundaries
+9. Research gaps analyzed from "why hasn't anyone done this" and "what value would it bring" perspectives
+10. Academic but accessible language, avoid filler and vague statements
+11. Report length >= 2000 words"""
 
-        user_prompt = f"""Please write an academic trend review report on "{user_topic}".
+            user_prompt = f"""Please write an academic trend review report on "{user_topic}".
+
+Department debate consensus:
+
+{consensus_text}
+
+Cross-debate results:
+
+{cross_text}
+
+The following are real literature search results (MUST be used as references, do not fabricate others):
+
+{paper_references}
+
+Based on the above debate content and real literature, write a structured academic review report. Report structure:
+1. Research Background & Problem Definition
+2. Key Findings & Methodology Comparison
+3. Trend Analysis & Evolution Path
+4. Research Gaps & Future Directions
+5. Conclusions & Recommendations
+6. References (use the real paper list above, format: Authors. (Year). Title. Journal.)"""
+        else:
+            system_prompt = """You are a senior academic review writing expert. Your task is to synthesize multi-group debate consensus into a structured academic trend review report.
+
+[HARD RULES]
+1. This is an ACADEMIC REVIEW, NOT an animation script or storyboard. Absolutely no animation/visual/storyboard terminology
+2. Each section must have substantive content paragraphs, not bare bullet points
+3. Must cover ALL participating departments' contributions, do not omit any department's consensus
+4. Since external literature search was not available, the references section should list "Debate Sources" (department consensuses), do not fabricate any non-existent references
+5. Methodology comparison must have depth: pros/cons, applicable scenarios, computational costs, data requirements
+6. Trend analysis based on evolution trajectories revealed in debates
+7. Counter-evidence must be included: valid criticisms, failure cases, applicability boundaries
+8. Research gaps analyzed from "why hasn't anyone done this" and "what value would it bring" perspectives
+9. Academic but accessible language, avoid filler and vague statements
+10. Report length >= 2000 words"""
+
+            user_prompt = f"""Please write an academic trend review report on "{user_topic}".
 
 Department debate consensus:
 
@@ -3035,7 +3154,7 @@ Based on the above debate content, write a structured academic review report. Re
 3. Trend Analysis & Evolution Path
 4. Research Gaps & Future Directions
 5. Conclusions & Recommendations
-6. References (with debate source attribution)"""
+6. Debate Sources (list participating departments and their main contributions)"""
 
     # Call LLM
     report = call_api(
@@ -3055,12 +3174,11 @@ Based on the above debate content, write a structured academic review report. Re
     return {
         "final_report": report,
         "consensus_report": consensus_text,
+        "papers_found": len(papers_found),
+        "has_real_references": has_papers,
     }
 
 
-# ============ P7: Proofreading ============
-
-PROOFREAD_DEPARTMENTS = ["screenwriter", "spatial", "storyboard", "dp", "editing"]
 
 def run_proofreading(
     storyboard: str,
