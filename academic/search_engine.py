@@ -202,7 +202,7 @@ class AcademicSearchEngine:
 
         # Quantity guarantee fallback: if filtered results < min_results, progressively relax filters
         if len(filtered) < self.min_results:
-            filtered = self._ensure_minimum(journal_papers, filtered)
+            filtered = self._ensure_minimum(journal_papers, filtered, query=query)
 
         # Sort by level
         level_order = {"S": 0, "A": 1, "B": 2, "C": 3, "D": 4}
@@ -238,22 +238,36 @@ class AcademicSearchEngine:
         self,
         all_papers: List[PaperCandidate],
         filtered: List[PaperCandidate],
+        query: str = "",
     ) -> List[PaperCandidate]:
         """
         Guarantee minimum output papers. Progressively relax filters:
         1. Relax citation requirement (halve)
         2. Include C-level papers
         3. Include highly-cited preprints
+
+        v4.5: All fallback papers must pass a minimal relevance check (>= 0.05)
+        to prevent completely off-topic papers from being added.
         """
         result = list(filtered)
         filtered_dois = {p.doi for p in result if p.doi}
         filtered_titles = {p.title[:30].lower() for p in result}
+
+        def _is_minimally_relevant(paper: PaperCandidate) -> bool:
+            """Check if paper has at least minimal relevance to the query."""
+            if not query:
+                return True  # No query = no filtering
+            relevance = self._compute_relevance(paper, query)
+            return relevance >= 0.05
 
         # Stage 1: Relax citation (S/A/C pass through, B-level citations halved)
         if len(result) < self.min_results:
             relaxed = []
             for paper in all_papers:
                 if paper.doi in filtered_dois or paper.title[:30].lower() in filtered_titles:
+                    continue
+                # v4.5: Skip off-topic papers even in fallback
+                if not _is_minimally_relevant(paper):
                     continue
                 if paper.quality_level in ["S", "A"]:
                     relaxed.append(paper)
@@ -276,6 +290,7 @@ class AcademicSearchEngine:
                 if p.quality_level == "C"
                 and p.doi not in current_dois
                 and p.title[:30].lower() not in current_titles
+                and _is_minimally_relevant(p)  # v4.5: relevance check
             ]
             c_papers.sort(key=lambda p: -p.citation_count)
             needed = self.min_results - len(result)
@@ -479,7 +494,7 @@ class AcademicSearchEngine:
         self,
         papers: List[PaperCandidate],
         query: str = "",
-        relevance_threshold: float = 0.10,
+        relevance_threshold: float = 0.15,
     ) -> List[PaperCandidate]:
         """
         Four-stage filtering (v5.1: 4th stage activated — content relevance filtering)
@@ -597,6 +612,16 @@ class AcademicSearchEngine:
                 "carbon price", "carbon market", "carbon emission", "carbon trading",
                 "carbon tax", "carbon capture", "carbon budget",
                 "能源", "电力", "碳", "电价", "负荷", "预测",
+                # v4.5: Economics & policy keywords
+                "economics", "economic", "economy", "policy", "regulation",
+                "efficiency", "productivity", "causal", "treatment effect",
+                "difference-in-differences", "instrumental variable", "panel data",
+                "empirical", "welfare", "externality", "tax", "subsidy",
+                "environmental regulation", "energy efficiency", "energy policy",
+                "energy economics", "carbon pricing", "emission trading",
+                "经济学", "经济", "政策", "规制", "效率", "生产率",
+                "因果", "面板数据", "实证", "外部性", "补贴",
+                "环境规制", "能源效率", "能源政策", "碳排放", "碳交易",
             }
             # Exclusion words: contain carbon but not in energy context
             carbon_exclude = {
@@ -665,9 +690,9 @@ class AcademicSearchEngine:
 
         penalty = 1.0
         if not has_domain:
-            penalty *= 0.3  # Unrelated to energy → heavy penalty
-        if not has_ml:
-            penalty *= 0.5  # Unrelated to ML → moderate penalty
+            penalty *= 0.3  # Unrelated to domain → heavy penalty
+        if not has_ml and not has_domain:
+            penalty *= 0.5  # Unrelated to both ML and domain → additional penalty
         # v5.1.8-fix2: Exclude non-energy carbon context (nanomaterials/chemistry etc.)
         # v0.7.0: If no domain_config (fallback mode), keep legacy logic
         if not domain_config and any(ex in combined for ex in carbon_exclude):
