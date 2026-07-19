@@ -1866,6 +1866,27 @@ def _render_academic_output(final, is_zh):
     dept_results = st.session_state.get("dept_results", {})
     cross_results = st.session_state.get("cross_results", [])
     
+    # ---- Search Info (if available) ----
+    search_info = final.get("search_info") if isinstance(final, dict) else None
+    if search_info:
+        with st.expander("🔍 " + ("文献检索信息" if is_zh else "Literature Search Info"), expanded=False):
+            if is_zh:
+                st.write(f"**检索词：** {search_info.get('query', 'N/A')}")
+                st.write(f"**总抓取：** {search_info.get('total_fetched', 0)}篇 | "
+                         f"**过滤后：** {search_info.get('after_filter', 0)}篇期刊论文 | "
+                         f"**预印本：** {search_info.get('preprint_count', 0)}篇")
+                st.write(f"**参考文献数：** {search_info.get('papers_in_refs', 0)}篇 | "
+                         f"**含真实引用：** {'是' if search_info.get('has_real_references') else '否'}")
+                if search_info.get('after_filter', 0) == 0 and search_info.get('preprint_count', 0) > 0:
+                    st.warning("⚠️ 期刊论文搜索结果为0，仅有arXiv预印本。可能原因：Semantic Scholar/OpenAlex API网络不通，或检索词匹配度低。")
+            else:
+                st.write(f"**Query:** {search_info.get('query', 'N/A')}")
+                st.write(f"**Total fetched:** {search_info.get('total_fetched', 0)} | "
+                         f"**After filter:** {search_info.get('after_filter', 0)} journal | "
+                         f"**Preprints:** {search_info.get('preprint_count', 0)}")
+                if search_info.get('after_filter', 0) == 0 and search_info.get('preprint_count', 0) > 0:
+                    st.warning("⚠️ No journal papers found, only arXiv preprints. Possible: Semantic Scholar/OpenAlex API unreachable.")
+    
     # ---- Final Research Report ----
     st.subheader("📋 " + ("最终研究报告" if is_zh else "Final Research Report"))
     
