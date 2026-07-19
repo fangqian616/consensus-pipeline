@@ -148,6 +148,13 @@ class RequirementStructurer:
         role_template = DOMAIN_ROLE_MAP.get(domain_code, DOMAIN_ROLE_MAP["general"])
         dept_hints = DOMAIN_DEPARTMENT_HINTS.get(domain_code, [])
 
+        # v0.8.0: For academic_research, generate topic-specific department hints via LLM
+        # instead of using hardcoded pipeline infrastructure module names
+        if self.llm_call_fn and domain_code == "academic_research":
+            topic_hints = self._generate_topic_dept_hints(doc)
+            if topic_hints:
+                dept_hints = topic_hints
+
         # Assemble fixed roles + domain-specific roles
         suggested_roles = list(role_template["fixed_roles"])
 
@@ -243,3 +250,63 @@ Output only JSON, no other text."""
             return json.loads(response)
         except json.JSONDecodeError:
             return current_roles
+
+    def _generate_topic_dept_hints(self, doc: RequirementDocument) -> List[Dict]:
+        """Generate topic-specific department direction hints using LLM.
+
+        Replaces the hardcoded DOMAIN_DEPARTMENT_HINTS that used pipeline infrastructure
+        module names (e.g., 'Multi-source literature retrieval', 'DOI metadata extraction')
+        instead of actual research sub-topics.
+
+        Args:
+            doc: Requirement document with user's actual research topic
+
+        Returns:
+            List of {"type": str, "description": str} with topic-specific research directions
+        """
+        topic = doc.topic
+        objectives = "；".join(doc.objectives) if doc.objectives else "未指定"
+        questions = "；".join(doc.key_questions) if doc.key_questions else "未指定"
+
+        system_prompt = """You are a research methodology expert. Your task is to decompose a research topic into 6-8 specific sub-directions that will serve as expert debate departments.
+
+IMPORTANT: These sub-directions must be actual RESEARCH SUB-TOPICS of the given domain, NOT literature review methodology terms (do NOT use terms like "literature retrieval", "metadata extraction", "citation analysis", "topic clustering", "data validation", "report generation" — these are pipeline infrastructure, not research topics).
+
+For each sub-direction, provide:
+- type: a short English identifier (lowercase, underscores)
+- description: a concise Chinese description of the research sub-direction
+
+Output ONLY a JSON array, no other text. Format:
+[{"type": "sub_topic_1", "description": "研究方向1描述"}, ...]
+
+Example for topic "碳价预测与能源经济学":
+[{"type": "carbon_price_drivers", "description": "碳价形成机制与影响因素"},
+ {"type": "ml_forecasting", "description": "机器学习碳价预测方法"},
+ {"type": "electricity_carbon_coupling", "description": "电碳市场联动机制"},
+ {"type": "policy_evaluation", "description": "能源政策评估方法"},
+ {"type": "emission_trading", "description": "碳排放权交易机制设计"},
+ {"type": "renewable_integration", "description": "可再生能源与碳市场互动"},
+ {"type": "risk_modeling", "description": "碳价波动风险建模"},
+ {"type": "international_comparison", "description": "国际碳市场比较研究"}]"""
+
+        user_msg = f"""Research topic: {topic}
+Research objectives: {objectives}
+Key questions: {questions}
+
+Please decompose this topic into 6-8 specific research sub-directions for expert debate."""
+
+        response = self.llm_call_fn(system_prompt, user_msg)
+
+        try:
+            hints = json.loads(response)
+            if isinstance(hints, list) and len(hints) >= 3:
+                # Validate each hint has required fields
+                valid_hints = [
+                    h for h in hints
+                    if isinstance(h, dict) and "type" in h and "description" in h
+                ]
+                if len(valid_hints) > 3:
+                    return valid_hints
+            return []
+        except (json.JSONDecodeError, TypeError):
+            return []
