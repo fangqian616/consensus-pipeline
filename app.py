@@ -1423,10 +1423,10 @@ def render_input_tab():
         # Academic mode hides positive/negative prompts and character refs, shows research constraints instead
         with st.expander("🔬 " + ("研究约束与补充" if is_zh else "Research Constraints"), expanded=False):
             st.session_state.positive_prompt = st.text_area(
-                "🔍 " + ("检索关键词/重点方向" if is_zh else "Search Keywords / Focus"),
+                "🔍 " + ("补充检索词（可选，用于辅助论文搜索）" if is_zh else "Extra Search Terms (optional)"),
                 value=st.session_state.positive_prompt,
                 height=80,
-                placeholder="补充检索关键词、重点关注方向..." if is_zh else "Additional search keywords, focus areas...",
+                placeholder="补充检索关键词，留空则自动生成..." if is_zh else "Extra search keywords, leave empty for auto-generation...",
                 label_visibility="collapsed",
             )
             st.session_state.negative_prompt = st.text_area(
@@ -1558,6 +1558,16 @@ def render_input_tab():
 
 def render_debate_tab():
     is_zh = st.session_state.lang == "zh"
+    
+    # Auto-start debate after Phase 4 confirmation
+    if st.session_state.get("_trigger_debate_run"):
+        st.session_state._trigger_debate_run = False
+        if not st.session_state.get("debate_running"):
+            st.session_state.debate_running = True
+            with st.spinner("🚀 " + ("正在自动启动辩论..." if is_zh else "Auto-starting debate...")):
+                run_all_debates()
+            st.session_state.debate_running = False
+            st.rerun()
     
     if st.session_state.step_mode and st.session_state.step_phase != "idle":
         render_step_mode()
@@ -1981,17 +1991,124 @@ def _render_academic_output(final, is_zh):
     
     st.divider()
     
+    # ---- Programming & Tutorial Outputs (Priority Panel) ----
+    _prog = dept_results.get("programming", {})
+    _tut = dept_results.get("tutorial", {})
+    _prog_consensus = _prog.get("consensus", "") if isinstance(_prog, dict) else ""
+    _tut_consensus = _tut.get("consensus", "") if isinstance(_tut, dict) else ""
+    
+    if _prog_consensus or _tut_consensus:
+        st.subheader("💻 " + ("代码实现与教程" if is_zh else "Code & Tutorial"))
+        col_code, col_tut = st.columns(2)
+        with col_code:
+            if _prog_consensus:
+                with st.container(border=True):
+                    st.markdown("### 🐍 " + ("代码实现" if is_zh else "Code Implementation"))
+                    st.markdown(_prog_consensus)
+                    st.download_button(
+                        "📥 " + ("下载代码产出 (MD)" if is_zh else "Download Code (MD)"),
+                        data=_prog_consensus,
+                        file_name="programming_output.md",
+                        mime="text/markdown",
+                        use_container_width=True,
+                        key="dl_programming_output",
+                    )
+        with col_tut:
+            if _tut_consensus:
+                with st.container(border=True):
+                    st.markdown("### 📖 " + ("教程" if is_zh else "Tutorial"))
+                    st.markdown(_tut_consensus)
+                    st.download_button(
+                        "📥 " + ("下载教程产出 (MD)" if is_zh else "Download Tutorial (MD)"),
+                        data=_tut_consensus,
+                        file_name="tutorial_output.md",
+                        mime="text/markdown",
+                        use_container_width=True,
+                        key="dl_tutorial_output",
+                    )
+    
     # ---- Department Consensus Details ----
+    _academic_label_depts = {"programming", "tutorial"}
     if dept_results:
         st.subheader("🏢 " + ("各部门共识详情" if is_zh else "Department Consensus Details"))
+        _non_empty = False
         for dept_key, dept_data in dept_results.items():
             name = dept_data.get("zh_name", dept_key) if is_zh else dept_data.get("en_name", dept_key)
             consensus = dept_data.get("consensus", "")
             if consensus:
-                with st.expander(f"🏢 {name}", expanded=False):
+                _non_empty = True
+                # Add type label for programming/tutorial departments
+                _label = ""
+                if dept_key == "programming":
+                    _label = " [💻 代码产出]" if is_zh else " [💻 Code Output]"
+                elif dept_key == "tutorial":
+                    _label = " [📖 教程产出]" if is_zh else " [📖 Tutorial Output]"
+                with st.expander(f"🏢 {name}{_label}", expanded=False):
                     st.markdown(consensus)
+        if not _non_empty:
+            st.info("📝 " + ("暂无部门共识，请先完成辩论流程" if is_zh else "No department consensus yet"))
     
     st.divider()
+    
+    # ---- Paper Metadata CSV Export ----
+    _papers_csv = st.session_state.get("papers_metadata_csv")
+    if not _papers_csv:
+        # Try to find papers_metadata.csv from disk
+        import os as _os
+        _csv_paths = [
+            _os.path.join(_os.getcwd(), "papers_metadata.csv"),
+            _os.path.join(_os.getcwd(), "output", "papers_metadata.csv"),
+        ]
+        for _cp in _csv_paths:
+            if _os.path.isfile(_cp):
+                try:
+                    with open(_cp, "r", encoding="utf-8") as _f:
+                        _papers_csv = _f.read()
+                    st.session_state.papers_metadata_csv = _papers_csv
+                    break
+                except Exception:
+                    pass
+    
+    if _papers_csv:
+        st.subheader("📊 " + ("论文元数据导出" if is_zh else "Paper Metadata Export"))
+        col_csv1, col_csv2 = st.columns([3, 1])
+        with col_csv1:
+            st.caption(f"📄 papers_metadata.csv ({len(_papers_csv.split(chr(10)))-1} 行)" if is_zh else f"📄 papers_metadata.csv ({len(_papers_csv.split(chr(10)))-1} rows)")
+        with col_csv2:
+            st.download_button(
+                "📥 CSV",
+                data=_papers_csv,
+                file_name="papers_metadata.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key="dl_papers_metadata",
+            )
+    
+    # ---- Chart Export ----
+    import os as _os2
+    _chart_dir = _os2.path.join(_os2.getcwd(), "charts")
+    if _os2.path.isdir(_chart_dir):
+        _chart_files = sorted([f for f in _os2.listdir(_chart_dir) if f.endswith((".png", ".jpg", ".svg", ".html"))])
+        if _chart_files:
+            st.subheader("📈 " + ("可视化图表" if is_zh else "Charts"))
+            _chart_cols = st.columns(min(len(_chart_files), 3))
+            for _i, _cf in enumerate(_chart_files):
+                _fp = _os2.path.join(_chart_dir, _cf)
+                with _chart_cols[_i % 3]:
+                    if _cf.endswith(".html"):
+                        with open(_fp, "r", encoding="utf-8") as _hf:
+                            st.components.v1.html(_hf.read(), height=300, scrolling=True)
+                    else:
+                        st.image(_fp, caption=_cf, use_container_width=True)
+                    with open(_fp, "rb") as _bf:
+                        st.download_button(
+                            f"📥 {_cf}",
+                            data=_bf.read(),
+                            file_name=_cf,
+                            mime="image/png" if _cf.endswith(".png") else "image/svg+xml",
+                            use_container_width=True,
+                            key=f"dl_chart_{_i}",
+                        )
     
     # ---- Cross-Debate Results ----
     if cross_results:
@@ -3939,7 +4056,9 @@ def render_requirement_tab():
                     st.session_state.req_discussion = None
                     st.session_state.req_config = None
                     
-                    st.success("✅ " + ("配置已确认！请切换到「辩论」Tab开始" if is_zh else "Config confirmed! Switch to Debate tab"))
+                    # Auto-start debate: set flag for main() to pick up after rerun
+                    st.session_state._auto_start_debate = True
+                    st.success("✅ " + ("配置已确认，正在自动跳转到辩论..." if is_zh else "Config confirmed, auto-starting debate..."))
                     st.balloons()
                     st.rerun()
             
@@ -4049,43 +4168,61 @@ def main():
     st.title(t("title"))
     st.caption(t("subtitle"))
     
-    tab0, tab1, tab2, tab3 = st.tabs([
+    # Auto-jump to debate tab after Phase 4 confirmation
+    if st.session_state.get("_auto_start_debate"):
+        st.session_state._auto_start_debate = False
+        st.session_state._active_main_tab = 1  # debate tab
+        st.session_state._trigger_debate_run = True  # auto-start debate
+    
+    if "_active_main_tab" not in st.session_state:
+        st.session_state._active_main_tab = 0
+    
+    _tab_labels = [
         t("tab_setup"),
         t("tab_debate_combined"),
         t("tab_output_combined"),
         t("tab_tools"),
-    ])
+    ]
+    _active_tab = st.radio(
+        "",
+        options=range(len(_tab_labels)),
+        format_func=lambda i: _tab_labels[i],
+        horizontal=True,
+        key="_active_main_tab",
+        label_visibility="collapsed",
+    )
     
     # Tab0: 需求与配置 — sub-tabs
-    with tab0:
-        sub_tab0, sub_tab1, sub_tab2 = st.tabs([
-            t("tab_setup_req"),
-            t("tab_setup_config"),
-            t("tab_setup_input"),
-        ])
-        with sub_tab0:
-            render_requirement_tab()
-        with sub_tab1:
-            render_config_tab()
-        with sub_tab2:
-            render_input_tab()
+    with st.container():
+        if _active_tab == 0:
+            sub_tab0, sub_tab1, sub_tab2 = st.tabs([
+                t("tab_setup_req"),
+                t("tab_setup_config"),
+                t("tab_setup_input"),
+            ])
+            with sub_tab0:
+                render_requirement_tab()
+            with sub_tab1:
+                render_config_tab()
+            with sub_tab2:
+                render_input_tab()
     
     # Tab1: 辩论 — expanders
-    with tab1:
+    if _active_tab == 1:
         with st.expander(t("tab_dept_debate"), expanded=True):
             render_debate_tab()
         with st.expander(t("tab_cross_debate_sub"), expanded=False):
             render_cross_tab()
     
     # Tab2: 产出 — expanders
-    with tab2:
+    if _active_tab == 2:
         with st.expander(t("tab_final_output"), expanded=True):
             render_output_tab()
         with st.expander(t("tab_proofread_sub"), expanded=False):
             render_proofread_tab()
     
     # Tab3: 工具 — expanders
-    with tab3:
+    if _active_tab == 3:
         with st.expander(t("tab_compare_sub"), expanded=True):
             render_compare_tab()
         with st.expander(t("tab_market_sub"), expanded=False):
