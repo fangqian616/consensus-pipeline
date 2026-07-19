@@ -65,7 +65,7 @@ def _detect_pipeline_mode(cfg=None):
     dept_keys = list(cfg.get("departments", {}).keys()) if isinstance(cfg, dict) else []
     academic_keys = {"literature_search", "methodology_review", "report_integration", 
                      "programming", "tutorial", "metadata_inspector", "citation_network",
-                     "data_validation", "counter_evidence", "topic_clustering"}
+                     "data_validation", "counter_evidence", "topic_clustering", "visualization"}
     if any(k in dept_keys for k in academic_keys):
         return "academic"
     return "animation"
@@ -3827,7 +3827,7 @@ def render_requirement_tab():
                     _p4_dept_keys = set(final_config.get("departments", {}).keys())
                     _academic_keys = {"literature_search", "methodology_review", "report_integration", 
                                      "programming", "tutorial", "metadata_inspector", "citation_network",
-                                     "data_validation", "counter_evidence", "topic_clustering"}
+                                     "data_validation", "counter_evidence", "topic_clustering", "visualization"}
                     st.session_state.pipeline_mode = "academic" if _p4_dept_keys & _academic_keys else "animation"
                     
                     # Set auto-jump flag for toast notification
