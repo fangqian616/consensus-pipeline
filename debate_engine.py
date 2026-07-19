@@ -1110,6 +1110,10 @@ def run_department_debate(
 
 请从你的专业视角出发，提出你对上述内容的方案和建议。要具体、有细节、有理由。不要泛泛而谈。"""
                 else:
+                    if _is_academic_dept:
+                        _academic_instruction_en = "Analyze the academic landscape, key issues, and frontier trends of the above research topic from your professional perspective. Your analysis MUST focus on the research topic itself, NOT on search methodology or tool workflows. Be specific, evidence-based, and reasoned."
+                    else:
+                        _academic_instruction_en = "Propose your specific plan and recommendations from your professional perspective. Be specific, detailed, and reasoned. No vague statements."
                     prompt = f"""You are the {debater['en_name']} debater of the {dept['en_name']} Department.
 
 {ANIME_VISUAL_DIRECTIVE['en']}
@@ -1122,7 +1126,7 @@ Current discussion topic:
 
 {f'Extra instructions: {extra_instructions}' if extra_instructions else ''}
 
-Propose your specific plan and recommendations from your professional perspective. Be specific, detailed, and reasoned. No vague statements."""
+{_academic_instruction_en}"""
             else:
                 prev_args = "\n\n---\n\n".join(all_arguments[-3:])
                 reminder = get_screenwriter_reminder(lang) if department_key == "screenwriter" else ""
@@ -1458,6 +1462,12 @@ def _build_dept_input_simple(dept_key, dept_results, script, positive, chars, la
         return "编剧部细节填充版剧本：\n" + sw + "\n\n原始场景风格：\n" + positive
     else:
         parts = []
+        # Always include the original topic as context for academic departments
+        if script:
+            if is_zh:
+                parts.append(f"研究主题：\n{script}")
+            else:
+                parts.append(f"Research Topic:\n{script}")
         for pk in DEPT_ORDER[:DEPT_ORDER.index(dept_key)]:
             if pk in dept_results:
                 p = DEPARTMENTS[pk]
@@ -3974,7 +3984,17 @@ def run_department_round(
                     cf_block = f"\n【承上文档——前段辩论的关键决策，必须遵守】\n{carry_forward}\n"
                 else:
                     cf_block = f"\n[Carry Forward — Key decisions from previous segment debate, MUST follow]\n{carry_forward}\n"
+            # Detect academic mode (non-animation departments)
+            _academic_dept_keys = {"literature_search", "methodology_review", "report_integration",
+                                   "programming", "tutorial", "metadata_inspector", "citation_network",
+                                   "data_validation", "counter_evidence", "topic_clustering", "visualization"}
+            _is_academic_dept = department_key in _academic_dept_keys
+            
             if is_zh:
+                if _is_academic_dept:
+                    _academic_instruction = "请从你的专业视角分析上述研究主题的学术现状、关键问题和前沿趋势。你的分析必须围绕研究主题本身展开，不要讨论检索方法论或工具流程本身。要具体、有文献支撑、有理由。"
+                else:
+                    _academic_instruction = "请从你的专业视角出发，提出你对上述内容的方案和建议。要具体、有细节、有理由。不要泛泛而谈。"
                 prompt = f"""你是{dept['zh_name']}的{debater['zh_name']}辩手。
 
 {ANIME_VISUAL_DIRECTIVE['zh']}
@@ -3987,7 +4007,7 @@ def run_department_round(
 
 {f'额外指令：{extra_instructions}' if extra_instructions else ''}
 
-请从你的专业视角出发，提出你对上述内容的方案和建议。要具体、有细节、有理由。不要泛泛而谈。"""
+{_academic_instruction}"""
             else:
                 prompt = f"""You are the {debater['en_name']} debater of the {dept['en_name']} Department.
 
