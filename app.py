@@ -1767,6 +1767,12 @@ def render_output_tab():
     is_zh = st.session_state.lang == "zh"
     final = st.session_state.get("final_output", {})
     
+    # Detect mode
+    _cfg = (st.session_state.get("workgroup_config") or get_current_config() or {})
+    _dept_keys = list(_cfg.get("departments", {}).keys())
+    is_academic = any(k in _dept_keys for k in ["literature_search", "methodology_review", "report_integration", "programming", "tutorial", "metadata_inspector", "citation_network", "data_validation", "counter_evidence", "topic_clustering"])
+    is_animation = any(k in _dept_keys for k in ["screenwriter", "storyboard", "spatial", "dp", "lighting", "vfx", "sound", "editing"])
+    
     # 🔧 Auto-restore normal mode results
     if not final:
         saved = autosave_load("normal_result")
@@ -1780,6 +1786,135 @@ def render_output_tab():
         st.info(t("output_not_ready"))
         return
     
+    if is_academic:
+        _render_academic_output(final, is_zh)
+    else:
+        _render_animation_output(final, is_zh)
+
+
+def _render_academic_output(final, is_zh):
+    """Academic mode output: research report + department consensus + cross-debate + PDF export"""
+    dept_results = st.session_state.get("dept_results", {})
+    cross_results = st.session_state.get("cross_results", [])
+    
+    # ---- Final Research Report ----
+    st.subheader("📋 " + ("最终研究报告" if is_zh else "Final Research Report"))
+    
+    # Try to get the final report text
+    report_text = final.get("final_report", "") or final.get("consensus_report", "") or ""
+    if not report_text and dept_results:
+        # Fallback: assemble from department consensus
+        parts = []
+        for dept_key, dept_data in dept_results.items():
+            name = dept_data.get("zh_name", dept_key) if is_zh else dept_data.get("en_name", dept_key)
+            consensus = dept_data.get("consensus", "")
+            if consensus:
+                parts.append(f"## {name}\n\n{consensus}")
+        if parts:
+            report_text = "\n\n---\n\n".join(parts)
+    
+    if report_text:
+        st.markdown(report_text)
+        
+        col_dl1, col_dl2 = st.columns(2)
+        with col_dl1:
+            st.download_button(
+                "📥 " + ("下载研究报告 (MD)" if is_zh else "Download Report (MD)"),
+                data=report_text,
+                file_name="research_report.md",
+                mime="text/markdown",
+                use_container_width=True,
+                key="dl_academic_report_md",
+            )
+        with col_dl2:
+            # PDF export
+            import tempfile as _tf
+            _pdf_dir = _tf.mkdtemp()
+            _pdf_path = os.path.join(_pdf_dir, "research_report.pdf")
+            try:
+                _title = "研究报告" if is_zh else "Research Report"
+                markdown_to_pdf(report_text, _pdf_path, title=_title)
+                with open(_pdf_path, "rb") as _pf:
+                    _pdf_bytes = _pf.read()
+                st.download_button(
+                    "📄 " + ("下载研究报告 (PDF)" if is_zh else "Download Report (PDF)"),
+                    data=_pdf_bytes,
+                    file_name="research_report.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="dl_academic_report_pdf",
+                )
+            except Exception as _e:
+                st.warning(f"PDF export failed: {_e}")
+    else:
+        st.info("📝 " + ("暂无最终报告，请先完成辩论流程" if is_zh else "No final report yet, complete debate first"))
+    
+    st.divider()
+    
+    # ---- Department Consensus Details ----
+    if dept_results:
+        st.subheader("🏢 " + ("各部门共识详情" if is_zh else "Department Consensus Details"))
+        for dept_key, dept_data in dept_results.items():
+            name = dept_data.get("zh_name", dept_key) if is_zh else dept_data.get("en_name", dept_key)
+            consensus = dept_data.get("consensus", "")
+            if consensus:
+                with st.expander(f"🏢 {name}", expanded=False):
+                    st.markdown(consensus)
+    
+    st.divider()
+    
+    # ---- Cross-Debate Results ----
+    if cross_results:
+        st.subheader("🔀 " + ("交叉辩论结果" if is_zh else "Cross-Debate Results"))
+        for i, cr in enumerate(cross_results):
+            cr_title = cr.get("title", f"Cross-debate {i+1}") if isinstance(cr, dict) else f"Cross-debate {i+1}"
+            cr_content = cr.get("result", "") or cr.get("consensus", "") if isinstance(cr, dict) else str(cr)
+            if cr_content:
+                with st.expander(f"🔀 {cr_title}", expanded=False):
+                    st.markdown(cr_content)
+    
+    st.divider()
+    
+    # ---- Full Debate PDF Export ----
+    st.subheader("📄 " + ("辩论产出PDF导出" if is_zh else "Export Debate PDF"))
+    if dept_results:
+        all_md_parts = []
+        for dept_key, dept_data in dept_results.items():
+            name = dept_data.get("zh_name", dept_key) if is_zh else dept_data.get("en_name", dept_key)
+            consensus = dept_data.get("consensus", "")
+            if consensus:
+                all_md_parts.append(f"## {name}\n\n{consensus}")
+        
+        if all_md_parts:
+            all_md = "# " + ("辩论产出汇总报告" if is_zh else "Debate Summary Report") + "\n\n" + "\n\n---\n\n".join(all_md_parts)
+            import tempfile as _tf
+            _pdf_dir = _tf.mkdtemp()
+            _pdf_path = os.path.join(_pdf_dir, "debate_summary.pdf")
+            try:
+                _title = "辩论产出汇总报告" if is_zh else "Debate Summary Report"
+                markdown_to_pdf(all_md, _pdf_path, title=_title)
+                with open(_pdf_path, "rb") as _pf:
+                    _pdf_bytes = _pf.read()
+                st.download_button(
+                    "📥 " + ("下载全部辩论PDF" if is_zh else "Download Full Debate PDF"),
+                    data=_pdf_bytes,
+                    file_name="debate_summary.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="dl_academic_full_pdf",
+                )
+            except Exception as _e:
+                st.warning(f"PDF export failed: {_e}")
+    
+    st.divider()
+    
+    # ---- Smart Re-roll (mode-agnostic) ----
+    with st.expander("🧠 " + ("智能回炉" if is_zh else "Smart Re-roll"), expanded=False):
+        _render_smart_reroll(is_zh, is_academic=True)
+
+
+def _render_animation_output(final, is_zh):
+    """Animation mode output: storyboard + video prompt + spatial diagram + asset checklist + PDF + carry-forward + re-roll"""
     # Storyboard
     st.subheader(t("output_storyboard"))
     storyboard_text = final.get("storyboard_prompt", "")
@@ -1860,7 +1995,6 @@ def render_output_tab():
             scene_diagrams = diagram.get("scene_diagrams", [])
             
             if scene_count > 1 and scene_diagrams:
-                # Multi-scene: display each scene separately
                 for sd in scene_diagrams:
                     st.markdown(f"**🗺️ {sd['scene_name']}**")
                     st.code(sd["diagram_prompt"], language=None)
@@ -1874,7 +2008,6 @@ def render_output_tab():
                     )
                     st.divider()
             else:
-                # Single scene: original logic
                 diagram_text = diagram.get("spatial_diagram_prompt", "")
                 st.code(diagram_text, language=None)
                 
@@ -1923,8 +2056,7 @@ def render_output_tab():
     
     st.divider()
     
-
-    # ===== PDF Export =====
+    # PDF Export
     st.divider()
     st.subheader("📄 " + ("PDF报告导出" if is_zh else "Export PDF Reports"))
     st.caption("将所有部门辩论产出导出为PDF文件" if is_zh else "Export all department debate outputs as PDF files")
@@ -1935,7 +2067,6 @@ def render_output_tab():
         pdf_col1, pdf_col2 = st.columns(2)
         
         with pdf_col1:
-            # Full debate report PDF
             all_md_parts = []
             for dept_key, dept_data in dept_results.items():
                 dept_name = dept_data.get("zh_name", dept_key)
@@ -1965,7 +2096,6 @@ def render_output_tab():
                     st.warning(f"PDF generation failed: {_e}")
         
         with pdf_col2:
-            # Individual department PDFs
             dept_pdf_options = []
             for dept_key, dept_data in dept_results.items():
                 dept_name = dept_data.get("zh_name", dept_key)
@@ -2047,258 +2177,100 @@ def render_output_tab():
     
     st.divider()
     
-    # ===== Smart Re-roll =====
+    # Smart Re-roll
     with st.expander("🧠 " + ("智能回炉" if is_zh else "Smart Re-roll"), expanded=False):
+        _render_smart_reroll(is_zh, is_academic=False)
+
+
+def _render_smart_reroll(is_zh, is_academic=False):
+    """Smart re-roll logic shared between academic and animation modes"""
+    if is_academic:
+        st.caption(
+            "输入修改意见，AI自动分析应该回炉哪些部门，只重跑选中的部分。"
+            if is_zh else
+            "Enter revision feedback, AI auto-analyzes which departments to re-roll, only re-running what you select."
+        )
+        _placeholder = (
+            "例如：方法论综述不够全面，需要补充深度学习方向；反方质疑组遗漏了重要的反对证据"
+            if is_zh else
+            "e.g. methodology review is incomplete, need to add deep learning direction; counter-evidence group missed key contrary evidence"
+        )
+    else:
         st.caption(
             "输入修改意见，AI自动分析应该回炉哪些部门。你可以在此基础上增减部门，只重跑选中的部分。"
             if is_zh else
             "Enter revision feedback, AI auto-analyzes which departments to re-roll. You can add/remove departments, only re-running what you select."
         )
-        
-        revision_feedback = st.text_area(
-            "✏️ " + ("修改意见" if is_zh else "Revision Feedback"),
-            height=100,
-            placeholder=(
-                "例如：沙虫从沙尘墙中破开冲出的瞬间不够震撼，冲击力不够；整体色调偏暖了，改成冷色沙漠感"
-                if is_zh else
-                "e.g. The sandworm bursting out of the dust wall isn't impactful enough; the overall tone is too warm, make it a cold desert feel"
-            ),
-            key="smart_reroll_feedback",
+        _placeholder = (
+            "例如：沙虫从沙尘墙中破开冲出的瞬间不够震撼，冲击力不够；整体色调偏暖了，改成冷色沙漠感"
+            if is_zh else
+            "e.g. The sandworm bursting out of the dust wall isn't impactful enough; the overall tone is too warm, make it a cold desert feel"
         )
-        
-        col_analyze, _ = st.columns([2, 3])
-        with col_analyze:
-            if st.button("🔍 " + ("AI分析影响范围" if is_zh else "AI Analyze Impact"), type="secondary", use_container_width=True, key="analyze_reroll_impact"):
-                if not revision_feedback.strip():
-                    st.warning("请先输入修改意见" if is_zh else "Please enter revision feedback first")
-                else:
-                    with st.spinner("🧠 " + ("AI正在分析..." if is_zh else "AI analyzing...")):
-                        impact = analyze_revision_impact(
-                            revision_feedback=revision_feedback,
-                            current_config=(st.session_state.get("workgroup_config") or get_current_config() or {}),
-                            api_url=st.session_state.api_url,
-                            api_key=st.session_state.api_key,
-                            model=st.session_state.model_name,
-                            lang=st.session_state.lang,
-                        )
-                        st.session_state.smart_reroll_impact = impact
-                    st.rerun()
-        
-        impact = st.session_state.get("smart_reroll_impact")
-        if impact and not impact.get("error"):
-            st.success("✅ " + ("AI分析完成！以下是推荐回炉的部门：" if is_zh else "AI analysis complete! Recommended departments to re-roll:"))
-            
-            # Department selection
-            available_depts = []
-            for dk in DEPT_ORDER:
-                dept = DEPARTMENTS.get(dk, {})
-                name = dept["zh_name"] if is_zh else dept["en_name"]
-                available_depts.append((dk, name))
-            
-            # Default to AI-recommended department
-            ai_recommended = set(d.get("dept_key") for d in impact.get("affected_departments", []))
-            
-            st.caption("✅ " + ("勾选要回炉的部门，可增减" if is_zh else "Check departments to re-roll, add/remove as needed"))
-            
-            selected_depts = {}
-            for dk, name in available_depts:
-                # Find AI recommendation reason
-                reason = ""
-                for d in impact.get("affected_departments", []):
-                    if d["dept_key"] == dk:
-                        reason = d.get("reason", "")
-                        break
-                
-                label = f"{name} ({dk})"
-                if reason:
-                    label += f" — {reason}"
-                
-                selected_depts[dk] = st.checkbox(
-                    label,
-                    value=(dk in ai_recommended),
-                    key=f"smart_reroll_dept_{dk}",
-                )
-            
-            # Cross-debate prompt
-            cross_pairs = impact.get("cross_debate_pairs", [])
-            if cross_pairs:
-                pairs_text = ", ".join(
-                    f"{DEPARTMENTS.get(p.get('side_a',''),{}).get('zh_name' if is_zh else 'en_name', p.get('side_a','?'))} ↔ {DEPARTMENTS.get(p.get('side_b',''),{}).get('zh_name' if is_zh else 'en_name', p.get('side_b','?'))}"
-                    for p in cross_pairs
-                )
-                st.info("⚔️ " + (f"将重新交叉辩论：{pairs_text}" if is_zh else f"Will re-run cross-debates: {pairs_text}"))
-            
-            # Execute button
-            final_selected = [dk for dk, v in selected_depts.items() if v]
-            if final_selected:
-                dept_names = ", ".join(DEPARTMENTS.get(dk, {}).get("zh_name" if is_zh else "en_name", dk) for dk in final_selected)
-                
-                if st.button("🚀 " + (f"执行智能回炉（{len(final_selected)}个部门）" if is_zh else f"Execute Smart Re-roll ({len(final_selected)} depts)"), type="primary", use_container_width=True, key="run_smart_reroll"):
-                    dept_results = st.session_state.get("dept_results", {})
-                    cross_results = st.session_state.get("cross_results", [])
-                    
-                    reroll_cross_pairs = []
-                    for cp in cross_pairs:
-                        if cp["side_a"] in final_selected or cp["side_b"] in final_selected:
-                            reroll_cross_pairs.append(cp)
-                    
-                    progress_placeholder = st.empty()
-                    
-                    with st.spinner("🔄 " + (f"正在回炉{dept_names}..." if is_zh else f"Re-rolling {dept_names}...")):
-                        reroll_result = run_smart_reroll(
-                            selected_departments=final_selected,
-                            revision_feedback=revision_feedback,
-                            dept_order=DEPT_ORDER,
-                            all_dept_results=dept_results,
-                            user_script=st.session_state.script,
-                            positive_prompt=st.session_state.positive_prompt,
-                            negative_prompt=st.session_state.negative_prompt,
-                            character_refs=st.session_state.character_refs,
-                            cross_debate_pairs=reroll_cross_pairs,
-                            existing_cross_results=cross_results,
-                            api_url=st.session_state.api_url,
-                            api_key=st.session_state.api_key,
-                            model=st.session_state.model_name,
-                            lang=st.session_state.lang,
-                            stats=st.session_state.get("current_stats"),
-                        )
-                        
-                        st.session_state.dept_results = reroll_result["updated_dept_results"]
-                        st.session_state.cross_results = reroll_result["updated_cross_results"]
-                        st.session_state.final_output = reroll_result["final_output"]
-                        st.session_state.smart_reroll_result = reroll_result
-                    
-                    st.success("✅ " + ("智能回炉完成！请查看「最终产出」Tab" if is_zh else "Smart re-roll complete! Check Output tab"))
-                    st.rerun()
-            else:
-                st.warning("请至少选择一个部门" if is_zh else "Please select at least one department")
-        elif impact and impact.get("error"):
-            st.error(f"❌ {impact.get('message', '分析失败' if is_zh else 'Analysis failed')}")
     
-    # ===== Output Re-roll Editing =====
-    with st.expander(t("output_edit"), expanded=False):
-        st.caption(t("output_edit_hint"))
-        
-        dept_options = {}
-        for dk in DEPT_ORDER:
-            dept = DEPARTMENTS.get(dk, {})
-            dept_options[dk] = dept["zh_name"] if is_zh else dept["en_name"]
-        
-        col_dept_edit, col_spatial = st.columns([3, 2])
-        with col_dept_edit:
-            selected_edit_dept = st.selectbox(
-                t("output_edit_dept"),
-                options=list(dept_options.keys()),
-                format_func=lambda x: dept_options[x],
-                key="output_edit_dept_select",
-            )
-        with col_spatial:
-            edit_spatial = st.checkbox(
-                t("output_edit_spatial"),
-                value=(selected_edit_dept == "spatial"),
-                key="output_edit_spatial_check",
-            )
-        
-        edit_note = st.text_area(
-            t("output_edit_note"),
-            height=100,
-            placeholder=t("output_edit_note_hint"),
-            key="output_edit_note_input",
-        )
-        
-        if st.button(t("output_edit_run"), type="primary", use_container_width=True, key="run_output_edit"):
-            if not edit_note.strip():
-                st.warning(t("reject_hint"))
+    revision_feedback = st.text_area(
+        "✏️ " + ("修改意见" if is_zh else "Revision Feedback"),
+        height=100,
+        placeholder=_placeholder,
+        key="smart_reroll_feedback",
+    )
+    
+    col_analyze, _ = st.columns([2, 3])
+    with col_analyze:
+        if st.button("🔍 " + ("AI分析影响范围" if is_zh else "AI Analyze Impact"), type="secondary", use_container_width=True, key="analyze_reroll_impact"):
+            if not revision_feedback.strip():
+                st.warning("请先输入修改意见" if is_zh else "Please enter revision feedback first")
             else:
-                dept_results = st.session_state.get("dept_results", {})
-                spatial_consensus = dept_results.get("spatial", {}).get("consensus", "") if dept_results else ""
-                with st.spinner(t("output_edit_running", dept=dept_options[selected_edit_dept])):
-                    edit_result = run_output_edit(
-                        department_key=selected_edit_dept,
-                        edit_instructions=edit_note,
-                        current_storyboard=final.get("storyboard_prompt", ""),
-                        current_video_prompt=final.get("video_prompt", ""),
-                        spatial_consensus=spatial_consensus,
-                        all_consensus={k: v["consensus"] for k, v in dept_results.items()},
-                        edit_spatial=edit_spatial,
+                with st.spinner("🧠 " + ("AI正在分析..." if is_zh else "AI analyzing...")):
+                    impact = analyze_revision_impact(
+                        revision_feedback=revision_feedback,
+                        current_config=(st.session_state.get("workgroup_config") or get_current_config() or {}),
                         api_url=st.session_state.api_url,
                         api_key=st.session_state.api_key,
                         model=st.session_state.model_name,
                         lang=st.session_state.lang,
-                        stats=st.session_state.get("current_stats"),
                     )
-                    st.session_state.output_edit_result = edit_result
-                    st.rerun()
-        
-        edit_res = st.session_state.get("output_edit_result")
-        if edit_res:
-            st.success(t("output_edit_done"))
-            
-            if edit_res.get("edit_notes"):
-                with st.expander("📝 " + t("output_edit_notes")):
-                    st.markdown(edit_res["edit_notes"])
-            
-            # Display modified output
-            rev_sb = edit_res.get("storyboard_prompt", "")
-            rev_vp = edit_res.get("video_prompt", "")
-            rev_sp = edit_res.get("spatial_consensus")
-            
-            if rev_sb:
-                with st.expander("📐 " + t("output_storyboard")):
-                    st.code(rev_sb, language=None)
-            if rev_vp:
-                with st.expander("🎥 " + t("output_video")):
-                    st.code(rev_vp, language=None)
-            if rev_sp:
-                with st.expander("🗺️ " + ("修改后空间板块" if is_zh else "Revised Spatial Layout")):
-                    st.code(rev_sp, language=None)
-            
-            # One-click apply
-            if st.button(t("output_edit_apply"), type="primary", use_container_width=True, key="apply_output_edit"):
-                st.session_state.final_output["storyboard_prompt"] = rev_sb
-                st.session_state.final_output["video_prompt"] = rev_vp
-                # If spatial department modified, sync update dept_results
-                if rev_sp:
-                    dept_results = st.session_state.get("dept_results", {})
-                    if "spatial" in dept_results:
-                        dept_results["spatial"]["consensus"] = rev_sp
-                st.session_state.output_edit_result = None
-                st.session_state.proofread_result = None
-                st.session_state.auto_revision_result = None
+                    st.session_state.smart_reroll_impact = impact
                 st.rerun()
     
-    st.divider()
-    
-    # Complete result JSON
-    full_result = {
-        "script": st.session_state.script,
-        "positive_prompt": st.session_state.positive_prompt,
-        "negative_prompt": st.session_state.negative_prompt,
-        "character_refs": st.session_state.character_refs,
-        "dept_results": {
-            k: {
-                "department": v.get("department"),
-                "consensus": v.get("consensus"),
-            }
-            for k, v in st.session_state.get("dept_results", {}).items()
-        },
-        "spatial_review": st.session_state.get("spatial_review_result"),
-        "cross_results": st.session_state.get("cross_results", []),
-        "storyboard_prompt": storyboard_text,
-        "video_prompt": video_text,
-        "proofread_result": st.session_state.get("proofread_result"),
-        "generated_at": datetime.now().isoformat(),
-    }
-    st.download_button(
-        t("export_json"),
-        data=json.dumps(full_result, ensure_ascii=False, indent=2),
-        file_name="debate_result.json",
-        mime="application/json",
-        use_container_width=True,
-    )
-
-
-# ============ Proofread Tab ============
+    impact = st.session_state.get("smart_reroll_impact")
+    if impact and not impact.get("error"):
+        st.success("✅ " + ("AI分析完成！以下是推荐回炉的部门：" if is_zh else "AI analysis complete! Recommended departments to re-roll:"))
+        
+        available_depts = []
+        _cfg = (st.session_state.get("workgroup_config") or get_current_config() or {})
+        _depts = _cfg.get("departments", DEPARTMENTS)
+        for dk in (_cfg.get("dept_order", list(_depts.keys())) if _cfg else DEPT_ORDER):
+            dept = _depts.get(dk, {})
+            name = dept.get("zh_name", dk) if is_zh else dept.get("en_name", dk)
+            available_depts.append((dk, name))
+        
+        ai_recommended = set(d.get("dept_key") for d in impact.get("affected_departments", []))
+        
+        selected_depts = st.multiselect(
+            "🔧 " + ("选择回炉部门" if is_zh else "Select Departments to Re-roll"),
+            options=[dk for dk, _ in available_depts],
+            default=[dk for dk in ai_recommended if dk in [d[0] for d in available_depts]],
+            format_func=lambda dk: next((name for d, name in available_depts if d == dk), dk),
+            key="reroll_dept_select",
+        )
+        
+        if selected_depts:
+            if st.button("🚀 " + ("执行回炉" if is_zh else "Execute Re-roll"), type="primary", use_container_width=True, key="exec_reroll_btn"):
+                with st.spinner("🔄 " + ("正在回炉..." if is_zh else "Re-rolling...")):
+                    reroll_result = smart_reroll(
+                        selected_depts=selected_depts,
+                        revision_feedback=revision_feedback,
+                        api_url=st.session_state.api_url,
+                        api_key=st.session_state.api_key,
+                        model=st.session_state.model_name,
+                        lang=st.session_state.lang,
+                    )
+                    if reroll_result:
+                        st.session_state.dept_results = reroll_result.get("dept_results", st.session_state.dept_results)
+                        st.session_state.final_output = reroll_result.get("final_output", st.session_state.final_output)
+                        st.session_state.smart_reroll_impact = None
+                        st.success("✅ " + ("智能回炉完成！请查看「最终产出」Tab" if is_zh else "Smart re-roll complete! Check Output tab"))
+                        st.rerun()
 
 def render_proofread_tab():
     is_zh = st.session_state.lang == "zh"
