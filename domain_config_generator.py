@@ -45,6 +45,7 @@ You must output a valid JSON object containing the following fields:
      bacterial, photosynthesis, drug discovery, clinical trial, genetic, 
      semiconductor device, quantum computing, astrophysics, etc.
    - Must cover common cross-domain noise sources: materials science, biology, medicine, pure chemistry, pure physics, etc.
+   - Must also cover non-hard-science noise: education/teaching (curriculum, pedagogy, course design, textbook, teaching, education, 教学, 课程, 教育), nutrition/dietary (obesity, dietary, calorie, nutrition), book reviews
 
 3. "query_rotation": A list of strings (6-10 items) for search query rotation.
    Each search term should cover a different retrieval angle:
@@ -103,7 +104,7 @@ Important:
 - Output only JSON, no other text
 - Ensure the JSON is valid and parseable
 - Use English lowercase for keywords
-- Exclusion signals should cover common noise domains
+- Exclusion signals should cover common noise domains including education/teaching and nutrition/dietary noise
 - categorization_schema must be topic-specific, not generic"""
 
     user_msg = f"Research topic: {topic}\n\nPlease generate the precise domain configuration JSON."
@@ -231,6 +232,8 @@ def _default_domain_config(topic: str) -> Dict[str, Any]:
         "exclusion_signals": [
             "nanotube", "nanowire", "photosynthesis", "bacterial",
             "drug discovery", "clinical trial", "genetic mutation",
+            "curriculum", "pedagogy", "course design", "textbook", "teaching",
+            "obesity", "dietary", "calorie", "nutrition", "book review",
             "semiconductor device", "quantum computing", "astrophysics",
             "plant growth", "soil microbiome", "volcanic", "geological",
             "marine biology",
