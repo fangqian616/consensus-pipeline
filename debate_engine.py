@@ -3200,11 +3200,23 @@ Based on the above debate content, write a structured academic review report. Re
         # Fallback: just concatenate consensus
         report = consensus_text
 
+    # Collect search stats
+    _se_stats = locals().get("_se_stats", {})
+    _search_info = {
+        "query": search_query if 'search_query' in dir() else user_topic,
+        "total_fetched": _se_stats.get("total_fetched", 0) if _se_stats else 0,
+        "after_filter": _se_stats.get("after_filter", 0) if _se_stats else 0,
+        "preprint_count": _se_stats.get("preprint_count", 0) if _se_stats else 0,
+        "papers_in_refs": len(papers_found),
+        "has_real_references": has_papers,
+    }
+    
     return {
         "final_report": report,
         "consensus_report": consensus_text,
         "papers_found": len(papers_found),
         "has_real_references": has_papers,
+        "search_info": _search_info,
     }
 
 
