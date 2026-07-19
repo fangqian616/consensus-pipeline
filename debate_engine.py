@@ -3239,7 +3239,7 @@ def run_academic_summary(
 9. 研究空白从"为什么没人做"和"做了有什么价值"两个角度分析
 10. 学术但可读的语言，避免空话套话和模糊表述
 11. 报告字数 >= 6000字，确保每个章节有充分的论述深度，尽量详细展开每个章节
-12. 第6章「代码实现」必须包含实际的代码块（用markdown代码块格式），不能只描述代码思路，要输出可运行的关键代码片段
+12. 第6章「代码实现」必须包含实际的代码块（用```python```标记），不能只描述代码思路，要输出可运行的关键代码片段。代码示例应覆盖核心模块：搜索引擎、领域配置、辩论引擎、报告生成等
 13. 第7章「教程」必须是分步骤的实操指南，包含环境配置命令、基础示例代码、进阶用法说明"""
 
             user_prompt = f"""请撰写「{search_query}」领域的学术动向综述报告。
@@ -3262,8 +3262,8 @@ def run_academic_summary(
 3. 趋势分析与演进路径
 4. 研究空白与未来方向
 5. 结论与建议
-6. 代码实现（基于程序部辩论共识，输出该领域核心方法的可运行代码片段，使用代码块格式，包含关键函数和数据流）
-7. 教程（基于教程部辩论共识，输出分步骤的入门到进阶教程，包含环境配置、基础用法、进阶技巧）
+6. 代码实现（基于程序部辩论共识，提供可运行的Python代码示例：①快速入门——30行核心管线，展示从搜索到报告生成的完整调用链；②进阶增强——反证搜索、多维度加权；③高级定制——自定义domain_config、专家分组策略。每个代码块用```python```标记，提供真实可运行的关键片段，不要伪代码）
+7. 教程（基于教程部辩论共识，输出三级递进教程：①零基础入门——环境配置+最小可运行demo；②进阶实战——生产环境最佳实践与避坑指南；③高级定制——自定义领域配置与专家分组策略。每步含操作命令、示例代码、预期输出）
 8. 参考文献（使用上方真实论文列表，格式：作者. (年份). 标题. 期刊。）"""
         else:
             system_prompt = """你是一位资深学术综述撰写专家。你的任务是将多个学术辩论组的共识结果整合为一篇结构完整的学术动向综述报告。
@@ -3298,8 +3298,8 @@ def run_academic_summary(
 3. 趋势分析与演进路径
 4. 研究空白与未来方向
 5. 结论与建议
-6. 代码实现（基于程序部辩论共识，输出该领域核心方法的可运行代码片段，使用代码块格式，包含关键函数和数据流）
-7. 教程（基于教程部辩论共识，输出分步骤的入门到进阶教程，包含环境配置、基础用法、进阶技巧）
+6. 代码实现（基于程序部辩论共识，提供可运行的Python代码示例：①快速入门——30行核心管线，展示从搜索到报告生成的完整调用链；②进阶增强——反证搜索、多维度加权；③高级定制——自定义domain_config、专家分组策略。每个代码块用```python```标记，提供真实可运行的关键片段，不要伪代码）
+7. 教程（基于教程部辩论共识，输出三级递进教程：①零基础入门——环境配置+最小可运行demo；②进阶实战——生产环境最佳实践与避坑指南；③高级定制——自定义领域配置与专家分组策略。每步含操作命令、示例代码、预期输出）
 8. 辩论来源（列出参与辩论的各部门及其主要贡献）"""
     else:
         if has_papers:
@@ -3317,7 +3317,7 @@ def run_academic_summary(
 9. Research gaps analyzed from "why hasn't anyone done this" and "what value would it bring" perspectives
 10. Academic but accessible language, avoid filler and vague statements
 11. Report length >= 5000 words, ensure each section has sufficient depth, expand each section thoroughly with 3-4 substantive paragraphs
-12. Section 6 "Code Implementation" must include actual code blocks (in markdown code block format), not just descriptions of code ideas - output runnable key code snippets
+12. Section 6 "Code Implementation" must include actual code blocks (marked with ```python```), not just descriptions - output runnable key code snippets covering core modules: search engine, domain config, debate engine, report generator
 13. Section 7 "Tutorial" must be a step-by-step hands-on guide, including environment setup commands, basic example code, and advanced usage notes"""
 
             user_prompt = f"""Please write an academic trend review report on "{search_query}".
@@ -3340,8 +3340,8 @@ Based on the above debate content and real literature, write a structured academ
 3. Trend Analysis & Evolution Path
 4. Research Gaps & Future Directions
 5. Conclusions & Recommendations
-6. Code Implementation (based on programming department consensus, output runnable code snippets for core methods in the field, use code block format, include key functions and data flow)
-7. Tutorial (based on tutorial department consensus, output step-by-step beginner-to-advanced tutorial, include environment setup, basic usage, advanced techniques)
+6. Code Implementation (based on programming dept consensus, provide runnable Python code: (1) Quick Start — 30-line core pipeline showing search-to-report chain; (2) Advanced Enhancement — counter-evidence search, multi-dimensional weighting; (3) Advanced Customization — custom domain_config, expert group strategy. Use ```python``` blocks, provide real runnable snippets, no pseudocode)
+7. Tutorial (based on tutorial dept consensus, 3-tier progressive guide: (1) Beginner — env setup + minimal runnable demo; (2) Intermediate — production best practices and pitfalls; (3) Advanced — custom domain config and expert grouping. Each step includes commands, example code, expected output)
 8. References (use the real paper list above, format: Authors. (Year). Title. Journal.)"""
         else:
             system_prompt = """You are a senior academic review writing expert. Your task is to synthesize multi-group debate consensus into a structured academic trend review report.
@@ -3376,8 +3376,8 @@ Based on the above debate content, write a structured academic review report. Re
 3. Trend Analysis & Evolution Path
 4. Research Gaps & Future Directions
 5. Conclusions & Recommendations
-6. Code Implementation (based on programming department consensus, output runnable code snippets for core methods in the field, use code block format, include key functions and data flow)
-7. Tutorial (based on tutorial department consensus, output step-by-step beginner-to-advanced tutorial, include environment setup, basic usage, advanced techniques)
+6. Code Implementation (based on programming dept consensus, provide runnable Python code: (1) Quick Start — 30-line core pipeline showing search-to-report chain; (2) Advanced Enhancement — counter-evidence search, multi-dimensional weighting; (3) Advanced Customization — custom domain_config, expert group strategy. Use ```python``` blocks, provide real runnable snippets, no pseudocode)
+7. Tutorial (based on tutorial dept consensus, 3-tier progressive guide: (1) Beginner — env setup + minimal runnable demo; (2) Intermediate — production best practices and pitfalls; (3) Advanced — custom domain config and expert grouping. Each step includes commands, example code, expected output)
 8. Debate Sources (list participating departments and their main contributions)"""
 
     # Call LLM
