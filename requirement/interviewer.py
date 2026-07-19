@@ -241,9 +241,15 @@ class RequirementInterviewer:
             "调研", "研究", "论文", "学术", "文献", "期刊",  # Chinese academic keywords
             "综述", "检索", "引用", "cssci", "sci", "ssci",
             "arxiv", "实证", "计量",
+            # v0.7.6: academic discipline keywords
+            "经济学", "金融学", "管理学", "社会学", "心理学", "物理学",
+            "计算机科学", "生物学", "化学", "数学", "统计学", "工程学",
+            "能源经济", "环境经济", "公共管理", "政治学", "法学",
+            "economics", "finance", "sociology", "psychology", "physics",
+            "biology", "chemistry", "philosophy", "history",
         ]
         # Weak academic signals (only score when co-occurring with strong signals)
-        academic_weak = ["方法", "模型", "数据"]
+        academic_weak = ["方法", "模型", "数据", "经济", "分析"]
         
         academic_score = sum(1 for kw in academic_strong if kw in text_lower)
         # Weak signals only score when strong signals are present
