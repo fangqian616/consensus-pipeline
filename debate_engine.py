@@ -3191,6 +3191,10 @@ Based on the above debate content, write a structured academic review report. Re
 
 
 
+# ============ P7: Proofreading ============
+
+PROOFREAD_DEPARTMENTS = ["screenwriter", "spatial", "storyboard", "dp", "editing"]
+
 def run_proofreading(
     storyboard: str,
     video_prompt: str,
