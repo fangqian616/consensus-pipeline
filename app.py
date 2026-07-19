@@ -1023,6 +1023,9 @@ def build_dept_input(dept_key: str) -> str:
         return "\n\n---\n\n".join(parts)
     
     else:
+        # Academic/generic mode: always include research topic as context
+        topic_label = "研究主题" if is_zh else "Research Topic"
+        topic_line = f"{topic_label}：\n{script}" if is_zh else f"{topic_label}:\n{script}"
         prev = []
         try:
             _idx = DEPT_ORDER.index(dept_key)
@@ -1032,14 +1035,10 @@ def build_dept_input(dept_key: str) -> str:
             if pk in dept_results:
                 p = DEPARTMENTS.get(pk, {})
                 pn = p.get("zh_name" if is_zh else "en_name", pk)
-                prev.append(f"{pn}：\n{dept_results[pk]['consensus']}")
+                prev.append(f"{pn}：\n{dept_results[pk]['consensus']}" if is_zh else f"{pn}:\n{dept_results[pk]['consensus']}")
         if not prev:
-            # First department: no prior results, provide research topic as input
-            if is_zh:
-                return f"研究主题：\n{script}"
-            else:
-                return f"Research Topic:\n{script}"
-        return "\n\n---\n\n".join(prev)
+            return topic_line
+        return topic_line + "\n\n---\n\n" + "\n\n---\n\n".join(prev)
 
 
 # ============ One-Click Full Debate ============
