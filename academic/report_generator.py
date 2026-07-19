@@ -4,7 +4,7 @@ Report Generator — Consensus Pipeline v5.2
 v5.2: --lang parameter support (zh/en output)
 
 v5.1: Dual template separation
-  - Final deliverable report (<=2000 words, user-facing): information-density-first, layered presentation
+  - Final deliverable report (>=1000 words, user-facing): information-density-first, layered presentation
   - Internal working document (unlimited length, developer-facing): complete search+debate+verification records
 
 v4.2: Fix safe truncation for multi-byte characters
@@ -31,7 +31,7 @@ class ReportGenerator:
     Report integration group — v5.1 dual template
 
     Produces two documents:
-    - final_report.md: Final deliverable report, <=2000 words, information-density-first
+    - final_report.md: Final deliverable report, >=1000 words, information-density-first
     - internal_doc.md: Internal working document, complete process record
     """
 
@@ -128,7 +128,7 @@ class ReportGenerator:
         }
 
     # ================================================================
-    # Final deliverable report (<=2000 words)
+    # Final deliverable report (>=1000 words)
     # ================================================================
 
     def _build_final_report(
