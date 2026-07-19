@@ -665,6 +665,17 @@ class AcademicSearchEngine:
         combined = title_lower + " " + abstract_lower
 
         # v0.7.0: Papers matching exclusion_signals return 0.0 directly (not penalty×0.2)
+        # Universal exclusion: always exclude education/pedagogy/nutrition noise
+        # regardless of domain_config (these are never relevant to academic research reviews)
+        _universal_exclude = {
+            "course design", "course construction", "syllabus", "pedagogy",
+            "teaching method", "curriculum", "ideological", "课程建设",
+            "课程思政", "教学设计", "教学改革", "教学改革", "教育发展",
+            "obesity", "dietary", "nutrition", "weight loss", "body mass",
+            "肥胖", "膳食", "营养", "减肥",
+        }
+        if any(ex in combined for ex in _universal_exclude):
+            return 0.0  # Universal rejection: education/pedagogy/nutrition noise
         if domain_config and carbon_exclude:
             # In domain_config mode, carbon_exclude = exclusion_signals
             if any(ex in combined for ex in carbon_exclude):
