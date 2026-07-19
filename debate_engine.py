@@ -3219,7 +3219,7 @@ def run_academic_summary(
 
 【硬性规则】
 1. 这是学术综述，不是动画脚本或分镜表。严禁出现任何动画/视觉/分镜术语（如"冲击帧""蓄力-释放""速度线""残影""停帧""九宫格""分镜"等）
-2. 每个章节必须有实质性内容段落（每节至少300字），不能只有标题或要点列表
+2. 每个章节必须有实质性内容段落（每节至少400字），每个章节至少3-4段实质性内容，不能只有标题或要点列表
 3. 必须涵盖所有参与辩论的部门的贡献，不得遗漏任何部门的共识
 4. 参考文献必须且只能使用下方提供的真实论文列表，严禁自行编造任何文献。不得标注"示范性引用""佚名"等。如果提供的论文不足，减少参考文献数量，不得补充虚构文献
 5. 在报告中适当引用真实论文的结论来支撑辩论观点，每篇参考文献至少在正文中被引用一次
@@ -3228,7 +3228,7 @@ def run_academic_summary(
 8. 反证必须包含：有效批评、失败案例、适用边界
 9. 研究空白从"为什么没人做"和"做了有什么价值"两个角度分析
 10. 学术但可读的语言，避免空话套话和模糊表述
-11. 报告字数 >= 4000字，确保每个章节有充分的论述深度"""
+11. 报告字数 >= 6000字，确保每个章节有充分的论述深度，尽量详细展开每个章节"""
 
             user_prompt = f"""请撰写「{search_query}」领域的学术动向综述报告。
 
@@ -3256,7 +3256,7 @@ def run_academic_summary(
 
 【硬性规则】
 1. 这是学术综述，不是动画脚本或分镜表。严禁出现任何动画/视觉/分镜术语
-2. 每个章节必须有实质性内容段落，不能只有标题或要点列表
+2. 每个章节必须有实质性内容段落（每节至少300字），每个章节至少3-4段实质性内容，不能只有标题或要点列表
 3. 必须涵盖所有参与辩论的部门的贡献，不得遗漏任何部门的共识
 4. 由于未能检索到外部文献，参考文献部分应列出"辩论来源"（各部门共识），不得编造任何不存在的文献
 5. 方法论比较要有深度：优缺点、适用场景、计算成本、数据需求
@@ -3264,7 +3264,7 @@ def run_academic_summary(
 7. 反证必须包含：有效批评、失败案例、适用边界
 8. 研究空白从"为什么没人做"和"做了有什么价值"两个角度分析
 9. 学术但可读的语言，避免空话套话和模糊表述
-10. 报告字数 >= 2000字"""
+10. 报告字数 >= 4000字，尽量详细展开每个章节"""
 
             user_prompt = f"""请撰写「{search_query}」领域的学术动向综述报告。
 
@@ -3289,7 +3289,7 @@ def run_academic_summary(
 
 [HARD RULES]
 1. This is an ACADEMIC REVIEW, NOT an animation script or storyboard. Absolutely no animation/visual/storyboard terminology
-2. Each section must have substantive content paragraphs (at least 150 words per section), not bare bullet points
+2. Each section must have substantive content paragraphs (at least 200 words per section), not bare bullet points
 3. Must cover ALL participating departments' contributions, do not omit any department's consensus
 4. References MUST ONLY use the real paper list provided below. Do NOT fabricate any references. Do NOT mark references as "illustrative" or "anonymous". If fewer papers are available, use fewer references rather than inventing fake ones
 5. Cite real paper conclusions appropriately to support debate arguments, each reference should be cited at least once in the text
@@ -3298,7 +3298,7 @@ def run_academic_summary(
 8. Counter-evidence must be included: valid criticisms, failure cases, applicability boundaries
 9. Research gaps analyzed from "why hasn't anyone done this" and "what value would it bring" perspectives
 10. Academic but accessible language, avoid filler and vague statements
-11. Report length >= 3500 words, ensure each section has sufficient depth"""
+11. Report length >= 5000 words, ensure each section has sufficient depth, expand each section thoroughly with 3-4 substantive paragraphs"""
 
             user_prompt = f"""Please write an academic trend review report on "{search_query}".
 
@@ -3326,7 +3326,7 @@ Based on the above debate content and real literature, write a structured academ
 
 [HARD RULES]
 1. This is an ACADEMIC REVIEW, NOT an animation script or storyboard. Absolutely no animation/visual/storyboard terminology
-2. Each section must have substantive content paragraphs (at least 150 words per section), not bare bullet points
+2. Each section must have substantive content paragraphs (at least 200 words per section), not bare bullet points
 3. Must cover ALL participating departments' contributions, do not omit any department's consensus
 4. Since external literature search was not available, the references section should list "Debate Sources" (department consensuses), do not fabricate any non-existent references
 5. Methodology comparison must have depth: pros/cons, applicable scenarios, computational costs, data requirements
@@ -3334,7 +3334,7 @@ Based on the above debate content and real literature, write a structured academ
 7. Counter-evidence must be included: valid criticisms, failure cases, applicability boundaries
 8. Research gaps analyzed from "why hasn't anyone done this" and "what value would it bring" perspectives
 9. Academic but accessible language, avoid filler and vague statements
-10. Report length >= 3500 words, ensure each section has sufficient depth"""
+10. Report length >= 4500 words, ensure each section has sufficient depth, expand each section thoroughly with 3-4 substantive paragraphs"""
 
             user_prompt = f"""Please write an academic trend review report on "{search_query}".
 
