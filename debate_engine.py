@@ -3033,46 +3033,123 @@ def run_academic_summary(
 
     try:
         from academic.search_engine import AcademicSearchEngine
+        import time as _time
+
+        # === v0.7.0 Pipeline Integration: Domain Config Generation ===
+        # Generate domain_config with query_rotation (6-10 English search queries),
+        # exclusion_signals (15-25 exclusion keywords), tier_definitions (core/method/background).
+        # This connects run_academic_summary to the same proven pipeline as run_pipeline.py phase4_search_v6().
+        domain_config = None
+        try:
+            from domain_config_generator import generate_domain_config
+
+            def _dc_llm_call(system_prompt: str, user_message: str, temperature: float = 0.2) -> str:
+                """Local LLM call for domain_config generation (same interface as run_pipeline.llm_call)"""
+                import requests as _req
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}",
+                }
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message},
+                    ],
+                    "temperature": temperature,
+                    "max_tokens": 8192,
+                }
+                try:
+                    resp = _req.post(api_url, headers=headers, json=payload, timeout=120)
+                    resp.raise_for_status()
+                    result = resp.json()
+                    return result["choices"][0]["message"]["content"]
+                except Exception as e:
+                    print(f"  [LLM ERROR in domain_config] {e}")
+                    return ""
+
+            print(f"Generating domain config for: \"{search_query}\"...")
+            domain_config = generate_domain_config(search_query, _dc_llm_call)
+            if domain_config and domain_config.get("query_rotation"):
+                _qr = domain_config["query_rotation"]
+                _es = domain_config.get("exclusion_signals", [])
+                print(f"Domain config generated: {len(_qr)} search queries, "
+                      f"{len(_es)} exclusion signals, "
+                      f"tiers: {list(domain_config.get('tier_definitions', {}).keys())}")
+            else:
+                print("Domain config generation returned no query_rotation, using fallback search")
+                domain_config = None
+        except Exception as dc_err:
+            print(f"Domain config generation failed: {dc_err}, using fallback search")
+            domain_config = None
+
+        # === Multi-query search with cross-query deduplication (pipeline integration) ===
         se = AcademicSearchEngine(
             min_citations=3,
             min_results=10,
             include_preprints=True,
+            domain_config=domain_config,  # v0.7.0: Enable config-driven exclusion filtering
         )
-        # Search with original query
-        search_result = se.search(search_query, max_results_per_source=30)
-        papers_found = search_result.get("papers", [])
-        preprints = search_result.get("preprints", [])
 
-        # v4.5: Also search with English query and merge
-        if en_query and en_query != search_query:
-            en_result = se.search(en_query, max_results_per_source=30)
-            en_papers = en_result.get("papers", [])
-            en_preprints = en_result.get("preprints", [])
-            # Merge: deduplicate by DOI and title
-            existing_dois = {p.doi for p in papers_found if p.doi}
-            existing_titles = {p.title[:30].lower() for p in papers_found}
-            for p in en_papers:
-                if p.doi and p.doi in existing_dois:
-                    continue
-                if p.title[:30].lower() in existing_titles:
-                    continue
-                papers_found.append(p)
-            for p in en_preprints:
-                if p.doi and p.doi in existing_dois:
-                    continue
-                if p.title[:30].lower() in existing_titles:
-                    continue
-                preprints.append(p)
-            # Update stats
-            se_stats = search_result.get("stats", {})
-            en_stats = en_result.get("stats", {})
-            se_stats["total_fetched"] = se_stats.get("total_fetched", 0) + en_stats.get("total_fetched", 0)
-            se_stats["after_filter"] = len(papers_found)
-            se_stats["preprint_count"] = len(preprints)
-            search_result["stats"] = se_stats
+        # Build search query list: use query_rotation if available, otherwise bilingual fallback
+        if domain_config and domain_config.get("query_rotation"):
+            search_queries = list(domain_config["query_rotation"])
+            # Prepend original search_query and en_query if not already included
+            if search_query and search_query not in search_queries:
+                search_queries.insert(0, search_query)
+            if en_query and en_query != search_query and en_query not in search_queries:
+                search_queries.append(en_query)
+        else:
+            # Fallback: bilingual search (original + English)
+            search_queries = [search_query]
+            if en_query and en_query != search_query:
+                search_queries.append(en_query)
 
+        print(f"Academic search: {len(search_queries)} queries to execute")
+        for i, q in enumerate(search_queries):
+            print(f"  Query {i+1}/{len(search_queries)}: \"{q}\"")
+
+        all_papers_raw = []
+        all_preprints_raw = []
+        seen_titles = set()
+        total_fetched = 0
+
+        for q in search_queries:
+            try:
+                result = se.search(q, max_results_per_source=30)
+                papers = result.get("papers", [])
+                preprints = result.get("preprints", [])
+                q_stats = result.get("stats", {})
+
+                total_fetched += q_stats.get("total_fetched", 0)
+                print(f"  \"{q}\" → raw={q_stats.get('total_fetched', 0)}, "
+                      f"filtered={q_stats.get('after_filter', 0)}, "
+                      f"preprints={q_stats.get('preprint_count', 0)}")
+
+                # Cross-query deduplication (same logic as phase4_search_v6)
+                for p in papers:
+                    title_key = p.title[:30].lower()
+                    if title_key not in seen_titles:
+                        seen_titles.add(title_key)
+                        all_papers_raw.append(p)
+
+                for p in preprints:
+                    title_key = p.title[:30].lower()
+                    if title_key not in seen_titles:
+                        seen_titles.add(title_key)
+                        all_preprints_raw.append(p)
+            except Exception as qe:
+                print(f"  Search error for \"{q}\": {qe}")
+
+            # Rate limit: wait 3s between queries (same as phase4_search_v6)
+            if q != search_queries[-1]:
+                _time.sleep(3)
+
+        papers_found = all_papers_raw
+        preprints = all_preprints_raw
         all_papers = papers_found + preprints[:5]  # Include top 5 preprints
 
+        # Build reference list
         if all_papers:
             ref_lines = []
             for i, p in enumerate(all_papers[:20], 1):
@@ -3081,11 +3158,20 @@ def run_academic_summary(
                     authors_str += " et al."
                 ref_lines.append(f"{i}. {authors_str} ({p.year}). {p.title}. {p.journal}, cited by {p.citation_count}. DOI: {p.doi or 'N/A'}")
             paper_references = "\n".join(ref_lines)
-            se_stats = search_result.get("stats", {})
-            print(f"Academic search: {se_stats.get('total_fetched', 0)} fetched, {se_stats.get('after_filter', 0)} filtered, {se_stats.get('preprint_count', 0)} preprints")
+            print(f"Academic search complete: {total_fetched} fetched, "
+                  f"{len(papers_found)} unique papers, {len(preprints)} preprints, "
+                  f"{len(all_papers)} total references")
+            _se_stats = {
+                "total_fetched": total_fetched,
+                "after_filter": len(papers_found),
+                "preprint_count": len(preprints),
+            }
+        else:
+            _se_stats = {"total_fetched": total_fetched, "after_filter": 0, "preprint_count": 0}
     except ImportError:
         print("⚠️ Academic search skipped: academic/search_engine.py not found or import error")
         paper_references = ""
+        _se_stats = {}
     except Exception as e:
         import traceback
         err_type = type(e).__name__
@@ -3097,6 +3183,7 @@ def run_academic_summary(
             print(f"⚠️ Academic search failed ({err_type}): {e}")
             traceback.print_exc()
         paper_references = ""
+        _se_stats = {}
 
     # === Step 2: Build LLM prompt with real papers ===
     has_papers = bool(paper_references)
@@ -3266,6 +3353,8 @@ Based on the above debate content, write a structured academic review report. Re
         "preprint_count": _se_stats.get("preprint_count", 0) if _se_stats else 0,
         "papers_in_refs": len(papers_found),
         "has_real_references": has_papers,
+        "queries_used": len(search_queries) if 'search_queries' in dir() else 0,
+        "domain_config_active": domain_config is not None if 'domain_config' in dir() else False,
     }
     
     return {
