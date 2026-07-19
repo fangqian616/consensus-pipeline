@@ -3700,8 +3700,8 @@ def render_requirement_tab():
                     d_en = st.text_input("English name", value=en_name, key=f"req_dept_en_{dept_key}")
                     
                     debaters = dept.get("debaters", {})
-                if not isinstance(debaters, dict):
-                    debaters = {} if isinstance(dept, dict) else {}
+                    if not isinstance(debaters, dict):
+                        debaters = {} if isinstance(dept, dict) else {}
                     # Track deletions in session_state
                     del_key = f"_req_del_{dept_key}"
                     if del_key not in st.session_state:
@@ -3715,7 +3715,7 @@ def render_requirement_tab():
                             st.markdown(f"**Debater {debater_key}**: {debater.get('zh_name', '')}")
                         with db_col2:
                             can_delete = len(active_debaters) > 2
-                            if st.button("\U0001f5d1\ufe0f", key=f"req_db_del_{dept_key}_{debater_key}", disabled=not can_delete, help=("至少保留2位辩手" if can_delete else "至少保留2位辩手") if not can_delete else ("删除辩手" if is_zh else "Remove debater")):
+                            if st.button("🗑️", key=f"req_db_del_{dept_key}_{debater_key}", disabled=not can_delete, help=("至少保留2位辩手" if can_delete else "至少保留2位辩手") if not can_delete else ("删除辩手" if is_zh else "Remove debater")):
                                 st.session_state[del_key].append(debater_key)
                                 st.rerun()
                         
@@ -3732,7 +3732,7 @@ def render_requirement_tab():
                         }
                     
                     # Add debater button
-                    if st.button("\u2795 " + ("添加辩手" if is_zh else "Add Debater"), key=f"req_db_add_{dept_key}", use_container_width=True):
+                    if st.button("➕ " + ("添加辩手" if is_zh else "Add Debater"), key=f"req_db_add_{dept_key}", use_container_width=True):
                         existing_keys = set(active_debaters.keys())
                         next_key = None
                         for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
@@ -3741,9 +3741,9 @@ def render_requirement_tab():
                                 break
                         if next_key:
                             new_debater = {
-                                "zh_name": f"\u65b0\u8fa9\u624b{next_key}" if is_zh else f"New Debater {next_key}",
+                                "zh_name": f"新辩手{next_key}" if is_zh else f"New Debater {next_key}",
                                 "en_name": f"New Debater {next_key}",
-                                "zh_style": "\u8bf7\u8865\u5145\u8fa9\u624b\u98ce\u683c\u63cf\u8ff0" if is_zh else "Describe debater style",
+                                "zh_style": "请补充辩手风格描述" if is_zh else "Describe debater style",
                                 "en_style": "Describe debater style",
                             }
                             if isinstance(st.session_state.req_config, dict):
@@ -3757,6 +3757,7 @@ def render_requirement_tab():
                         "en_name": d_en,
                         "debaters": edited_debaters,
                     }
+
             
             # Review operations
             st.divider()
@@ -3809,6 +3810,8 @@ def render_requirement_tab():
                     if script_parts:
                         st.session_state.script = "\n".join(script_parts)
                         st.session_state.script_input = st.session_state.script
+                        # Auto-fill config tab input too
+                        st.session_state.config_user_input = st.session_state.script
                     
                     st.session_state.req_phase = 0  # 重置
                     st.session_state.req_interview_history = []
@@ -3819,6 +3822,7 @@ def render_requirement_tab():
                     
                     st.success("✅ " + ("配置已确认！请切换到「辩论」Tab开始" if is_zh else "Config confirmed! Switch to Debate tab"))
                     st.balloons()
+                    st.rerun()
             
             with col2:
                 if st.button("🔄 " + ("修改配置" if is_zh else "Edit Config"), key="req_edit_btn"):
