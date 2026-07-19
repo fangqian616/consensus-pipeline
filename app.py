@@ -3170,8 +3170,10 @@ def render_config_tab():
                     for q in result.get("clarification_questions", []):
                         st.markdown(f"- {q}")
                     # Still save partial config for editing
+                    apply_config(result)
                     st.session_state.workgroup_config = result
                 else:
+                    apply_config(result)
                     st.session_state.workgroup_config = result
                     st.success("✅ " + ("AI配组完成！" if is_zh else "AI config complete!"))
         
@@ -3189,6 +3191,7 @@ def render_config_tab():
             if st.button("📦 " + ("加载预设" if is_zh else "Load Preset"), use_container_width=True):
                 try:
                     cfg = load_preset(selected_preset)
+                    apply_config(cfg)
                     st.session_state.workgroup_config = cfg
                     st.session_state.workgroup_name = selected_preset
                     st.session_state.pipeline_mode = None  # reset, will be detected on next use
@@ -3210,6 +3213,7 @@ def render_config_tab():
                 if st.button("💾 " + ("加载" if is_zh else "Load"), use_container_width=True):
                     try:
                         cfg = load_profile(selected_profile)
+                        apply_config(cfg)
                         st.session_state.workgroup_config = cfg
                         st.session_state.workgroup_name = selected_profile
                         st.success(f"✅ {'已加载配置' if is_zh else 'Loaded config'}: {selected_profile}")
@@ -3401,6 +3405,7 @@ def render_config_tab():
                     if errors:
                         for e in errors:
                             st.warning(e)
+                    apply_config(cfg)
                     st.session_state.workgroup_config = cfg
                     st.success("✅ " + ("配置已导入" if is_zh else "Config imported"))
                 except Exception as e:
