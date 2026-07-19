@@ -321,9 +321,17 @@ class AcademicSearchEngine:
                 summary = entry.find("atom:summary", ns).text.strip()
                 published = entry.find("atom:published", ns).text[:4]
 
+                # Parse authors from arXiv XML
+                authors = []
+                for author_elem in entry.findall("atom:author", ns):
+                    name_elem = author_elem.find("atom:name", ns)
+                    if name_elem is not None and name_elem.text:
+                        authors.append(name_elem.text.strip())
+
                 results.append(PaperCandidate(
                     title=title,
                     doi=doi,
+                    authors=authors,
                     journal="arXiv",
                     year=int(published) if published.isdigit() else 0,
                     abstract=safe_truncate(summary, 500),
