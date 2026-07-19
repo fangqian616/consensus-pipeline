@@ -1327,21 +1327,38 @@ def step_run_summary():
     if st.session_state.current_stats is None:
         st.session_state.current_stats = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "api_calls": 0}
         st.session_state.current_start_time = time.time()
-    
+
     dept_results = st.session_state.dept_results
-    final = run_summary(
-        all_consensus={k: v["consensus"] for k, v in dept_results.items()},
-        cross_results=st.session_state.cross_results,
-        user_script=st.session_state.script,
-        positive_prompt=st.session_state.positive_prompt,
-        negative_prompt=st.session_state.negative_prompt,
-        character_refs=st.session_state.character_refs,
-        api_url=st.session_state.api_url,
-        api_key=st.session_state.api_key,
-        model=st.session_state.model_name,
-        lang=st.session_state.lang,
-        stats=st.session_state.current_stats,
-    )
+    _is_zh = st.session_state.lang == "zh"
+    _cfg = (st.session_state.get("workgroup_config") or get_current_config() or {})
+    _dept_keys = list(_cfg.get("departments", {}).keys())
+    _is_academic = any(k in _dept_keys for k in ["literature_search", "methodology_review", "report_integration", "programming", "tutorial", "metadata_inspector", "citation_network", "data_validation", "counter_evidence", "topic_clustering"])
+
+    if _is_academic:
+        final = run_academic_summary(
+            user_topic=st.session_state.script or st.session_state.get("config_user_input", ""),
+            all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+            cross_results=st.session_state.cross_results,
+            api_url=st.session_state.api_url,
+            api_key=st.session_state.api_key,
+            model=st.session_state.model_name,
+            lang=st.session_state.lang,
+            stats=st.session_state.current_stats,
+        )
+    else:
+        final = run_summary(
+            all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+            cross_results=st.session_state.cross_results,
+            user_script=st.session_state.script,
+            positive_prompt=st.session_state.positive_prompt,
+            negative_prompt=st.session_state.negative_prompt,
+            character_refs=st.session_state.character_refs,
+            api_url=st.session_state.api_url,
+            api_key=st.session_state.api_key,
+            model=st.session_state.model_name,
+            lang=st.session_state.lang,
+            stats=st.session_state.current_stats,
+        )
     st.session_state.final_output = final
     st.session_state.debate_completed = True
     st.session_state.current_end_time = time.time()
