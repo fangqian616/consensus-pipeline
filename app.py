@@ -1877,6 +1877,10 @@ def _render_academic_output(final, is_zh):
                          f"**预印本：** {search_info.get('preprint_count', 0)}篇")
                 st.write(f"**参考文献数：** {search_info.get('papers_in_refs', 0)}篇 | "
                          f"**含真实引用：** {'是' if search_info.get('has_real_references') else '否'}")
+                _dc_active = search_info.get('domain_config_active', False)
+                _q_count = search_info.get('queries_used', 0)
+                st.write(f"**搜索轮次：** {_q_count}轮 | "
+                         f"**智能领域配置：** {'已启用' if _dc_active else '未启用(回退模式)'}")
                 if search_info.get('after_filter', 0) == 0 and search_info.get('preprint_count', 0) > 0:
                     st.warning("⚠️ 期刊论文搜索结果为0，仅有arXiv预印本。可能原因：Semantic Scholar/OpenAlex API网络不通，或检索词匹配度低。")
             else:
@@ -1884,6 +1888,10 @@ def _render_academic_output(final, is_zh):
                 st.write(f"**Total fetched:** {search_info.get('total_fetched', 0)} | "
                          f"**After filter:** {search_info.get('after_filter', 0)} journal | "
                          f"**Preprints:** {search_info.get('preprint_count', 0)}")
+                _dc_active = search_info.get('domain_config_active', False)
+                _q_count = search_info.get('queries_used', 0)
+                st.write(f"**Queries:** {_q_count} rounds | "
+                         f"**Domain config:** {'Active' if _dc_active else 'Fallback mode'}")
                 if search_info.get('after_filter', 0) == 0 and search_info.get('preprint_count', 0) > 0:
                     st.warning("⚠️ No journal papers found, only arXiv preprints. Possible: Semantic Scholar/OpenAlex API unreachable.")
     
@@ -4094,4 +4102,5 @@ def main():
 if __name__ == "__main__":
     init_state()
     main()
+
 
