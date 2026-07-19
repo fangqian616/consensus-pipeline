@@ -1522,6 +1522,7 @@ def render_input_tab():
     with btn_col1:
         if st.button(t("start_debate"), type="secondary", use_container_width=True):
             st.session_state.step_phase = "idle"
+            st.session_state.pipeline_mode = None  # will be auto-detected by _detect_pipeline_mode
             st.session_state.dept_results = {}
             st.session_state.cross_results = []
             st.session_state.final_output = {}
@@ -1532,6 +1533,7 @@ def render_input_tab():
     
     with btn_col2:
         if st.button(t("start_step"), type="primary", use_container_width=True):
+            st.session_state.pipeline_mode = None  # will be auto-detected by _detect_pipeline_mode
             st.session_state.dept_results = {}
             st.session_state.cross_results = []
             st.session_state.final_output = {}
