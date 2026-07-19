@@ -114,7 +114,8 @@ Important:
 - Ensure the JSON is valid and parseable
 - Use English lowercase for keywords
 - Exclusion signals should cover common noise domains including education/teaching and nutrition/dietary noise
-- categorization_schema must be topic-specific, not generic"""
+- categorization_schema must be topic-specific, not generic
+- CONCISENESS REQUIREMENT: Keep the JSON concise. categorization_schema should have at most 3 categories per dimension (plus "Other") with 3-5 keywords each. llm_classify_prompt should be under 500 characters. Total output must not exceed 12000 characters."""
 
     user_msg = f"Research topic: {topic}\n\nPlease generate the precise domain configuration JSON."
 
