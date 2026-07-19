@@ -3057,7 +3057,7 @@ def run_academic_summary(
                         {"role": "user", "content": user_message},
                     ],
                     "temperature": temperature,
-                    "max_tokens": 8192,
+                    "max_tokens": 16384,
                 }
                 try:
                     resp = _req.post(api_url, headers=headers, json=payload, timeout=120)
