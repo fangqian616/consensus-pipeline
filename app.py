@@ -1033,6 +1033,12 @@ def build_dept_input(dept_key: str) -> str:
                 p = DEPARTMENTS.get(pk, {})
                 pn = p.get("zh_name" if is_zh else "en_name", pk)
                 prev.append(f"{pn}：\n{dept_results[pk]['consensus']}")
+        if not prev:
+            # First department: no prior results, provide research topic as input
+            if is_zh:
+                return f"研究主题：\n{script}"
+            else:
+                return f"Research Topic:\n{script}"
         return "\n\n---\n\n".join(prev)
 
 
@@ -1915,16 +1921,16 @@ def _render_academic_output(final, is_zh):
                     elif line_stripped.startswith("---"):
                         doc.add_paragraph("─" * 40)
                     else:
-                        # Handle bold markers
+                        # Handle bold markers with state toggle
                         p = doc.add_paragraph()
-                        # Simple bold handling: split by ** and alternate
                         parts = line_stripped.split("**")
-                        for idx, part in enumerate(parts):
-                            if not part:
-                                continue
-                            run = p.add_run(part)
-                            if idx % 2 == 1:
-                                run.bold = True
+                        _bold = False
+                        for part in parts:
+                            if part:
+                                run = p.add_run(part)
+                                if _bold:
+                                    run.bold = True
+                            _bold = not _bold
                 
                 buf = BytesIO()
                 doc.save(buf)
