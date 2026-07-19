@@ -3068,8 +3068,33 @@ def run_academic_summary(
                     print(f"  [LLM ERROR in domain_config] {e}")
                     return ""
 
-            print(f"Generating domain config for: \"{search_query}\"...")
-            domain_config = generate_domain_config(search_query, _dc_llm_call)
+            # Translate Chinese topic to English before generating domain config
+            # generate_domain_config's LLM prompt expects English topics; Chinese input
+            # produces Chinese query_rotation which returns garbage from arXiv/S2/OpenAlex
+            dc_topic = search_query
+            if any('\u4e00' <= c <= '\u9fff' for c in search_query):
+                try:
+                    _trans_prompt = "You are a professional academic translator. Translate the following Chinese research topic into a concise English academic phrase (5-12 words). Output ONLY the English translation, nothing else."
+                    _trans_result = _dc_llm_call(_trans_prompt, search_query, temperature=0.1)
+                    _trans_result = _trans_result.strip().strip('"').strip("'").strip(".")
+                    if _trans_result and not any('\u4e00' <= c <= '\u9fff' for c in _trans_result):
+                        dc_topic = _trans_result
+                        print(f"Topic translated: \"{search_query}\" → \"{dc_topic}\"")
+                    else:
+                        # Fallback: use en_query from _ZH_EN_MAP if available
+                        if en_query:
+                            dc_topic = en_query
+                            print(f"Topic translated (fallback map): \"{search_query}\" → \"{dc_topic}\"")
+                        else:
+                            print(f"Topic translation failed, using original: \"{search_query}\"")
+                except Exception as trans_err:
+                    print(f"Topic translation error: {trans_err}, using en_query fallback")
+                    if en_query:
+                        dc_topic = en_query
+                    # else: keep Chinese, generate_domain_config will still try
+
+            print(f"Generating domain config for: \"{dc_topic}\"...")
+            domain_config = generate_domain_config(dc_topic, _dc_llm_call)
             if domain_config and domain_config.get("query_rotation"):
                 _qr = domain_config["query_rotation"]
                 _es = domain_config.get("exclusion_signals", [])
