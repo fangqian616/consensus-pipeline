@@ -3008,8 +3008,19 @@ def run_academic_summary(
             paper_references = "\n".join(ref_lines)
             se_stats = search_result.get("stats", {})
             print(f"Academic search: {se_stats.get('total_fetched', 0)} fetched, {se_stats.get('after_filter', 0)} filtered, {se_stats.get('preprint_count', 0)} preprints")
+    except ImportError:
+        print("⚠️ Academic search skipped: academic/search_engine.py not found or import error")
+        paper_references = ""
     except Exception as e:
-        print(f"Academic search failed (non-fatal): {e}")
+        import traceback
+        err_type = type(e).__name__
+        if "Connection" in str(e) or "Timeout" in str(e) or "timeout" in str(e):
+            print(f"⚠️ Academic search failed (network): {err_type}: {e}")
+        elif "key" in str(e).lower() or "auth" in str(e).lower() or "401" in str(e) or "403" in str(e):
+            print(f"⚠️ Academic search failed (auth): {err_type}: {e}")
+        else:
+            print(f"⚠️ Academic search failed ({err_type}): {e}")
+            traceback.print_exc()
         paper_references = ""
 
     # === Step 2: Build LLM prompt with real papers ===
