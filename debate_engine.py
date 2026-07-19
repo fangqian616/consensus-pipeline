@@ -2930,6 +2930,134 @@ IMPORTANT:
         "video_prompt": video_result or "逐镜视频提示词生成失败",
     }
 
+# ============ Academic Summary (for academic mode) ============
+
+def run_academic_summary(
+    user_topic: str,
+    all_consensus: Dict[str, str],
+    cross_results: list,
+    api_url: str,
+    api_key: str,
+    model: str = "deepseek-v4-flash",
+    lang: str = "zh",
+    stats: dict = None,
+) -> Dict:
+    """
+    Academic mode summary: synthesize department debate consensus into a proper academic review report.
+    Unlike run_summary() which generates storyboard+video prompt, this produces an academic report.
+    """
+    is_zh = lang == "zh"
+
+    # Build all department consensus
+    consensus_parts = []
+    for dept_key, consensus in all_consensus.items():
+        dept = DEPARTMENTS.get(dept_key, {})
+        name = dept.get("zh_name", dept_key) if is_zh else dept.get("en_name", dept_key)
+        if consensus:
+            consensus_parts.append(f"### {name}\n{consensus}")
+    consensus_text = "\n\n".join(consensus_parts)
+
+    # Cross-debate results
+    cross_parts = []
+    for cr in cross_results:
+        if isinstance(cr, dict):
+            title = cr.get("topic", "Cross-debate")
+            result = cr.get("debate_result", cr.get("result", cr.get("consensus", "")))
+        else:
+            title = "Cross-debate"
+            result = str(cr)
+        if result:
+            cross_parts.append(f"### {title}\n{result}")
+    cross_text = "\n\n".join(cross_parts)
+
+    if not consensus_text and not cross_text:
+        return {"final_report": "", "consensus_report": ""}
+
+    # LLM prompt for academic report synthesis
+    if is_zh:
+        system_prompt = """你是一位资深学术综述撰写专家。你的任务是将多个学术辩论组的共识结果整合为一篇结构完整的学术动向综述报告。
+
+【硬性规则】
+1. 这是学术综述，不是动画脚本或分镜表。严禁出现任何动画/视觉/分镜术语（如"冲击帧""蓄力-释放""速度线""残影""停帧""九宫格""分镜"等）
+2. 每个章节必须有实质性内容段落，不能只有标题或要点列表
+3. 引用具体辩论观点时标注来源部门
+4. 方法论比较要有深度：优缺点、适用场景、计算成本、数据需求
+5. 趋势分析基于辩论中揭示的演变轨迹
+6. 反证必须包含：有效批评、失败案例、适用边界
+7. 研究空白从"为什么没人做"和"做了有什么价值"两个角度分析
+8. 学术但可读的语言，避免空话套话和模糊表述
+9. 报告字数 >= 1000字"""
+
+        user_prompt = f"""请撰写「{user_topic}」领域的学术动向综述报告。
+
+以下为各部门辩论共识：
+
+{consensus_text}
+
+交叉辩论结果：
+
+{cross_text}
+
+请基于以上辩论内容，撰写结构完整的学术综述报告。报告结构：
+1. 研究背景与问题定义
+2. 核心发现与方法论比较
+3. 趋势分析与演进路径
+4. 研究空白与未来方向
+5. 结论与建议
+6. 参考文献（标注辩论来源）"""
+    else:
+        system_prompt = """You are a senior academic review writing expert. Your task is to synthesize multi-group debate consensus into a structured academic trend review report.
+
+[HARD RULES]
+1. This is an ACADEMIC REVIEW, NOT an animation script or storyboard. Absolutely no animation/visual/storyboard terminology (e.g., "impact frame", "charge-release", "speed lines", "afterimage", "freeze frame", "9-grid", "storyboard")
+2. Each section must have substantive content paragraphs, not bare bullet points
+3. Cite specific debate arguments with source department attribution
+4. Methodology comparison must have depth: pros/cons, applicable scenarios, computational costs, data requirements
+5. Trend analysis based on evolution trajectories revealed in debates
+6. Counter-evidence must be included: valid criticisms, failure cases, applicability boundaries
+7. Research gaps analyzed from "why hasn't anyone done this" and "what value would it bring" perspectives
+8. Academic but accessible language, avoid filler and vague statements
+9. Report length >= 1000 words"""
+
+        user_prompt = f"""Please write an academic trend review report on "{user_topic}".
+
+Department debate consensus:
+
+{consensus_text}
+
+Cross-debate results:
+
+{cross_text}
+
+Based on the above debate content, write a structured academic review report. Report structure:
+1. Research Background & Problem Definition
+2. Key Findings & Methodology Comparison
+3. Trend Analysis & Evolution Path
+4. Research Gaps & Future Directions
+5. Conclusions & Recommendations
+6. References (with debate source attribution)"""
+
+    # Call LLM
+    report = call_api(
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        api_url=api_url, api_key=api_key, model=model,
+        temperature=0.25, max_tokens=8192, timeout=180,
+        stats=stats,
+    )
+
+    if not report:
+        # Fallback: just concatenate consensus
+        report = consensus_text
+
+    return {
+        "final_report": report,
+        "consensus_report": consensus_text,
+    }
+
+
 # ============ P7: Proofreading ============
 
 PROOFREAD_DEPARTMENTS = ["screenwriter", "spatial", "storyboard", "dp", "editing"]
