@@ -1101,7 +1101,9 @@ def run_department_debate(
                     else:
                         cf_block = f"\n[Carry Forward — Key decisions from previous segment debate, MUST follow]\n{carry_forward}\n"
                 if is_zh:
-                    prompt = f"""你是{dept['zh_name']}的{debater['zh_name']}辩手。
+                    prompt = f"""【重要】你必须使用中文回答。所有输出必须是中文。
+
+你是{dept['zh_name']}的{debater['zh_name']}辩手。
 
 {ANIME_VISUAL_DIRECTIVE['zh']}
 
@@ -1138,7 +1140,9 @@ Current discussion topic:
                 prev_args = "\n\n---\n\n".join(all_arguments[-3:])
                 reminder = get_screenwriter_reminder(lang) if department_key == "screenwriter" else ""
                 if is_zh:
-                    prompt = f"""你是{dept['zh_name']}的{debater['zh_name']}辩手。
+                    prompt = f"""【重要】你必须使用中文回答。所有输出必须是中文。
+
+你是{dept['zh_name']}的{debater['zh_name']}辩手。
 
 {ANIME_VISUAL_DIRECTIVE['zh']}
 
@@ -1196,7 +1200,9 @@ This is Round {round_num}. Respond to other debaters—what do you agree with? D
             constraint_check = '\n\n[Screenwriter Hard Constraint Check] The final plan must NOT contain new characters, new relationships, new plot sublines, or new dialogue not in the user\'s script. Any constraint-violating proposals must be removed and marked as "This suggestion was removed for exceeding screenwriter authority.".'
     
     if is_zh:
-        consensus_prompt = f"""你是{dept['zh_name']}的辩论主持人。
+        consensus_prompt = f"""【重要】你必须使用中文回答。所有输出必须是中文。
+
+你是{dept['zh_name']}的辩论主持人。
 
 以下是{dept['zh_name']}{len(dept['debaters'])}位辩手经过{rounds}轮辩论后的全部观点：
 
@@ -1276,7 +1282,9 @@ def run_single_agent(
     is_zh = lang == "zh"
     
     if is_zh:
-        prompt = f"""你是一个AI动画制作专家。请根据以下输入，直接生成分镜表和逐镜视频提示词。
+        prompt = f"""【重要】你必须使用中文回答。所有输出必须是中文。
+
+你是一个AI动画制作专家。请根据以下输入，直接生成分镜表和逐镜视频提示词。
 
 输入：
 - 剧本：{user_script}
@@ -2102,7 +2110,9 @@ def run_cross_debate(
     b_name = dept_b["zh_name"] if is_zh else dept_b["en_name"]
     
     if is_zh:
-        prompt = f"""你是{a_name}和{b_name}的交叉辩论主持人。
+        prompt = f"""【重要】你必须使用中文回答。所有输出必须是中文。
+
+你是{a_name}和{b_name}的交叉辩论主持人。
 
 辩论主题：{topic}
 
@@ -2171,7 +2181,9 @@ def run_spatial_review(
             debater_name = debater["zh_name"] if is_zh else debater["en_name"]
             
             if is_zh:
-                prompt = f"""你是{dept_name}的{debater_name}辩手。
+                prompt = f"""【重要】你必须使用中文回答。所有输出必须是中文。
+
+你是{dept_name}的{debater_name}辩手。
 
 {ANIME_VISUAL_DIRECTIVE['zh']}
 
@@ -2306,7 +2318,9 @@ def run_summary(
     
     # ===== Output 1: Storyboard (pure static keyframes) =====
     if is_zh:
-        storyboard_prompt = f"""你是最终总结AI。请根据以下所有部门的辩论结果，生成纯静态关键帧分镜表。
+        storyboard_prompt = f"""【重要】你必须使用中文回答。所有输出必须是中文。
+
+你是最终总结AI。请根据以下所有部门的辩论结果，生成纯静态关键帧分镜表。
 
 【分镜表定义】分镜表是拍摄内容的静态关键帧——每个Shot是定格照片，不是动画脚本。
 - 写的是"在这个机位、这个角度、这个打光下，角色表情什么、动作定格什么、和谁互动什么、背景什么"
@@ -2621,7 +2635,9 @@ Negative prompt:
     
     # ===== Output 2: Video shot-by-shot prompts ([Keyframe]+[Dynamic Link] dual-layer) =====
     if is_zh:
-        video_prompt = f"""你是最终总结AI。请根据以下所有部门的辩论结果，生成逐镜视频提示词。
+        video_prompt = f"""【重要】你必须使用中文回答。所有输出必须是中文。
+
+你是最终总结AI。请根据以下所有部门的辩论结果，生成逐镜视频提示词。
 
 【视频提示词定义】视频提示词是分镜表的完整扩展层：
 - [关键帧]：直接来自分镜表的静态关键帧描述（照抄分镜表对应Shot的完整内容）
@@ -3240,7 +3256,9 @@ def run_academic_summary(
 
     if is_zh:
         if has_papers:
-            system_prompt = """你是一位资深学术综述撰写专家。你的任务是将多个学术辩论组的共识结果与真实文献检索结果整合为一篇结构完整的学术动向综述报告。
+            system_prompt = """【重要】你必须使用中文回答。所有输出必须是中文。
+
+你是一位资深学术综述撰写专家。你的任务是将多个学术辩论组的共识结果与真实文献检索结果整合为一篇结构完整的学术动向综述报告。
 
 【硬性规则】
 1. 这是学术综述，不是动画脚本或分镜表。严禁出现任何动画/视觉/分镜术语（如"冲击帧""蓄力-释放""速度线""残影""停帧""九宫格""分镜"等）
@@ -3281,7 +3299,9 @@ def run_academic_summary(
 7. 教程（基于教程部辩论共识，输出三级递进教程：①零基础入门——环境配置+最小可运行demo；②进阶实战——生产环境最佳实践与避坑指南；③高级定制——自定义领域配置与专家分组策略。每步含操作命令、示例代码、预期输出）
 8. 参考文献（使用上方真实论文列表，格式：作者. (年份). 标题. 期刊。）"""
         else:
-            system_prompt = """你是一位资深学术综述撰写专家。你的任务是将多个学术辩论组的共识结果整合为一篇结构完整的学术动向综述报告。
+            system_prompt = """【重要】你必须使用中文回答。所有输出必须是中文。
+
+你是一位资深学术综述撰写专家。你的任务是将多个学术辩论组的共识结果整合为一篇结构完整的学术动向综述报告。
 
 【硬性规则】
 1. 这是学术综述，不是动画脚本或分镜表。严禁出现任何动画/视觉/分镜术语
@@ -4014,7 +4034,9 @@ def run_department_round(
                     _academic_instruction = "请从你的专业视角分析上述研究主题的学术现状、关键问题和前沿趋势。你的分析必须围绕研究主题本身展开，不要讨论检索方法论或工具流程本身。要具体、有文献支撑、有理由。"
                 else:
                     _academic_instruction = "请从你的专业视角出发，提出你对上述内容的方案和建议。要具体、有细节、有理由。不要泛泛而谈。"
-                prompt = f"""你是{dept['zh_name']}的{debater['zh_name']}辩手。
+                prompt = f"""【重要】你必须使用中文回答。所有输出必须是中文。
+
+你是{dept['zh_name']}的{debater['zh_name']}辩手。
 
 {ANIME_VISUAL_DIRECTIVE['zh']}
 
@@ -4045,7 +4067,9 @@ Propose your specific plan and recommendations from your professional perspectiv
             prev_args = "\n\n---\n\n".join(all_arguments[-3:])
             reminder = get_screenwriter_reminder(lang) if department_key == "screenwriter" else ""
             if is_zh:
-                prompt = f"""你是{dept['zh_name']}的{debater['zh_name']}辩手。
+                prompt = f"""【重要】你必须使用中文回答。所有输出必须是中文。
+
+你是{dept['zh_name']}的{debater['zh_name']}辩手。
 
 {ANIME_VISUAL_DIRECTIVE['zh']}
 
@@ -4119,7 +4143,9 @@ def run_department_consensus(
             constraint_check = '\n\n[Screenwriter Hard Constraint Check] The final plan must NOT contain new characters, new relationships, new plot sublines, or new dialogue not in the user\'s script. Any constraint-violating proposals must be removed and marked as "This suggestion was removed for exceeding screenwriter authority.".'
     
     if is_zh:
-        consensus_prompt = f"""你是{dept['zh_name']}的辩论主持人。
+        consensus_prompt = f"""【重要】你必须使用中文回答。所有输出必须是中文。
+
+你是{dept['zh_name']}的辩论主持人。
 
 以下是{dept['zh_name']}{len(dept['debaters'])}位辩手经过{rounds}轮辩论后的全部观点：
 
