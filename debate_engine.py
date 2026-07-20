@@ -1079,6 +1079,11 @@ def run_department_debate(
     is_zh = lang == "zh"
     debate_log = []
     all_arguments = []
+    _is_academic_dept = department_key in {
+        "literature_search", "methodology_review", "report_integration",
+        "programming", "tutorial", "metadata_inspector", "citation_network",
+        "data_validation", "counter_evidence", "topic_clustering", "visualization"
+    }
     
     for round_num in range(1, rounds + 1):
         for debater_key in dept["debaters"]:
