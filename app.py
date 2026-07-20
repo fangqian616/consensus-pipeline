@@ -14,6 +14,7 @@ import os
 import time
 import threading
 from datetime import datetime
+from streamlit.runtime.scriptrunner import add_script_run_ctx
 
 from pdf_exporter import markdown_to_pdf, generate_department_pdf
 from requirement.fact_checker import FactChecker
@@ -672,13 +673,6 @@ def t(key: str, **kwargs) -> str:
     return text
 
 
-# 模块级共享变量，用于后台线程与主线程通信
-# st.session_state 绑定 ScriptRunContext，daemon 线程无法写入
-_DEBATE_SHARED = {
-    "running": False,
-    "progress": 0.0,
-    "status": "",
-}
 
 def init_state():
     defaults = {
@@ -1236,18 +1230,18 @@ def run_all_debates(progress_callback=None):
 # ============ 后台线程辩论 ============
 
 def _debate_thread_worker():
-    """后台线程入口：运行 run_all_debates，通过模块级共享变量报告进度"""
+    """后台线程入口：运行 run_all_debates，通过 st.session_state 报告进度"""
     def progress_cb(pct, text):
-        _DEBATE_SHARED["progress"] = pct
-        _DEBATE_SHARED["status"] = text
+        st.session_state._debate_progress = pct
+        st.session_state._debate_status = text
     
     try:
         run_all_debates(progress_callback=progress_cb)
     except Exception as e:
-        _DEBATE_SHARED["status"] = f"❌ 辩论出错: {str(e)}"
-        _DEBATE_SHARED["progress"] = -1.0  # 错误标记
+        st.session_state._debate_status = f"❌ 辩论出错: {str(e)}"
+        st.session_state._debate_progress = -1.0  # 错误标记
     finally:
-        _DEBATE_SHARED["running"] = False
+        st.session_state._debate_running = False
 
 
 # ============ Step-by-Step Mode ============
@@ -1450,11 +1444,9 @@ def render_input_tab():
     is_zh = st.session_state.get("lang", "zh") == "zh"
     
     # 后台线程辩论进行中：显示进度条
-    if _DEBATE_SHARED.get("running", False):
-        pct = _DEBATE_SHARED.get("progress", 0.0)
-        status = _DEBATE_SHARED.get("status", "")
-        st.session_state._debate_progress = pct
-        st.session_state._debate_status = status
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
         if pct < 0:
             st.error(status)
         else:
@@ -1591,7 +1583,7 @@ def render_input_tab():
     btn_col1, btn_col2 = st.columns(2)
     
     with btn_col1:
-        debate_disabled = _DEBATE_SHARED.get("running", False)
+        debate_disabled = st.session_state.get("_debate_running", False)
         if st.button(t("start_debate"), type="secondary", use_container_width=True,
                      disabled=debate_disabled):
             st.session_state.step_phase = "idle"
@@ -1606,10 +1598,8 @@ def render_input_tab():
             st.session_state._debate_running = True
             st.session_state._debate_progress = 0.0
             st.session_state._debate_status = "正在初始化辩论..."
-            _DEBATE_SHARED["running"] = True
-            _DEBATE_SHARED["progress"] = 0.0
-            _DEBATE_SHARED["status"] = "正在初始化辩论..."
             thread = threading.Thread(target=_debate_thread_worker, daemon=True)
+            add_script_run_ctx(thread)
             st.session_state._debate_thread = thread
             thread.start()
             st.rerun()
@@ -1638,11 +1628,9 @@ def render_debate_tab():
     is_zh = st.session_state.lang == "zh"
     
     # 后台线程辩论进行中：显示进度条
-    if _DEBATE_SHARED.get("running", False):
-        pct = _DEBATE_SHARED.get("progress", 0.0)
-        status = _DEBATE_SHARED.get("status", "")
-        st.session_state._debate_progress = pct
-        st.session_state._debate_status = status
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
         if pct < 0:
             st.error(status)
         else:
@@ -1658,10 +1646,8 @@ def render_debate_tab():
         st.session_state._debate_running = True
         st.session_state._debate_progress = 0.0
         st.session_state._debate_status = "正在初始化辩论..."
-        _DEBATE_SHARED["running"] = True
-        _DEBATE_SHARED["progress"] = 0.0
-        _DEBATE_SHARED["status"] = "正在初始化辩论..."
         thread = threading.Thread(target=_debate_thread_worker, daemon=True)
+        add_script_run_ctx(thread)
         st.session_state._debate_thread = thread
         thread.start()
         st.rerun()
@@ -1905,11 +1891,9 @@ def rerun_single_dept(dept_key: str, revision_note: str):
 
 def render_cross_tab():
     # 后台线程辩论进行中：显示进度条
-    if _DEBATE_SHARED.get("running", False):
-        pct = _DEBATE_SHARED.get("progress", 0.0)
-        status = _DEBATE_SHARED.get("status", "")
-        st.session_state._debate_progress = pct
-        st.session_state._debate_status = status
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
         if pct < 0:
             st.error(status)
         else:
@@ -1958,11 +1942,9 @@ def render_output_tab():
     is_zh = st.session_state.lang == "zh"
     
     # 后台线程辩论进行中：显示进度条
-    if _DEBATE_SHARED.get("running", False):
-        pct = _DEBATE_SHARED.get("progress", 0.0)
-        status = _DEBATE_SHARED.get("status", "")
-        st.session_state._debate_progress = pct
-        st.session_state._debate_status = status
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
         if pct < 0:
             st.error(status)
         else:
@@ -2611,11 +2593,9 @@ def render_proofread_tab():
     is_zh = st.session_state.lang == "zh"
     
     # 后台线程辩论进行中：显示进度条
-    if _DEBATE_SHARED.get("running", False):
-        pct = _DEBATE_SHARED.get("progress", 0.0)
-        status = _DEBATE_SHARED.get("status", "")
-        st.session_state._debate_progress = pct
-        st.session_state._debate_status = status
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
         if pct < 0:
             st.error(status)
         else:
@@ -2889,11 +2869,9 @@ def render_compare_tab():
     is_zh = st.session_state.lang == "zh"
     
     # 后台线程辩论进行中：显示进度条
-    if _DEBATE_SHARED.get("running", False):
-        pct = _DEBATE_SHARED.get("progress", 0.0)
-        status = _DEBATE_SHARED.get("status", "")
-        st.session_state._debate_progress = pct
-        st.session_state._debate_status = status
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
         if pct < 0:
             st.error(status)
         else:
@@ -2999,11 +2977,9 @@ def render_market_tab():
     is_zh = st.session_state.lang == "zh"
     
     # 后台线程辩论进行中：显示进度条
-    if _DEBATE_SHARED.get("running", False):
-        pct = _DEBATE_SHARED.get("progress", 0.0)
-        status = _DEBATE_SHARED.get("status", "")
-        st.session_state._debate_progress = pct
-        st.session_state._debate_status = status
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
         if pct < 0:
             st.error(status)
         else:
@@ -3434,11 +3410,9 @@ def render_config_tab():
     is_zh = st.session_state.lang == "zh"
 
     # 后台线程辩论进行中：显示进度条
-    if _DEBATE_SHARED.get("running", False):
-        pct = _DEBATE_SHARED.get("progress", 0.0)
-        status = _DEBATE_SHARED.get("status", "")
-        st.session_state._debate_progress = pct
-        st.session_state._debate_status = status
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
         if pct < 0:
             st.error(status)
         else:
@@ -3773,11 +3747,9 @@ def render_requirement_tab():
     is_zh = st.session_state.get("lang", "zh") == "zh"
     
     # 后台线程辩论进行中：显示进度条
-    if _DEBATE_SHARED.get("running", False):
-        pct = _DEBATE_SHARED.get("progress", 0.0)
-        status = _DEBATE_SHARED.get("status", "")
-        st.session_state._debate_progress = pct
-        st.session_state._debate_status = status
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
         if pct < 0:
             st.error(status)
         else:
