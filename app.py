@@ -987,32 +987,48 @@ def build_dept_input(dept_key: str) -> str:
     
     # P1: Screenwriter department
     if dept_key == "screenwriter":
-        return f"剧本：\n{script}\n\n场景风格：\n{positive}\n\n角色参考：\n{chars}"
+        if is_zh:
+            return f"剧本：\n{script}\n\n场景风格：\n{positive}\n\n角色参考：\n{chars}"
+        else:
+            return f"Script:\n{script}\n\nScene Style:\n{positive}\n\nCharacter References:\n{chars}"
     
     # P2: Spatial planning (based on screenwriter output)
     elif dept_key == "spatial":
         sw = dept_results.get("screenwriter", {}).get("consensus", script)
-        return f"编剧部细节填充版剧本：\n{sw}\n\n原始场景风格：\n{positive}"
+        if is_zh:
+            return f"编剧部细节填充版剧本：\n{sw}\n\n原始场景风格：\n{positive}"
+        else:
+            return f"Screenwriter Detailed Script:\n{sw}\n\nOriginal Scene Style:\n{positive}"
     
     # P3: Visual four departments (based on screenwriter + spatial output)
     elif dept_key == "storyboard":
         sw = dept_results.get("screenwriter", {}).get("consensus", script)
         sp = dept_results.get("spatial", {}).get("consensus", "")
-        return f"编剧部细节填充版剧本：\n{sw}\n\n空间板块布局：\n{sp}\n\n场景风格：\n{positive}"
+        if is_zh:
+            return f"编剧部细节填充版剧本：\n{sw}\n\n空间板块布局：\n{sp}\n\n场景风格：\n{positive}"
+        else:
+            return f"Screenwriter Detailed Script:\n{sw}\n\nSpatial Layout:\n{sp}\n\nScene Style:\n{positive}"
     
     elif dept_key in ("dp", "lighting", "vfx"):
-        parts = [f"编剧部：\n{dept_results.get('screenwriter', {}).get('consensus', script)}"]
+        parts = []
+        sw_label = "编剧部：" if is_zh else "Screenwriter:"
+        parts.append(f"{sw_label}\n{dept_results.get('screenwriter', {}).get('consensus', script)}")
         if "spatial" in dept_results:
-            parts.append(f"空间板块：\n{dept_results['spatial']['consensus']}")
+            sp_label = "空间板块：" if is_zh else "Spatial:"
+            parts.append(f"{sp_label}\n{dept_results['spatial']['consensus']}")
         if "storyboard" in dept_results:
-            parts.append(f"分镜部：\n{dept_results['storyboard']['consensus']}")
+            sb_label = "分镜部：" if is_zh else "Storyboard:"
+            parts.append(f"{sb_label}\n{dept_results['storyboard']['consensus']}")
         return "\n\n---\n\n".join(parts)
     
     # P4: Sound + Editing
     elif dept_key == "sound":
-        parts = [f"编剧部：\n{dept_results.get('screenwriter', {}).get('consensus', script)}"]
+        parts = []
+        sw_label = "编剧部：" if is_zh else "Screenwriter:"
+        parts.append(f"{sw_label}\n{dept_results.get('screenwriter', {}).get('consensus', script)}")
         if "storyboard" in dept_results:
-            parts.append(f"分镜部：\n{dept_results['storyboard']['consensus']}")
+            sb_label = "分镜部：" if is_zh else "Storyboard:"
+            parts.append(f"{sb_label}\n{dept_results['storyboard']['consensus']}")
         return "\n\n---\n\n".join(parts)
     
     elif dept_key == "editing":
@@ -1021,7 +1037,8 @@ def build_dept_input(dept_key: str) -> str:
             if pk in dept_results:
                 p = DEPARTMENTS.get(pk, {})
                 pn = p["zh_name"] if is_zh else p["en_name"]
-                parts.append(f"{pn}共识：\n{dept_results[pk]['consensus']}")
+                consensus_label = "共识" if is_zh else "Consensus"
+                parts.append(f"{pn}{consensus_label}：\n{dept_results[pk]['consensus']}" if is_zh else f"{pn} {consensus_label}:\n{dept_results[pk]['consensus']}")
         return "\n\n---\n\n".join(parts)
     
     else:
