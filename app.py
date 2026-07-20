@@ -16,7 +16,7 @@ import threading
 from datetime import datetime
 from streamlit.runtime.scriptrunner import add_script_run_ctx
 
-from pdf_exporter import markdown_to_pdf, generate_department_pdf
+
 from requirement.fact_checker import FactChecker
 
 from debate_engine import (
@@ -2231,7 +2231,7 @@ def _render_academic_output(final, is_zh):
                     st.markdown(cr_content)
 
 def _render_animation_output(final, is_zh):
-    """Animation mode output: storyboard + video prompt + spatial diagram + asset checklist + PDF + carry-forward + re-roll"""
+    """Animation mode output: storyboard + video prompt + spatial diagram + asset checklist + carry-forward + re-roll"""
     # Storyboard
     st.subheader(t("output_storyboard"))
     storyboard_text = final.get("storyboard_prompt", "")
@@ -2373,82 +2373,7 @@ def _render_animation_output(final, is_zh):
     
     st.divider()
     
-    # PDF Export
-    st.divider()
-    st.subheader("📄 " + ("PDF报告导出" if is_zh else "Export PDF Reports"))
-    st.caption("将所有部门辩论产出导出为PDF文件" if is_zh else "Export all department debate outputs as PDF files")
     
-    dept_results = st.session_state.get("dept_results", {})
-    
-    if dept_results:
-        pdf_col1, pdf_col2 = st.columns(2)
-        
-        with pdf_col1:
-            all_md_parts = []
-            for dept_key, dept_data in dept_results.items():
-                dept_name = dept_data.get("zh_name", dept_key)
-                consensus = dept_data.get("consensus", "")
-                if consensus:
-                    all_md_parts.append(f"## {dept_name}\n\n{consensus}")
-            
-            if all_md_parts:
-                all_md = "# 辩论产出汇总报告\n\n" + "\n\n---\n\n".join(all_md_parts)
-                
-                import tempfile as _tf
-                _pdf_dir = _tf.mkdtemp()
-                _pdf_path = os.path.join(_pdf_dir, "辩论产出汇总报告.pdf")
-                try:
-                    markdown_to_pdf(all_md, _pdf_path, title="辩论产出汇总报告")
-                    with open(_pdf_path, "rb") as _pf:
-                        _pdf_bytes = _pf.read()
-                    st.download_button(
-                        "📥 " + ("下载全部辩论PDF" if is_zh else "Download Full Debate PDF"),
-                        data=_pdf_bytes,
-                        file_name="辩论产出汇总报告.pdf",
-                        mime="application/pdf",
-                        use_container_width=True,
-                        key="dl_full_pdf",
-                    )
-                except Exception as _e:
-                    st.warning(f"PDF generation failed: {_e}")
-        
-        with pdf_col2:
-            dept_pdf_options = []
-            for dept_key, dept_data in dept_results.items():
-                dept_name = dept_data.get("zh_name", dept_key)
-                consensus = dept_data.get("consensus", "")
-                if consensus:
-                    dept_pdf_options.append((dept_key, dept_name, consensus))
-            
-            if dept_pdf_options:
-                selected_dept = st.selectbox(
-                    "选择部门" if is_zh else "Select Department",
-                    options=range(len(dept_pdf_options)),
-                    format_func=lambda i: dept_pdf_options[i][1],
-                    key="pdf_dept_select",
-                )
-                
-                if st.button("📄 " + ("生成该部门PDF" if is_zh else "Generate Dept PDF"), key="gen_dept_pdf_btn"):
-                    _dept_key, _dept_name, _dept_md = dept_pdf_options[selected_dept]
-                    import tempfile as _tf
-                    _pdf_dir = _tf.mkdtemp()
-                    _pdf_path = os.path.join(_pdf_dir, f"{_dept_name}_报告.pdf")
-                    try:
-                        markdown_to_pdf(f"# {_dept_name}\n\n{_dept_md}", _pdf_path, title=f"{_dept_name} 辩论报告")
-                        with open(_pdf_path, "rb") as _pf:
-                            _pdf_bytes = _pf.read()
-                        st.download_button(
-                            f"📥 {_dept_name}_报告.pdf",
-                            data=_pdf_bytes,
-                            file_name=f"{_dept_name}_报告.pdf",
-                            mime="application/pdf",
-                            use_container_width=True,
-                            key=f"dl_dept_pdf_{_dept_key}",
-                        )
-                    except Exception as _e:
-                        st.warning(f"PDF generation failed: {_e}")
-    else:
-        st.info("需要先完成部门辩论才能导出PDF" if is_zh else "Complete department debates first")
     
     # Carry-forward document
     st.subheader(t("carry_forward_label"))
@@ -2677,32 +2602,7 @@ def render_proofread_tab():
                         if r.notes:
                             st.write(f"**Notes**: {r.notes}")
                 
-                # PDF export
-                import tempfile as _tf
-                _pdf_dir = _tf.mkdtemp()
-                _pdf_path = os.path.join(_pdf_dir, "fact_check_report.pdf")
-                try:
-                    fc_md = f"# 事实校验报告\n\n{report.summary}\n\n"
-                    for i, r in enumerate(report.results):
-                        fc_md += f"## 结论{i+1}\n\n{r.claim}\n\n- 状态: {r.status}\n- 置信度: {r.confidence:.0%}\n"
-                        if r.supporting_dois:
-                            fc_md += f"- 支持DOI: {', '.join(r.supporting_dois)}\n"
-                        if r.contradicting_dois:
-                            fc_md += f"- 反对DOI: {', '.join(r.contradicting_dois)}\n"
-                        fc_md += "\n"
-                    markdown_to_pdf(fc_md, _pdf_path, title="事实校验报告")
-                    with open(_pdf_path, "rb") as _pf:
-                        _pdf_bytes = _pf.read()
-                    st.download_button(
-                        "📥 " + ("下载校验报告PDF" if is_zh else "Download Fact Check PDF"),
-                        data=_pdf_bytes,
-                        file_name="fact_check_report.pdf",
-                        mime="application/pdf",
-                        use_container_width=True,
-                        key="dl_fact_check_pdf",
-                    )
-                except Exception as _e:
-                    st.warning(f"PDF generation failed: {_e}")
+                
         else:
             st.info("需要先完成部门辩论才能进行事实校验" if is_zh else "Complete department debates first")
     
@@ -4267,43 +4167,7 @@ def render_requirement_tab():
                     save_profile(preset_name, final_config)
                     st.success(("预设已保存！" if is_zh else "Preset saved!"))
 
-            # ===== Research report PDF export =====
-            with st.expander("📄 " + ("导出调研报告PDF" if is_zh else "Export Research PDF"), expanded=False):
-                if st.button("📄 " + ("生成调研报告PDF" if is_zh else "Generate Research PDF"), key="req_gen_pdf_btn"):
-                    # Collect Phase 0-3 outputs
-                    req_doc = st.session_state.get("req_document")
-                    req_structured = st.session_state.get("req_structured")
-                    req_discussion = st.session_state.get("req_discussion")
-                    
-                    pdf_parts = []
-                    if req_doc:
-                        pdf_parts.append(f"## 需求调研记录\n\n{req_doc.raw_text if hasattr(req_doc, 'raw_text') else str(req_doc)}")
-                    if req_structured:
-                        pdf_parts.append(f"## 结构化需求\n\n{req_structured.to_markdown() if hasattr(req_structured, 'to_markdown') else str(req_structured)}")
-                    if req_discussion:
-                        pdf_parts.append(f"## 讨论组审议\n\n{req_discussion.to_markdown() if hasattr(req_discussion, 'to_markdown') else str(req_discussion)}")
-                    
-                    if pdf_parts:
-                        import tempfile as _tf
-                        _pdf_dir = _tf.mkdtemp()
-                        _pdf_path = os.path.join(_pdf_dir, "需求调研报告.pdf")
-                        _full_md = "# 需求调研报告\n\n" + "\n\n---\n\n".join(pdf_parts)
-                        try:
-                            markdown_to_pdf(_full_md, _pdf_path, title="需求调研报告")
-                            with open(_pdf_path, "rb") as _pf:
-                                _pdf_bytes = _pf.read()
-                            st.download_button(
-                                "📥 " + ("下载调研报告PDF" if is_zh else "Download Research PDF"),
-                                data=_pdf_bytes,
-                                file_name="需求调研报告.pdf",
-                                mime="application/pdf",
-                                use_container_width=True,
-                                key="dl_req_pdf",
-                            )
-                        except Exception as _e:
-                            st.warning(f"PDF generation failed: {_e}")
-                    else:
-                        st.warning("暂无调研内容可导出" if is_zh else "No research content to export")
+            
 
         else:
             st.warning("⚠️ " + ("请先完成Phase 3的配置推荐" if is_zh else "Please complete Phase 3 recommendation first"))
