@@ -2441,6 +2441,8 @@ Shot 02（时间：2-4s）：
     else:
         storyboard_prompt = f"""You are the final summary AI. Based on all department debate results, generate STATIC KEYFRAME storyboards for AI image generation.
 
+IMPORTANT: You MUST respond in English only. All output must be in English.
+
 [STORYBOARD DEFINITION] The storyboard is a collection of static keyframes—each Shot is a frozen photograph, NOT an animation script.
 - Write "at this camera position, this angle, this lighting, what expression the character has, what action is frozen, who they interact with, what the background is"
 - Do NOT write any dynamic descriptions (e.g. "character walks from A to B", "camera moves in from lower right")
@@ -2766,6 +2768,8 @@ SHOT XX
 6. 只输出视频提示词本身，不要加任何解释性文字"""
     else:
         video_prompt = f"""You are the final summary AI. Based on all department debate results, generate per-shot video prompts.
+
+IMPORTANT: You MUST respond in English only. All output must be in English.
 
 [VIDEO PROMPT DEFINITION] Video prompts are the complete expansion layer of the storyboard:
 - [Key Frame]: The static keyframe description copied directly from the corresponding storyboard Shot
@@ -3316,6 +3320,8 @@ def run_academic_summary(
         if has_papers:
             system_prompt = """You are a senior academic review writing expert. Your task is to synthesize multi-group debate consensus with real literature search results into a structured academic trend review report.
 
+IMPORTANT: You MUST respond in English only. All output must be in English.
+
 [HARD RULES]
 1. This is an ACADEMIC REVIEW, NOT an animation script or storyboard. Absolutely no animation/visual/storyboard terminology
 2. Each section must have substantive content paragraphs (at least 200 words per section), not bare bullet points
@@ -3356,6 +3362,8 @@ Based on the above debate content and real literature, write a structured academ
 8. References (use the real paper list above, format: Authors. (Year). Title. Journal.)"""
         else:
             system_prompt = """You are a senior academic review writing expert. Your task is to synthesize multi-group debate consensus into a structured academic trend review report.
+
+IMPORTANT: You MUST respond in English only. All output must be in English.
 
 [HARD RULES]
 1. This is an ACADEMIC REVIEW, NOT an animation script or storyboard. Absolutely no animation/visual/storyboard terminology
