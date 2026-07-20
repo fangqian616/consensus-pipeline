@@ -1121,6 +1121,8 @@ def run_department_debate(
                         _academic_instruction_en = "Propose your specific plan and recommendations from your professional perspective. Be specific, detailed, and reasoned. No vague statements."
                     prompt = f"""You are the {debater['en_name']} debater of the {dept['en_name']} Department.
 
+IMPORTANT: You MUST respond in English only. All output must be in English.
+
 {ANIME_VISUAL_DIRECTIVE['en']}
 
 {debater['en_style']}
@@ -1151,6 +1153,8 @@ Current discussion topic:
 这是第{round_num}轮辩论。请回应其他辩手的观点——你同意什么？反对什么？你的方案和他们的方案如何取舍？如果可以融合，怎么融合？"""
                 else:
                     prompt = f"""You are the {debater['en_name']} debater of the {dept['en_name']} Department.
+
+IMPORTANT: You MUST respond in English only. All output must be in English.
 
 {ANIME_VISUAL_DIRECTIVE['en']}
 
@@ -1209,6 +1213,8 @@ This is Round {round_num}. Respond to other debaters—what do you agree with? D
 {template}"""
     else:
         consensus_prompt = f"""You are the debate moderator for the {dept['en_name']} Department.
+
+IMPORTANT: You MUST respond in English only. All output must be in English.
 
 Below are all arguments from {len(dept["debaters"])} debaters after {rounds} rounds:
 
@@ -4047,6 +4053,8 @@ Propose your specific plan and recommendations from your professional perspectiv
             else:
                 prompt = f"""You are the {debater['en_name']} debater of the {dept['en_name']} Department.
 
+IMPORTANT: You MUST respond in English only. All output must be in English.
+
 {ANIME_VISUAL_DIRECTIVE['en']}
 
 {debater['en_style']}
@@ -4120,6 +4128,8 @@ def run_department_consensus(
 {template}"""
     else:
         consensus_prompt = f"""You are the debate moderator for the {dept['en_name']} Department.
+
+IMPORTANT: You MUST respond in English only. All output must be in English.
 
 Below are all arguments from {len(dept["debaters"])} debaters after {rounds} rounds:
 
