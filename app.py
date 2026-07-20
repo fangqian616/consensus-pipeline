@@ -12,6 +12,7 @@ import streamlit.components.v1 as st_components
 import json
 import os
 import time
+import threading
 from datetime import datetime
 
 from pdf_exporter import markdown_to_pdf, generate_department_pdf
@@ -715,6 +716,10 @@ def init_state():
         "current_stats": None,  # 当前运行的token统计
         "current_start_time": None,  # 当前运行的开始时间
         "current_end_time": None,  # 当前运行的结束时间
+        "_debate_running": False,  # 后台线程辩论进行中
+        "_debate_thread": None,  # 后台辩论线程句柄
+        "_debate_progress": 0.0,  # 后台辩论进度
+        "_debate_status": "",  # 后台辩论状态文本
         # v2.4 Market
         "market_result": None,  # Market mode结果
         "market_num_candidates": 3,
@@ -1043,8 +1048,12 @@ def build_dept_input(dept_key: str) -> str:
 
 # ============ One-Click Full Debate ============
 
-def run_all_debates():
-    """Execute full debate flow (non-step mode)"""
+def run_all_debates(progress_callback=None):
+    """Execute full debate flow (non-step mode).
+    
+    progress_callback: Optional callable(progress: float, text: str) for background thread mode.
+    When provided, all progress updates go through this callback instead of st.progress().
+    """
     is_zh = st.session_state.lang == "zh"
     api_url = st.session_state.api_url
     api_key = st.session_state.api_key
@@ -1067,7 +1076,10 @@ def run_all_debates():
     
     # === Single Agent Baseline Mode ===
     if arch_mode == "single_agent":
-        progress = st.progress(0, text=t("debate_progress"))
+        if progress_callback:
+            progress_callback(0.0, t("debate_progress"))
+        else:
+            progress = st.progress(0, text=t("debate_progress"))
         result = run_single_agent(
             user_script=script,
             positive_prompt=positive,
@@ -1080,13 +1092,19 @@ def run_all_debates():
         st.session_state.debate_completed = True
         st.session_state.current_end_time = time.time()
         autosave_result("normal_result", result)
-        progress.progress(1.0, text="✅ " + ("单Agent基线生成完成" if is_zh else "Single agent baseline complete"))
+        if progress_callback:
+            progress_callback(1.0, "✅ " + ("单Agent基线生成完成" if is_zh else "Single agent baseline complete"))
+        else:
+            progress.progress(1.0, text="✅ " + ("单Agent基线生成完成" if is_zh else "Single agent baseline complete"))
         return
     
     # === Pipeline / Expert Pool Mode ===
     dept_results = {}
     total_steps = len(DEPT_ORDER) * rounds * 3
-    progress = st.progress(0, text=t("debate_progress"))
+    if progress_callback:
+        progress_callback(0.0, t("debate_progress"))
+    else:
+        progress = st.progress(0, text=t("debate_progress"))
     step = 0
     
     if arch_mode == "expert_pool":
@@ -1116,12 +1134,17 @@ def run_all_debates():
                 dn = d["zh_name"] if is_zh else d["en_name"]
                 if debater == "consensus":
                     # Consensus generation phase
-                    progress.progress(min(step / total_steps, 0.99), text=f"🔄 {dn} - 正在生成部门总结（可能需要2-5分钟）...")
+                    pct = min(step / total_steps, 0.99)
+                    text = f"🔄 {dn} - 正在生成部门总结（可能需要2-5分钟）..."
                 else:
                     step += 1
                     dn2 = d["debaters"][debater]["zh_name"] if is_zh else d["debaters"][debater]["en_name"]
                     pct = min(step / total_steps, 0.99)
-                    progress.progress(pct, text=f"{dn} 第{rn}/{total_r}轮 - {dn2}")
+                    text = f"{dn} 第{rn}/{total_r}轮 - {dn2}"
+                if progress_callback:
+                    progress_callback(pct, text)
+                else:
+                    progress.progress(pct, text)
         
             result = run_department_debate(
                 department_key=dept_key,
@@ -1196,7 +1219,27 @@ def run_all_debates():
     st.session_state.debate_completed = True
     st.session_state.current_end_time = time.time()
     autosave_result("normal_result", final)
-    progress.progress(1.0, text="✅ " + ("全部辩论完成！" if is_zh else "All debates complete!"))
+    if progress_callback:
+        progress_callback(1.0, "✅ " + ("全部辩论完成！" if is_zh else "All debates complete!"))
+    else:
+        progress.progress(1.0, text="✅ " + ("全部辩论完成！" if is_zh else "All debates complete!"))
+
+
+# ============ 后台线程辩论 ============
+
+def _debate_thread_worker():
+    """后台线程入口：运行 run_all_debates，通过 session_state 报告进度"""
+    def progress_cb(pct, text):
+        st.session_state._debate_progress = pct
+        st.session_state._debate_status = text
+    
+    try:
+        run_all_debates(progress_callback=progress_cb)
+    except Exception as e:
+        st.session_state._debate_status = f"❌ 辩论出错: {str(e)}"
+        st.session_state._debate_progress = -1.0  # 错误标记
+    finally:
+        st.session_state._debate_running = False
 
 
 # ============ Step-by-Step Mode ============
@@ -1398,6 +1441,19 @@ def step_run_summary():
 def render_input_tab():
     is_zh = st.session_state.get("lang", "zh") == "zh"
     
+    # 后台线程辩论进行中：显示进度条
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
+        if pct < 0:
+            st.error(status)
+        else:
+            st.progress(pct, text=status)
+            st.info("🔄 辩论后台运行中，可自由切换Tab，不会中断")
+            time.sleep(2)
+            st.rerun()
+        return
+    
     # Sync pending auto-fill content (from requirement research Phase 4)
     _pending = st.session_state.pop("_pending_script_fill", None)
     if _pending:
@@ -1525,7 +1581,9 @@ def render_input_tab():
     btn_col1, btn_col2 = st.columns(2)
     
     with btn_col1:
-        if st.button(t("start_debate"), type="secondary", use_container_width=True):
+        debate_disabled = st.session_state.get("_debate_running", False)
+        if st.button(t("start_debate"), type="secondary", use_container_width=True,
+                     disabled=debate_disabled):
             st.session_state.step_phase = "idle"
             st.session_state.pipeline_mode = None  # will be auto-detected by _detect_pipeline_mode
             st.session_state.dept_results = {}
@@ -1534,7 +1592,14 @@ def render_input_tab():
             st.session_state.debate_completed = False
             st.session_state.proofread_result = None
             st.session_state.spatial_review_result = None
-            run_all_debates()
+            # 启动后台线程，避免切换Tab中断
+            st.session_state._debate_running = True
+            st.session_state._debate_progress = 0.0
+            st.session_state._debate_status = "正在初始化辩论..."
+            thread = threading.Thread(target=_debate_thread_worker, daemon=True)
+            st.session_state._debate_thread = thread
+            thread.start()
+            st.rerun()
     
     with btn_col2:
         if st.button(t("start_step"), type="primary", use_container_width=True):
@@ -1559,15 +1624,29 @@ def render_input_tab():
 def render_debate_tab():
     is_zh = st.session_state.lang == "zh"
     
+    # 后台线程辩论进行中：显示进度条
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
+        if pct < 0:
+            st.error(status)
+        else:
+            st.progress(pct, text=status)
+            st.info("🔄 辩论后台运行中，可自由切换Tab，不会中断")
+            time.sleep(2)
+            st.rerun()
+        return
+    
     # Auto-start debate after Phase 4 confirmation
     if st.session_state.get("_trigger_debate_run"):
         st.session_state._trigger_debate_run = False
-        if not st.session_state.get("debate_running"):
-            st.session_state.debate_running = True
-            with st.spinner("🚀 " + ("正在自动启动辩论..." if is_zh else "Auto-starting debate...")):
-                run_all_debates()
-            st.session_state.debate_running = False
-            st.rerun()
+        st.session_state._debate_running = True
+        st.session_state._debate_progress = 0.0
+        st.session_state._debate_status = "正在初始化辩论..."
+        thread = threading.Thread(target=_debate_thread_worker, daemon=True)
+        st.session_state._debate_thread = thread
+        thread.start()
+        st.rerun()
     
     if st.session_state.step_mode and st.session_state.step_phase != "idle":
         render_step_mode()
@@ -1807,6 +1886,19 @@ def rerun_single_dept(dept_key: str, revision_note: str):
 # ============ Cross-Debate Tab ============
 
 def render_cross_tab():
+    # 后台线程辩论进行中：显示进度条
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
+        if pct < 0:
+            st.error(status)
+        else:
+            st.progress(pct, text=status)
+            st.info("🔄 辩论后台运行中，可自由切换Tab，不会中断")
+            time.sleep(2)
+            st.rerun()
+        return
+    
     cross_results = st.session_state.get("cross_results", [])
     is_zh = st.session_state.lang == "zh"
     
@@ -1844,6 +1936,20 @@ def render_cross_tab():
 
 def render_output_tab():
     is_zh = st.session_state.lang == "zh"
+    
+    # 后台线程辩论进行中：显示进度条
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
+        if pct < 0:
+            st.error(status)
+        else:
+            st.progress(pct, text=status)
+            st.info("🔄 辩论后台运行中，可自由切换Tab，不会中断")
+            time.sleep(2)
+            st.rerun()
+        return
+    
     final = st.session_state.get("final_output", {})
     
     # Detect mode
@@ -2481,6 +2587,20 @@ def _render_smart_reroll(is_zh, is_academic=False):
 
 def render_proofread_tab():
     is_zh = st.session_state.lang == "zh"
+    
+    # 后台线程辩论进行中：显示进度条
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
+        if pct < 0:
+            st.error(status)
+        else:
+            st.progress(pct, text=status)
+            st.info("🔄 辩论后台运行中，可自由切换Tab，不会中断")
+            time.sleep(2)
+            st.rerun()
+        return
+    
     # ===== Fact Check =====
     with st.expander("🔬 " + ("事实校验（Phase 7.5）" if is_zh else "Fact Check (Phase 7.5)"), expanded=False):
         st.caption("对共识结论进行交叉验证，锚定文献DOI" if is_zh else "Cross-validate consensus points and anchor DOIs")
@@ -2743,6 +2863,20 @@ def render_proofread_tab():
 def render_compare_tab():
     """Render run comparison panel"""
     is_zh = st.session_state.lang == "zh"
+    
+    # 后台线程辩论进行中：显示进度条
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
+        if pct < 0:
+            st.error(status)
+        else:
+            st.progress(pct, text=status)
+            st.info("🔄 辩论后台运行中，可自由切换Tab，不会中断")
+            time.sleep(2)
+            st.rerun()
+        return
+    
     run_history = st.session_state.get("run_history", [])
     
     st.subheader(t("compare_title"))
@@ -2837,6 +2971,19 @@ def render_compare_tab():
 def render_market_tab():
     """Render Market Tab"""
     is_zh = st.session_state.lang == "zh"
+    
+    # 后台线程辩论进行中：显示进度条
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
+        if pct < 0:
+            st.error(status)
+        else:
+            st.progress(pct, text=status)
+            st.info("🔄 辩论后台运行中，可自由切换Tab，不会中断")
+            time.sleep(2)
+            st.rerun()
+        return
     
     st.subheader(t("market_title"))
     st.caption(t("market_subtitle"))
@@ -3258,6 +3405,19 @@ def render_config_tab():
     """🧠 Smart Grouping — Consensus Pipeline v3.0 Entry"""
     is_zh = st.session_state.lang == "zh"
 
+    # 后台线程辩论进行中：显示进度条
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
+        if pct < 0:
+            st.error(status)
+        else:
+            st.progress(pct, text=status)
+            st.info("🔄 辩论后台运行中，可自由切换Tab，不会中断")
+            time.sleep(2)
+            st.rerun()
+        return
+
     # Ensure workgroup_config is initialized
     if not st.session_state.get("workgroup_config"):
         st.session_state.workgroup_config = get_current_config() or {}
@@ -3581,6 +3741,19 @@ def render_config_tab():
 def render_requirement_tab():
     """Render requirement research Tab — Phase 0~4 complete flow"""
     is_zh = st.session_state.get("lang", "zh") == "zh"
+    
+    # 后台线程辩论进行中：显示进度条
+    if st.session_state.get("_debate_running", False):
+        pct = st.session_state.get("_debate_progress", 0.0)
+        status = st.session_state.get("_debate_status", "")
+        if pct < 0:
+            st.error(status)
+        else:
+            st.progress(pct, text=status)
+            st.info("🔄 辩论后台运行中，可自由切换Tab，不会中断")
+            time.sleep(2)
+            st.rerun()
+        return
     
     st.header("🔬 " + ("需求调研" if is_zh else "Requirement Research"))
     st.caption("v4.0 " + ("对话式需求调研 → 结构化 → 讨论组 → 配置推荐 → 审核" if is_zh else "Interview → Structure → Discussion → Recommend → Review"))
