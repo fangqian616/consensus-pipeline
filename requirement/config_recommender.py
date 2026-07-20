@@ -300,13 +300,12 @@ class ConfigRecommender:
 
         # Select base template
         if domain_code == "academic_research":
-            # v0.8.0: Use topic-specific department hints from structurer when available
-            # (structurer now generates research sub-topics via LLM instead of hardcoded
-            # pipeline module names like "文献检索组"/"元数据精查组")
-            if requirement.department_hints:
-                base_config = self._generate_default_config(requirement)
-            else:
-                base_config = self._deep_copy_config(ACADEMIC_DEPARTMENT_TEMPLATE)
+            # Always use ACADEMIC_DEPARTMENT_TEMPLATE as base for academic mode.
+            # department_hints are topic suggestions, NOT department replacements.
+            # Using _generate_default_config here would lose academic department keys
+            # (literature_search, methodology_review, etc.), causing _detect_pipeline_mode
+            # to return "animation" and producing storyboards instead of research reports.
+            base_config = self._deep_copy_config(ACADEMIC_DEPARTMENT_TEMPLATE)
         else:
             # Try loading from template file
             base_config = _load_template(f"{domain_code}_departments")
