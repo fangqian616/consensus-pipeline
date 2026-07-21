@@ -2159,7 +2159,7 @@ def _render_academic_output(final, is_zh):
                         st.download_button(
                             f"📥 {_cf}",
                             data=_bf.read(),
-                            file_name=_cf,
+                            file_name=_safe_filename(_cf),
                             mime="image/png" if _cf.endswith(".png") else "image/svg+xml",
                             use_container_width=True,
                             key=f"dl_chart_{_i}",
