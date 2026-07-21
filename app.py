@@ -20,11 +20,12 @@ from requirement.fact_checker import FactChecker
 from debate_engine import (
     DEPARTMENTS, P2_CROSS_DEBATES, P5_CROSS_DEBATES, CROSS_DEBATES,
     STRUCTURED_TEMPLATES, PROOFREAD_DEPARTMENTS, DEPT_ORDER,
+    ACADEMIC_PROOFREAD_DEPARTMENTS,
     MODEL_PROFILES, ARCHITECTURE_MODES,
     MARKET_CONFIG,
     apply_config, get_current_config, get_current_config_name,
     run_department_debate, run_cross_debate, run_summary, run_academic_summary,
-    run_spatial_review, run_proofreading, run_spatial_diagram,
+    run_spatial_review, run_proofreading, run_academic_proofreading, run_spatial_diagram,
     run_auto_revision, run_director_revision, run_output_edit,
     run_smart_reroll,
     run_department_round, run_department_consensus,
@@ -2472,9 +2473,13 @@ def render_proofread_tab():
         for dept_key, dept_data in dept_results.items():
             consensus = dept_data.get("consensus", "")
             if consensus:
-                # Split consensus into individual points
-                points = [p.strip() for p in consensus.split("\n") if p.strip() and not p.strip().startswith("#")]
-                all_consensus.extend(points[:3])  # 每个部门取前3条
+                # Split consensus into substantive paragraphs (skip headers and empty lines)
+                paragraphs = [p.strip() for p in consensus.split("\n\n") if p.strip() and not p.strip().startswith("#")]
+                # Take first paragraph from each department as primary claim
+                for para in paragraphs[:2]:
+                    # Only keep paragraphs that look like actual claims (at least 20 chars)
+                    if len(para) >= 20:
+                        all_consensus.append(para)
         
         if all_consensus:
             st.info(f"Extracted {len(all_consensus)} claims for verification")
@@ -2545,22 +2550,41 @@ def render_proofread_tab():
         st.info(t("proofread_not_ready"))
         return
     
+    # Detect pipeline mode for proofreading
+    pipeline_mode = _detect_pipeline_mode()
+    is_academic = pipeline_mode == "academic"
+    
     st.subheader(t("proofread_result"))
-    st.caption("P7: " + ("空间/分镜/摄影/剪辑四部门审查" if is_zh else "Spatial/Storyboard/DP/Editing review"))
+    if is_academic:
+        st.caption("P7: " + ("报告整合/程序/教程三部门审查" if is_zh else "Report Integration/Programming/Tutorial review"))
+    else:
+        st.caption("P7: " + ("空间/分镜/摄影/剪辑四部门审查" if is_zh else "Spatial/Storyboard/DP/Editing review"))
     
     if st.button(t("proofread_run"), type="primary", use_container_width=True, key="run_proofread"):
         dept_results = st.session_state.get("dept_results", {})
         with st.spinner(t("proofread_running")):
-            result = run_proofreading(
-                storyboard=final.get("storyboard_prompt", ""),
-                video_prompt=final.get("video_prompt", ""),
-                all_consensus={k: v["consensus"] for k, v in dept_results.items()},
-                api_url=st.session_state.api_url,
-                api_key=st.session_state.api_key,
-                model=st.session_state.model_name,
-                lang=st.session_state.lang,
-                stats=st.session_state.get("current_stats"),
-            )
+            if is_academic:
+                report_text = final.get("final_report", "") or final.get("consensus_report", "") or ""
+                result = run_academic_proofreading(
+                    final_report=report_text,
+                    all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+                    api_url=st.session_state.api_url,
+                    api_key=st.session_state.api_key,
+                    model=st.session_state.model_name,
+                    lang=st.session_state.lang,
+                    stats=st.session_state.get("current_stats"),
+                )
+            else:
+                result = run_proofreading(
+                    storyboard=final.get("storyboard_prompt", ""),
+                    video_prompt=final.get("video_prompt", ""),
+                    all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+                    api_url=st.session_state.api_url,
+                    api_key=st.session_state.api_key,
+                    model=st.session_state.model_name,
+                    lang=st.session_state.lang,
+                    stats=st.session_state.get("current_stats"),
+                )
             st.session_state.proofread_result = result
             st.rerun()
     
@@ -2572,15 +2596,26 @@ def render_proofread_tab():
         else:
             st.warning(pr.get("overall", ""))
         
-        for dept_key in PROOFREAD_DEPARTMENTS:
-            dept = DEPARTMENTS.get(dept_key, {})
-            dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+        # Use correct department list based on pipeline mode
+        _proof_departments = ACADEMIC_PROOFREAD_DEPARTMENTS if is_academic else PROOFREAD_DEPARTMENTS
+        _academic_dept_names = {
+            "report_integration": {"zh_name": "报告整合组", "en_name": "Report Integration"},
+            "programming": {"zh_name": "程序部", "en_name": "Programming"},
+            "tutorial": {"zh_name": "教程部", "en_name": "Tutorial"},
+        }
+        for dept_key in _proof_departments:
+            if is_academic:
+                dept = _academic_dept_names.get(dept_key, {})
+                dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+            else:
+                dept = DEPARTMENTS.get(dept_key, {})
+                dept_name = dept["zh_name"] if is_zh else dept["en_name"]
             review = pr.get("reviews", {}).get(dept_key, "")
             with st.expander(f"🔍 **{dept_name}**"):
                 st.markdown(review)
         
-        # ===== Proofread Issues → Auto Fix =====
-        if not pr.get("passed"):
+        # ===== Proofread Issues → Auto Fix (animation mode only) =====
+        if not pr.get("passed") and not is_academic:
             st.divider()
             st.subheader(t("auto_revision"))
             
