@@ -3702,7 +3702,7 @@ def run_academic_proofreading(
 {focus}
 
 ===== 待审查的学术报告 =====
-{final_report[:20000]}
+{final_report[:30000]}
 
 请逐项检查，输出格式：
 
@@ -3724,7 +3724,7 @@ def run_academic_proofreading(
 {focus}
 
 ===== Academic Report to Review =====
-{final_report[:20000]}
+{final_report[:30000]}
 
 Check each point. Output format:
 
@@ -5131,7 +5131,7 @@ def run_academic_auto_revision(
 {all_issues}
 
 ===== 原学术报告 =====
-{final_report}
+{final_report[:30000]}
 
 【修正要求】
 1. 逐条处理校对反馈中的❌问题项，按修正建议修改
@@ -5155,7 +5155,7 @@ def run_academic_auto_revision(
 {all_issues}
 
 ===== Original Academic Report =====
-{final_report}
+{final_report[:30000]}
 
 [Revision Requirements]
 1. Address each ❌ issue found in proofreading, apply the fix suggestions
