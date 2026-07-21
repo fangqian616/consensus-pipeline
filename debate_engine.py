@@ -1100,13 +1100,13 @@ def run_department_debate(
                         cf_block = f"\n【承上文档——前段辩论的关键决策，必须遵守】\n{carry_forward}\n"
                     else:
                         cf_block = f"\n[Carry Forward — Key decisions from previous segment debate, MUST follow]\n{carry_forward}\n"
+                # Only inject anime visual directive for animation departments
+                _anime_directive = "" if _is_academic_dept else f"\n{ANIME_VISUAL_DIRECTIVE['zh']}\n" if is_zh else f"\n{ANIME_VISUAL_DIRECTIVE['en']}\n"
                 if is_zh:
                     prompt = f"""【重要】你必须使用中文回答。所有输出必须是中文。
 
 你是{dept['zh_name']}的{debater['zh_name']}辩手。
-
-{ANIME_VISUAL_DIRECTIVE['zh']}
-
+{_anime_directive}
 {debater['zh_style']}
 {constraints}
 {cf_block}
@@ -1124,9 +1124,7 @@ def run_department_debate(
                     prompt = f"""You are the {debater['en_name']} debater of the {dept['en_name']} Department.
 
 IMPORTANT: You MUST respond in English only. All output must be in English.
-
-{ANIME_VISUAL_DIRECTIVE['en']}
-
+{_anime_directive}
 {debater['en_style']}
 {constraints}
 {cf_block}
@@ -1139,13 +1137,12 @@ Current discussion topic:
             else:
                 prev_args = "\n\n---\n\n".join(all_arguments[-3:])
                 reminder = get_screenwriter_reminder(lang) if department_key == "screenwriter" else ""
+                _anime_directive = "" if _is_academic_dept else f"\n{ANIME_VISUAL_DIRECTIVE['zh']}\n" if is_zh else f"\n{ANIME_VISUAL_DIRECTIVE['en']}\n"
                 if is_zh:
                     prompt = f"""【重要】你必须使用中文回答。所有输出必须是中文。
 
 你是{dept['zh_name']}的{debater['zh_name']}辩手。
-
-{ANIME_VISUAL_DIRECTIVE['zh']}
-
+{_anime_directive}
 {debater['zh_style']}
 {reminder}
 当前讨论内容：
@@ -1159,9 +1156,7 @@ Current discussion topic:
                     prompt = f"""You are the {debater['en_name']} debater of the {dept['en_name']} Department.
 
 IMPORTANT: You MUST respond in English only. All output must be in English.
-
-{ANIME_VISUAL_DIRECTIVE['en']}
-
+{_anime_directive}
 {debater['en_style']}
 {reminder}
 Current discussion topic:
@@ -3272,8 +3267,8 @@ def run_academic_summary(
 9. 研究空白从"为什么没人做"和"做了有什么价值"两个角度分析
 10. 学术但可读的语言，避免空话套话和模糊表述
 11. 报告字数 >= 6000字，确保每个章节有充分的论述深度，尽量详细展开每个章节
-12. 第6章「代码实现」必须包含实际的代码块（用```python```标记），不能只描述代码思路，要输出可运行的关键代码片段。代码示例应覆盖核心模块：搜索引擎、领域配置、辩论引擎、报告生成等
-13. 第7章「教程」必须是分步骤的实操指南，包含环境配置命令、基础示例代码、进阶用法说明"""
+12. 第6章「代码实现」必须基于辩论中讨论的该领域具体分析方法（如因果推断、统计建模、机器学习技术等），而非共识管线本身的基础设施代码。必须包含实际代码块（用```python```标记），展示如何用Python实现辩论共识中提到的核心分析方法，不能只描述代码思路
+13. 第7章「教程」必须是围绕该领域具体分析方法的分步骤实操指南，而非共识管线的使用教程。包含该领域分析方法的实现步骤、示例代码、进阶用法说明"""
 
             user_prompt = f"""请撰写「{search_query}」领域的学术动向综述报告。
 
@@ -3295,8 +3290,8 @@ def run_academic_summary(
 3. 趋势分析与演进路径
 4. 研究空白与未来方向
 5. 结论与建议
-6. 代码实现（基于程序部辩论共识，提供可运行的Python代码示例：①快速入门——30行核心管线，展示从搜索到报告生成的完整调用链；②进阶增强——反证搜索、多维度加权；③高级定制——自定义domain_config、专家分组策略。每个代码块用```python```标记，提供真实可运行的关键片段，不要伪代码）
-7. 教程（基于教程部辩论共识，输出三级递进教程：①零基础入门——环境配置+最小可运行demo；②进阶实战——生产环境最佳实践与避坑指南；③高级定制——自定义领域配置与专家分组策略。每步含操作命令、示例代码、预期输出）
+6. 代码实现（基于程序部辩论共识，提供该领域具体分析方法的Python代码示例：①快速入门——领域核心分析方法的实现，展示从数据加载到结果输出的完整流程；②进阶增强——辩论中提到的进阶技术实现；③高级定制——该领域前沿方法的复现与调优。代码必须围绕辩论中讨论的具体分析方法，不得写成共识管线的基础设施代码。每个代码块用```python```标记，提供真实可运行的关键片段，不要伪代码）
+7. 教程（基于教程部辩论共识，输出围绕该领域分析方法的三级递进教程：①零基础入门——该领域基础分析方法的实现步骤与示例；②进阶实战——该领域进阶技术的应用与避坑指南；③高级定制——该领域前沿方法的复现与调优。教程必须围绕辩论中讨论的具体分析方法，不得写成共识管线的使用教程。每步含操作命令、示例代码、预期输出）
 8. 参考文献（使用上方真实论文列表，格式：作者. (年份). 标题. 期刊。）"""
         else:
             system_prompt = """【重要】你必须使用中文回答。所有输出必须是中文。
@@ -3314,8 +3309,8 @@ def run_academic_summary(
 8. 研究空白从"为什么没人做"和"做了有什么价值"两个角度分析
 9. 学术但可读的语言，避免空话套话和模糊表述
 10. 报告字数 >= 4000字，尽量详细展开每个章节
-11. 第6章「代码实现」必须包含实际的代码块（用markdown代码块格式），不能只描述代码思路，要输出可运行的关键代码片段
-12. 第7章「教程」必须是分步骤的实操指南，包含环境配置命令、基础示例代码、进阶用法说明"""
+11. 第6章「代码实现」必须基于辩论中讨论的该领域具体分析方法，而非共识管线本身的基础设施。必须包含实际的代码块（用markdown代码块格式），不能只描述代码思路，要输出可运行的关键代码片段
+12. 第7章「教程」必须是围绕该领域具体分析方法的分步骤实操指南，而非共识管线的使用教程。包含环境配置命令、基础示例代码、进阶用法说明"""
 
             user_prompt = f"""请撰写「{search_query}」领域的学术动向综述报告。
 
@@ -3333,8 +3328,8 @@ def run_academic_summary(
 3. 趋势分析与演进路径
 4. 研究空白与未来方向
 5. 结论与建议
-6. 代码实现（基于程序部辩论共识，提供可运行的Python代码示例：①快速入门——30行核心管线，展示从搜索到报告生成的完整调用链；②进阶增强——反证搜索、多维度加权；③高级定制——自定义domain_config、专家分组策略。每个代码块用```python```标记，提供真实可运行的关键片段，不要伪代码）
-7. 教程（基于教程部辩论共识，输出三级递进教程：①零基础入门——环境配置+最小可运行demo；②进阶实战——生产环境最佳实践与避坑指南；③高级定制——自定义领域配置与专家分组策略。每步含操作命令、示例代码、预期输出）
+6. 代码实现（基于程序部辩论共识，提供该领域具体分析方法的Python代码示例：①快速入门——领域核心分析方法的实现，展示从数据加载到结果输出的完整流程；②进阶增强——辩论中提到的进阶技术实现；③高级定制——该领域前沿方法的复现与调优。代码必须围绕辩论中讨论的具体分析方法，不得写成共识管线的基础设施代码。每个代码块用```python```标记，提供真实可运行的关键片段，不要伪代码）
+7. 教程（基于教程部辩论共识，输出围绕该领域分析方法的三级递进教程：①零基础入门——该领域基础分析方法的实现步骤与示例；②进阶实战——该领域进阶技术的应用与避坑指南；③高级定制——该领域前沿方法的复现与调优。教程必须围绕辩论中讨论的具体分析方法，不得写成共识管线的使用教程。每步含操作命令、示例代码、预期输出）
 8. 辩论来源（列出参与辩论的各部门及其主要贡献）"""
     else:
         if has_papers:
@@ -3354,8 +3349,8 @@ IMPORTANT: You MUST respond in English only. All output must be in English.
 9. Research gaps analyzed from "why hasn't anyone done this" and "what value would it bring" perspectives
 10. Academic but accessible language, avoid filler and vague statements
 11. Report length >= 5000 words, ensure each section has sufficient depth, expand each section thoroughly with 3-4 substantive paragraphs
-12. Section 6 "Code Implementation" must include actual code blocks (marked with ```python```), not just descriptions - output runnable key code snippets covering core modules: search engine, domain config, debate engine, report generator
-13. Section 7 "Tutorial" must be a step-by-step hands-on guide, including environment setup commands, basic example code, and advanced usage notes"""
+12. Section 6 "Code Implementation" must be based on the specific analytical methods discussed in the debate (e.g., causal inference, statistical modeling, ML techniques), NOT the consensus pipeline infrastructure. Must include actual code blocks (marked with ```python```) demonstrating how to implement the core analytical methods discussed in the debate consensus, not just code descriptions
+13. Section 7 "Tutorial" must be a step-by-step guide on the domain's specific analytical methods, NOT a usage tutorial for the consensus pipeline. Include methodology implementation steps, example code, and advanced usage notes"""
 
             user_prompt = f"""Please write an academic trend review report on "{search_query}".
 
@@ -3377,8 +3372,8 @@ Based on the above debate content and real literature, write a structured academ
 3. Trend Analysis & Evolution Path
 4. Research Gaps & Future Directions
 5. Conclusions & Recommendations
-6. Code Implementation (based on programming dept consensus, provide runnable Python code: (1) Quick Start — 30-line core pipeline showing search-to-report chain; (2) Advanced Enhancement — counter-evidence search, multi-dimensional weighting; (3) Advanced Customization — custom domain_config, expert group strategy. Use ```python``` blocks, provide real runnable snippets, no pseudocode)
-7. Tutorial (based on tutorial dept consensus, 3-tier progressive guide: (1) Beginner — env setup + minimal runnable demo; (2) Intermediate — production best practices and pitfalls; (3) Advanced — custom domain config and expert grouping. Each step includes commands, example code, expected output)
+6. Code Implementation (based on programming dept consensus, provide Python code for the domain's specific analytical methods: (1) Quick Start — implementation of core analytical methods, showing a complete data-to-results workflow; (2) Advanced Enhancement — implementation of advanced techniques discussed in the debate; (3) Advanced Customization — reproduction and tuning of cutting-edge methods. Code must focus on the analytical methods discussed in the debate, NOT the consensus pipeline infrastructure. Use ```python``` blocks, provide real runnable snippets, no pseudocode)
+7. Tutorial (based on tutorial dept consensus, 3-tier progressive guide on the domain's analytical methods: (1) Beginner — implementation steps and examples for the domain's basic analytical methods; (2) Intermediate — application of advanced techniques with pitfalls to avoid; (3) Advanced — reproduction and tuning of cutting-edge methods. Tutorial must focus on the analytical methods discussed in the debate, NOT a usage guide for the consensus pipeline. Each step includes commands, example code, expected output)
 8. References (use the real paper list above, format: Authors. (Year). Title. Journal.)"""
         else:
             system_prompt = """You are a senior academic review writing expert. Your task is to synthesize multi-group debate consensus into a structured academic trend review report.
@@ -3396,8 +3391,8 @@ IMPORTANT: You MUST respond in English only. All output must be in English.
 8. Research gaps analyzed from "why hasn't anyone done this" and "what value would it bring" perspectives
 9. Academic but accessible language, avoid filler and vague statements
 10. Report length >= 4500 words, ensure each section has sufficient depth, expand each section thoroughly with 3-4 substantive paragraphs
-11. Section 6 "Code Implementation" must include actual code blocks (in markdown code block format), not just descriptions of code ideas - output runnable key code snippets
-12. Section 7 "Tutorial" must be a step-by-step hands-on guide, including environment setup commands, basic example code, and advanced usage notes"""
+11. Section 6 "Code Implementation" must be based on the specific analytical methods discussed in the debate, NOT the consensus pipeline infrastructure. Must include actual code blocks (in markdown code block format), not just descriptions of code ideas - output runnable key code snippets
+12. Section 7 "Tutorial" must be a step-by-step guide on the domain's specific analytical methods, NOT a usage tutorial for the consensus pipeline. Include environment setup commands, basic example code, and advanced usage notes"""
 
             user_prompt = f"""Please write an academic trend review report on "{search_query}".
 
@@ -3415,8 +3410,8 @@ Based on the above debate content, write a structured academic review report. Re
 3. Trend Analysis & Evolution Path
 4. Research Gaps & Future Directions
 5. Conclusions & Recommendations
-6. Code Implementation (based on programming dept consensus, provide runnable Python code: (1) Quick Start — 30-line core pipeline showing search-to-report chain; (2) Advanced Enhancement — counter-evidence search, multi-dimensional weighting; (3) Advanced Customization — custom domain_config, expert group strategy. Use ```python``` blocks, provide real runnable snippets, no pseudocode)
-7. Tutorial (based on tutorial dept consensus, 3-tier progressive guide: (1) Beginner — env setup + minimal runnable demo; (2) Intermediate — production best practices and pitfalls; (3) Advanced — custom domain config and expert grouping. Each step includes commands, example code, expected output)
+6. Code Implementation (based on programming dept consensus, provide Python code for the domain's specific analytical methods: (1) Quick Start — implementation of core analytical methods, showing a complete data-to-results workflow; (2) Advanced Enhancement — implementation of advanced techniques discussed in the debate; (3) Advanced Customization — reproduction and tuning of cutting-edge methods. Code must focus on the analytical methods discussed in the debate, NOT the consensus pipeline infrastructure. Use ```python``` blocks, provide real runnable snippets, no pseudocode)
+7. Tutorial (based on tutorial dept consensus, 3-tier progressive guide on the domain's analytical methods: (1) Beginner — implementation steps and examples for the domain's basic analytical methods; (2) Intermediate — application of advanced techniques with pitfalls to avoid; (3) Advanced — reproduction and tuning of cutting-edge methods. Tutorial must focus on the analytical methods discussed in the debate, NOT a usage guide for the consensus pipeline. Each step includes commands, example code, expected output)
 8. Debate Sources (list participating departments and their main contributions)"""
 
     # Call LLM
@@ -3593,6 +3588,185 @@ Check each point. Output format:
     }
     
     return result
+
+
+# ============ Academic Proofreading ============
+
+ACADEMIC_PROOFREAD_DEPARTMENTS = ["report_integration", "programming", "tutorial"]
+
+def run_academic_proofreading(
+    final_report: str,
+    all_consensus: Dict[str, str],
+    api_url: str,
+    api_key: str,
+    model: str = "deepseek-v4-flash",
+    lang: str = "zh",
+    stats: dict = None,
+) -> Dict:
+    """
+    Academic mode proofreading: 报告整合/程序/教程三部门审查最终学术报告。
+    与原版 run_proofreading 不同，这里审查的是学术报告（final_report），
+    而非动画分镜表和视频提示词。
+    """
+    is_zh = lang == "zh"
+    reviews = {}
+
+    # Academic department definitions (from templates/academic_departments.json)
+    academic_depts = {
+        "report_integration": {
+            "zh_name": "报告整合组",
+            "en_name": "Report Integration",
+        },
+        "programming": {
+            "zh_name": "程序部",
+            "en_name": "Programming",
+        },
+        "tutorial": {
+            "zh_name": "教程部",
+            "en_name": "Tutorial",
+        },
+    }
+
+    focus_points = {
+        "report_integration": {
+            "zh": (
+                "1. 报告结构是否完整（8个章节是否全部覆盖）\n"
+                "2. 各章节是否有实质性内容（每章至少3-4段，非空标题）\n"
+                "3. 各部门辩论共识是否都被纳入报告\n"
+                "4. 参考文献格式是否规范、是否全部来自真实检索结果\n"
+                "5. 方法论比较是否有深度（优缺点、适用场景、计算成本）\n"
+                "6. 是否存在动画/视觉术语混入（如'冲击帧''分镜'等）\n"
+                "7. 报告是否围绕研究主题展开，而非描述共识管线本身"
+            ),
+            "en": (
+                "1. Is the report structure complete (all 8 chapters covered)?\n"
+                "2. Does each chapter have substantive content (at least 3-4 paragraphs, not empty headers)?\n"
+                "3. Are all department debate consensuses incorporated into the report?\n"
+                "4. Are references properly formatted and all from real search results?\n"
+                "5. Does methodology comparison have depth (pros/cons, applicable scenarios, computational costs)?\n"
+                "6. Are there any animation/visual terms mixed in (e.g. 'impact frame', 'storyboard')?\n"
+                "7. Does the report focus on the research topic, not describing the consensus pipeline itself?"
+            ),
+        },
+        "programming": {
+            "zh": (
+                "1. 代码是否围绕研究主题的具体分析方法（而非共识管线基础设施）\n"
+                "2. 代码块是否使用```python```标记、是否可运行\n"
+                "3. 是否覆盖了三个层次（快速入门→进阶增强→高级定制）\n"
+                "4. 代码是否有类型注解、中文注释、异常处理\n"
+                "5. 代码是否与辩论共识中讨论的方法一致\n"
+                "6. 是否存在'搜索引擎''辩论引擎''报告生成'等管线基础设施代码（应被替换为领域方法代码）"
+            ),
+            "en": (
+                "1. Does the code focus on the research topic's specific analytical methods (not pipeline infrastructure)?\n"
+                "2. Are code blocks marked with ```python``` and actually runnable?\n"
+                "3. Are the three tiers covered (Quick Start → Advanced → Customization)?\n"
+                "4. Does the code have type annotations, comments, and error handling?\n"
+                "5. Is the code consistent with the methods discussed in the debate consensus?\n"
+                "6. Is there any pipeline infrastructure code (search engine, debate engine, report generator) that should be replaced?"
+            ),
+        },
+        "tutorial": {
+            "zh": (
+                "1. 教程是否围绕研究主题的具体分析方法（而非共识管线使用教程）\n"
+                "2. 是否覆盖三级递进（零基础→进阶实战→高级定制）\n"
+                "3. 每步是否包含操作→原因→预期输出→常见报错\n"
+                "4. 教程是否给新手提供了可运行的demo\n"
+                "5. 教程示例代码是否与程序部代码一致\n"
+                "6. 是否存在'如何运行共识管线'类的教程内容（应被替换为领域方法教程）"
+            ),
+            "en": (
+                "1. Does the tutorial focus on the research topic's analytical methods (not pipeline usage)?\n"
+                "2. Are the three tiers covered (Beginner → Intermediate → Advanced)?\n"
+                "3. Does each step include action → reason → expected output → common errors?\n"
+                "4. Does the tutorial provide a runnable demo for beginners?\n"
+                "5. Is the tutorial example code consistent with the programming dept output?\n"
+                "6. Is there any 'how to run the consensus pipeline' content that should be replaced?"
+            ),
+        },
+    }
+
+    for dept_key in ACADEMIC_PROOFREAD_DEPARTMENTS:
+        dept = academic_depts[dept_key]
+        dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+        dept_consensus = all_consensus.get(dept_key, "")
+        focus = focus_points.get(dept_key, {}).get(lang, "")
+
+        if is_zh:
+            prompt = f"""你是{dept_name}的校对审校员。请从你的专业视角审查以下学术报告的{dept_name}相关部分。
+
+{dept_name}的辩论共识（供对照参考）：
+{dept_consensus}
+
+【你的检查重点】
+{focus}
+
+===== 待审查的学术报告 =====
+{final_report[:20000]}
+
+请逐项检查，输出格式：
+
+## 通过项
+- [检查项]: ✅ 通过 — [简要说明]
+
+## 问题项
+- [检查项]: ❌ 问题 — [具体问题描述] — [修正建议]
+
+## 总体评价
+[通过/需返工] — [一句话总结]"""
+        else:
+            prompt = f"""You are the proofreader for the {dept['en_name']} Department. Review the academic report from your professional perspective.
+
+{dept['en_name']} debate consensus (for reference):
+{dept_consensus}
+
+[YOUR FOCUS POINTS]
+{focus}
+
+===== Academic Report to Review =====
+{final_report[:20000]}
+
+Check each point. Output format:
+
+## Passed Items
+- [Check item]: ✅ Pass — [brief explanation]
+
+## Issues Found
+- [Check item]: ❌ Issue — [specific problem description] — [fix suggestion]
+
+## Overall Assessment
+[Pass / Needs Rework] — [one-sentence summary]"""
+
+        messages = [{"role": "user", "content": prompt}]
+        result = call_api(messages, api_url, api_key, model, temperature=0.2, max_tokens=4096, stats=stats)
+        reviews[dept_key] = result or ("校对未能完成" if is_zh else "Proofreading failed")
+
+    # Summarize proofread conclusions
+    passed = True
+    summary_parts = []
+    for dept_key in ACADEMIC_PROOFREAD_DEPARTMENTS:
+        dept = academic_depts[dept_key]
+        dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+        review = reviews[dept_key]
+        has_issue = "❌" in review or "Issue" in review
+        if has_issue:
+            passed = False
+        summary_parts.append(f"### {dept_name}\n{review}")
+
+    if is_zh:
+        overall = "✅ 校对通过——报告可用" if passed else "⚠️ 校对发现问题——建议修正"
+    else:
+        overall = "✅ Proofreading passed—report is usable" if passed else "⚠️ Issues found—revision suggested"
+
+    result = {
+        "reviews": reviews,
+        "overall": overall,
+        "passed": passed,
+        "summary": "\n\n".join(summary_parts) + f"\n\n## {overall}",
+    }
+
+    return result
+
 
 def run_auto_revision(
     storyboard: str,
