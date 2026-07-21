@@ -17,7 +17,7 @@ AIGC:
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit" alt="Streamlit">
-  <img src="https://img.shields.io/badge/Latest-v0.7.5-brightgreen" alt="Version">
+  <img src="https://img.shields.io/badge/Latest-v0.7.8e-brightgreen" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
@@ -83,7 +83,7 @@ Consensus Pipeline takes a research topic and produces a structured literature r
 
 **Key difference from tools like Elicit/Consensus:** Those tools extract and summarize. This tool *debates*. Each finding has to survive adversarial challenge from multiple AI agents before it makes it into the report.
 
-### What actually works (v0.7.5):
+### What actually works (v0.7.8e):
 - ✅ Multi-source paper search (OpenAlex + Semantic Scholar + arXiv)
 - ✅ 3-layer QC: hard filter → LLM classify → importance tagging (219 → 77 papers, ~65% exclusion)
 - ✅ 10-11 debate departments, each with 2-4 debaters arguing from different perspectives
