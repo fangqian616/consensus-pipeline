@@ -25,7 +25,7 @@ from debate_engine import (
     MARKET_CONFIG,
     apply_config, get_current_config, get_current_config_name,
     run_department_debate, run_cross_debate, run_summary, run_academic_summary,
-    run_spatial_review, run_proofreading, run_academic_proofreading, run_spatial_diagram,
+    run_spatial_review, run_proofreading, run_academic_proofreading, run_academic_auto_revision, run_spatial_diagram,
     run_auto_revision, run_director_revision, run_output_edit,
     run_smart_reroll,
     run_department_round, run_department_consensus,
@@ -2638,6 +2638,46 @@ def render_proofread_tab():
                             stats=st.session_state.get("current_stats"),
                         )
                         st.session_state.auto_revision_result = revision
+                        st.rerun()
+
+        # ===== Academic Auto Revision =====
+        if not pr.get("passed") and is_academic:
+            st.divider()
+            st.subheader("🔧 " + ("根据校对反馈自动修正报告" if is_zh else "Auto-fix Report based on Proofreading"))
+            
+            ac_revision = st.session_state.get("academic_auto_revision_result")
+            if ac_revision:
+                st.success("✅ " + ("修正完成" if is_zh else "Revision complete"))
+                if ac_revision.get("revision_notes"):
+                    with st.expander("📝 " + ("修正说明" if is_zh else "Revision Notes")):
+                        st.markdown(ac_revision["revision_notes"])
+                
+                rev_report = ac_revision.get("final_report", "")
+                if rev_report:
+                    with st.expander("📄 " + ("修正后报告" if is_zh else "Revised Report")):
+                        st.markdown(rev_report)
+                
+                if st.button("✅ " + ("应用修正结果" if is_zh else "Apply Revision"), type="primary", use_container_width=True, key="apply_ac_auto_revision"):
+                    st.session_state.final_output["final_report"] = rev_report
+                    st.session_state.academic_auto_revision_result = None
+                    st.session_state.proofread_result = None
+                    st.rerun()
+            else:
+                if st.button("🔧 " + ("执行自动修正" if is_zh else "Run Auto Revision"), type="secondary", use_container_width=True, key="run_ac_auto_revision"):
+                    dept_results = st.session_state.get("dept_results", {})
+                    report_text = final.get("final_report", "") or final.get("consensus_report", "") or ""
+                    with st.spinner("🔧 " + ("正在根据校对反馈修正报告..." if is_zh else "Revising report based on proofreading feedback...")):
+                        ac_revision = run_academic_auto_revision(
+                            final_report=report_text,
+                            proofread_result=pr,
+                            all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+                            api_url=st.session_state.api_url,
+                            api_key=st.session_state.api_key,
+                            model=st.session_state.model_name,
+                            lang=st.session_state.lang,
+                            stats=st.session_state.get("current_stats"),
+                        )
+                        st.session_state.academic_auto_revision_result = ac_revision
                         st.rerun()
         
         # ===== Director Instruction Correction =====
