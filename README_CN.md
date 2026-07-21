@@ -38,12 +38,12 @@ AI 智能体会先访谈你，了解研究范围、约束条件和目标。
 ### 第二步：智能部门配置
 AI 根据你的主题自动生成 10+ 个专业辩论部门，每个部门配备多位辩手，从不同方法论角度展开辩论。
 
-<img src="examples/03_department_config_cn.png" alt="部门配置" width="80%">
+<img src="examples/04_department_config_cn.png" alt="部门配置" width="80%">
 
 ### 第三步：多轮辩论
 实时观看辩手辩论。每轮辩手陈述立场、挑战他人假设、完善论证。每个部门运行 2-3 轮后达成共识。
 
-<img src="examples/05_debate_content_cn.png" alt="辩论内容" width="80%">
+<img src="examples/03_debate_content_cn.png" alt="辩论内容" width="80%">
 
 ### 第四步：结构化输出
 辩论结果结构化输出为 JSON，清晰标注角色、立场和共识点，为报告生成做好准备。
@@ -59,8 +59,8 @@ AI 根据你的主题自动生成 10+ 个专业辩论部门，每个部门配备
 管线还会生成可运行的 Python 代码和经过校验的参考文献列表。
 
 <p float="left">
-  <img src="examples/08_code_output_cn.png" alt="代码输出" width="45%">
-  <img src="examples/10_references_cn.png" alt="参考文献" width="45%">
+  <img src="examples/06_code_output_cn.png" alt="代码输出" width="45%">
+  <img src="examples/07_references_cn.png" alt="参考文献" width="45%">
 </p>
 
 ---
