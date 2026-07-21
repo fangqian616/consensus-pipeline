@@ -115,71 +115,47 @@ def browser_notify(title: str, message: str):
 # ============ Disk Persistence ============
 # Auto-save JSON to disk after each step, survives network loss/crash/shutdown
 
-_AUTOSAVE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "autosave")
-
-def _ensure_autosave_dir():
-    """Ensure autosave directory exists"""
-    os.makedirs(_AUTOSAVE_DIR, exist_ok=True)
+_AUTOSAVE_PREFIX = "_autosave_"
 
 def autosave_result(key: str, data: dict):
     """
-    Persist results to disk.
+    Persist results to session state (per-user isolated).
     key: e.g. "normal_result", "market_step1", "market_result"
     data: dict data to save
     """
     try:
-        _ensure_autosave_dir()
-        filepath = os.path.join(_AUTOSAVE_DIR, f"{key}.json")
-        # Handle non-JSON-serializable types during serialization
-        def _default(obj):
-            if isinstance(obj, (set, frozenset)):
-                return list(obj)
-            if hasattr(obj, '__dict__'):
-                return str(obj)
-            return str(obj)
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2, default=_default)
+        st.session_state[_AUTOSAVE_PREFIX + key] = data
     except Exception as e:
-        # Persistence failure does not affect main flow, just log it
         import sys
         print(f"[autosave] Save {key} failed: {e}", file=sys.stderr)
 
 def autosave_load(key: str) -> dict | None:
     """
-    Load persisted results from disk.
-    Returns dict or None (when file does not exist)
+    Load persisted results from session state.
+    Returns dict or None
     """
-    filepath = os.path.join(_AUTOSAVE_DIR, f"{key}.json")
-    if not os.path.exists(filepath):
-        return None
-    try:
-        with open(filepath, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        import sys
-        print(f"[autosave] Load {key} failed: {e}", file=sys.stderr)
-        return None
+    return st.session_state.get(_AUTOSAVE_PREFIX + key)
 
 def autosave_has(key: str) -> bool:
     """Check if persisted result exists"""
-    return os.path.exists(os.path.join(_AUTOSAVE_DIR, f"{key}.json"))
+    return (_AUTOSAVE_PREFIX + key) in st.session_state
 
 def autosave_list() -> list[str]:
-    """List all persisted result keys"""
-    if not os.path.isdir(_AUTOSAVE_DIR):
-        return []
-    return [f.replace(".json", "") for f in os.listdir(_AUTOSAVE_DIR) if f.endswith(".json")]
+    """List all persisted result keys for current user"""
+    return [
+        k[len(_AUTOSAVE_PREFIX):]
+        for k in st.session_state
+        if k.startswith(_AUTOSAVE_PREFIX)
+    ]
 
 def autosave_clear(key: str = None):
     """Clear persisted results. key=None clears all"""
-    import glob
     if key:
-        filepath = os.path.join(_AUTOSAVE_DIR, f"{key}.json")
-        if os.path.exists(filepath):
-            os.remove(filepath)
+        st.session_state.pop(_AUTOSAVE_PREFIX + key, None)
     else:
-        for f in glob.glob(os.path.join(_AUTOSAVE_DIR, "*.json")):
-            os.remove(f)
+        for k in list(st.session_state):
+            if k.startswith(_AUTOSAVE_PREFIX):
+                del st.session_state[k]
 
 
 def notify_stage_complete(stage_name: str, detail: str = ""):
@@ -909,28 +885,31 @@ def render_sidebar():
             
             st.markdown("---")
             
-            # .env file generator
+            # .env file generator (download, not write to shared disk)
             st.markdown("📄 " + ("CLI配置文件生成" if is_zh else "CLI Config (.env)"))
             if st.session_state.get("api_key"):
-                if st.button("💾 " + ("保存到.env文件" if is_zh else "Save .env file"), key="save_env_btn"):
-                    env_content = f"DEEPSEEK_API_KEY={st.session_state.api_key}\n"
-                    if st.session_state.get("easyscholar_key"):
-                        env_content += f"EASYSCHOLAR_SECRET_KEY={st.session_state.easyscholar_key}\n"
-                    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
-                    with open(env_path, "w") as ef:
-                        ef.write(env_content)
-                    st.success(("✅ .env已保存！CLI模式可直接运行" if is_zh else "✅ .env saved! CLI mode ready"))
+                env_content = f"DEEPSEEK_API_KEY={st.session_state.api_key}\n"
+                if st.session_state.get("easyscholar_key"):
+                    env_content += f"EASYSCHOLAR_SECRET_KEY={st.session_state.easyscholar_key}\n"
+                st.download_button(
+                    label="⬇️ " + ("下载.env文件" if is_zh else "Download .env file"),
+                    data=env_content,
+                    file_name=".env",
+                    mime="text/plain",
+                    key="download_env_btn",
+                    use_container_width=True,
+                )
             else:
                 st.caption(("请先在上方填写API Key" if is_zh else "Fill API Key above first"))
         
         st.divider()
         
-        # Archive management
+        # Archive management (per-user session state)
         saved_keys = autosave_list()
         if saved_keys:
             st.subheader("💾 " + ("存档管理" if st.session_state.lang == "zh" else "Autosave"))
             for key in saved_keys:
-                st.caption(f"📄 {key}.json")
+                st.caption(f"📄 {key}")
             if st.button("🗑️ " + ("清除全部存档" if st.session_state.lang == "zh" else "Clear all saves"), 
                          use_container_width=True):
                 autosave_clear()
