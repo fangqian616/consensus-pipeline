@@ -2,10 +2,10 @@
 AIGC:
     Label: "1"
     ContentProducer: 001191110102MACQD9K64018705
-    ProduceID: 3946566099419012_0/project_7662589641924722984-files/推广方案/README_tutorial_update.md
+    ProduceID: 3946566099419012_0/project_7662589641924722984-files/推广方案/README_EN_final.md
     ReservedCode1: ""
     ContentPropagator: 001191110102MACQD9K64028705
-    PropagateID: 3946566099419012#1784598489524
+    PropagateID: 3946566099419012#1784599360365
     ReservedCode2: ""
 ---
 # 🧠 Consensus Pipeline
@@ -17,7 +17,7 @@ AIGC:
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit" alt="Streamlit">
-  <img src="https://img.shields.io/badge/Latest-v0.7.8e-brightgreen" alt="Version">
+  <img src="https://img.shields.io/badge/Latest-v0.7.8-brightgreen" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
@@ -83,7 +83,7 @@ Consensus Pipeline takes a research topic and produces a structured literature r
 
 **Key difference from tools like Elicit/Consensus:** Those tools extract and summarize. This tool *debates*. Each finding has to survive adversarial challenge from multiple AI agents before it makes it into the report.
 
-### What actually works (v0.7.8e):
+### What actually works (v0.7.8):
 - ✅ Multi-source paper search (OpenAlex + Semantic Scholar + arXiv)
 - ✅ 3-layer QC: hard filter → LLM classify → importance tagging (219 → 77 papers, ~65% exclusion)
 - ✅ 10-11 debate departments, each with 2-4 debaters arguing from different perspectives
@@ -98,7 +98,6 @@ Consensus Pipeline takes a research topic and produces a structured literature r
 
 ### What's still rough:
 - ⚠️ Some UI labels are bilingual (Chinese/English mix) in English mode
-- ⚠️ Final report language can leak (English mode occasionally outputs Chinese sections)
 - ⚠️ No GPU needed, but a full run takes 10-30 minutes and ~$0.05-0.10 in API costs
 - ⚠️ Cross-department pairing logic is basic (two-layer fallback, not optimized)
 
@@ -427,7 +426,6 @@ consensus-pipeline/
 
 | Priority | Feature | Status |
 |----------|---------|--------|
-| P0 | Fix final report language leak (EN mode outputs CN) | In progress |
 | P0 | Fix UI labels bilingual in EN mode | In progress |
 | P1 | Semantic citation verification (embedding-based) | Planned |
 | P1 | Sub-topic query splitting | Planned |
