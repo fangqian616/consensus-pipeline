@@ -51,6 +51,17 @@ from requirement import (
     FactChecker, FactCheckReport, FactCheckResult,
 )
 
+# ============ ASCII-safe filename helper ============
+def _safe_filename(name: str, fallback: str = "download") -> str:
+    """Sanitize filename to ASCII-safe chars for HTTP Content-Disposition header.
+    Streamlit's download_button sets Content-Disposition which uses latin-1 encoding;
+    non-ASCII chars (Chinese etc.) cause UnicodeEncodeError.
+    """
+    import re as _re
+    safe = _re.sub(r'[^\x20-\x7e]', '_', name)  # replace non-ASCII with _
+    safe = _re.sub(r'_+', '_', safe).strip('_')   # collapse multiple _
+    return safe if safe else fallback
+
 # ============ Pipeline Mode Detection ============
 
 def _detect_pipeline_mode(cfg=None):
@@ -2241,7 +2252,7 @@ def _render_animation_output(final, is_zh):
                     st.download_button(
                         f"📥 {t('spatial_diagram_export')} - {sd['scene_name']}",
                         data=sd["diagram_prompt"],
-                        file_name=f"spatial_diagram_{sd['scene_name']}.txt",
+                        file_name=_safe_filename(f"spatial_diagram_{sd['scene_name']}.txt"),
                         mime="text/plain",
                         use_container_width=True,
                         key=f"dl_spatial_{sd['scene_name']}",
@@ -3623,7 +3634,7 @@ def render_config_tab():
             st.download_button(
                 "⬇️ " + ("下载JSON" if is_zh else "Download JSON"),
                 data=json_str,
-                file_name=f"{st.session_state.get('workgroup_name', 'config')}.json",
+                file_name=_safe_filename(f"{st.session_state.get('workgroup_name', 'config')}.json"),
                 mime="application/json",
             )
     
