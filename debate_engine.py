@@ -5094,3 +5094,110 @@ def run_smart_reroll(
         "reroll_log": reroll_log,
         "error": False,
     }
+
+def run_academic_auto_revision(
+    final_report: str,
+    proofread_result: Dict,
+    all_consensus: Dict[str, str],
+    api_url: str,
+    api_key: str,
+    model: str = "deepseek-v4-flash",
+    lang: str = "zh",
+    stats: dict = None,
+) -> Dict:
+    """
+    Academic mode: auto-revise final_report based on proofreading feedback.
+    """
+    is_zh = lang == "zh"
+    reviews = proofread_result.get("reviews", {})
+
+    # Collect all issue items
+    all_issues = ""
+    academic_dept_names = {
+        "report_integration": {"zh": "报告整合组", "en": "Report Integration"},
+        "programming": {"zh": "程序部", "en": "Programming"},
+        "tutorial": {"zh": "教程部", "en": "Tutorial"},
+    }
+    for dept_key in ACADEMIC_PROOFREAD_DEPARTMENTS:
+        dept_name_map = academic_dept_names.get(dept_key, {})
+        dept_name = dept_name_map.get(lang, dept_key)
+        review = reviews.get(dept_key, "")
+        all_issues += f"\n### {dept_name}校对反馈\n{review}\n"
+
+    if is_zh:
+        revise_prompt = f"""你是校对修正专家。以下是校对环节发现的所有问题，请直接修正学术报告。
+
+===== 校对反馈汇总 =====
+{all_issues}
+
+===== 原学术报告 =====
+{final_report}
+
+【修正要求】
+1. 逐条处理校对反馈中的❌问题项，按修正建议修改
+2. 修正时保持其他未涉及部分不变
+3. 确保修正后报告仍是完整的8章节结构
+4. 确保不引入动画/视觉术语
+5. 确保代码和教程围绕研究主题方法，而非管线基础设施
+6. 直接输出修正后的完整报告，不要只输出差异
+
+请按以下格式输出：
+
+===== 修正后报告 =====
+[完整的修正后学术报告]
+
+===== 修正说明 =====
+[逐条列出你做了哪些修正]"""
+    else:
+        revise_prompt = f"""You are a proofreading revision expert. Below are all issues found during proofreading. Please directly fix the academic report.
+
+===== Proofreading Feedback Summary =====
+{all_issues}
+
+===== Original Academic Report =====
+{final_report}
+
+[Revision Requirements]
+1. Address each ❌ issue found in proofreading, apply the fix suggestions
+2. Keep all untouched parts unchanged
+3. Ensure the revised report still has the complete 8-chapter structure
+4. Ensure no animation/visual terms are introduced
+5. Ensure code and tutorial focus on research topic methods, not pipeline infrastructure
+6. Output the COMPLETE revised report, not just diffs
+
+Output format:
+
+===== Revised Report =====
+[Complete revised academic report]
+
+===== Revision Notes =====
+[List each change you made]"""
+
+    messages = [{"role": "user", "content": revise_prompt}]
+    result = call_api(messages, api_url, api_key, model, temperature=0.2, max_tokens=16384, timeout=180, stats=stats)
+
+    revised_report = final_report
+    revision_notes = ""
+
+    if result and not result.startswith("ERROR:"):
+        if is_zh:
+            marker = "===== 修正后报告 ====="
+            notes_marker = "===== 修正说明 ====="
+        else:
+            marker = "===== Revised Report ====="
+            notes_marker = "===== Revision Notes ====="
+
+        if marker in result:
+            after_marker = result.split(marker, 1)[1]
+            if notes_marker in after_marker:
+                parts = after_marker.split(notes_marker, 1)
+                revised_report = parts[0].strip()
+                revision_notes = parts[1].strip()
+            else:
+                revised_report = after_marker.strip()
+
+    return {
+        "final_report": revised_report,
+        "revision_notes": revision_notes,
+        "original_report": final_report,
+    }
