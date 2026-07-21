@@ -1,13 +1,3 @@
----
-AIGC:
-    Label: "1"
-    ContentProducer: 001191110102MACQD9K64018705
-    ProduceID: 3946566099419012_0/project_7662589641924722984-files/推广方案/screenshots/final_report.md
-    ReservedCode1: ""
-    ContentPropagator: 001191110102MACQD9K64028705
-    PropagateID: 3946566099419012#1784565426633
-    ReservedCode2: ""
----
 # Machine Learning in Energy Economics and Carbon Price Forecasting
 
 > Academic Trend Review | Consensus Pipeline v5 | July 18, 2026
@@ -378,4 +368,3 @@ The confidence labels (Low/Medium/High) assigned to each finding reflect the str
 
 ---
 
-> 本内容由 Coze AI 生成，请遵循相关法律法规及《人工智能生成合成内容标识办法》使用与传播。
