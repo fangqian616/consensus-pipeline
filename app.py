@@ -1601,8 +1601,17 @@ def render_debate_tab():
     is_zh = st.session_state.lang == "zh"
     
     # Auto-start debate: synchronous execution
-    if st.session_state.get("_debate_running"):
-        run_all_debates()
+    # Guard: prevent re-entry if debate already completed (e.g. stale _debate_running flag)
+    if st.session_state.get("_debate_running") and not st.session_state.get("debate_completed"):
+        try:
+            run_all_debates()
+        except Exception as e:
+            st.error(f"❌ {('辩论执行出错' if is_zh else 'Debate execution error')}: {e}")
+        finally:
+            st.session_state._debate_running = False
+        st.rerun()
+    elif st.session_state.get("_debate_running"):
+        # Stale flag — debate already completed, just clear the flag
         st.session_state._debate_running = False
         st.rerun()
     
@@ -4256,6 +4265,10 @@ def main():
     if st.session_state.get("_auto_start_debate"):
         st.session_state._auto_start_debate = False
         st.session_state._active_main_tab = 1  # debate tab
+        # Clear previous results before starting new debate
+        st.session_state.debate_completed = False
+        st.session_state.dept_results = {}
+        st.session_state.final_output = {}
         st.session_state._debate_running = True  # auto-start debate
     
     if "_active_main_tab" not in st.session_state:
