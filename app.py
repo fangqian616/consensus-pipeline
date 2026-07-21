@@ -2539,6 +2539,14 @@ def render_proofread_tab():
     else:
         st.caption("P7: " + ("空间/分镜/摄影/剪辑四部门审查" if is_zh else "Spatial/Storyboard/DP/Editing review"))
     
+    # Auto-revision loop slider
+    _max_loop = st.slider(
+        "🔄 " + ("自动修正最大轮数" if is_zh else "Max Auto-Revision Rounds"),
+        min_value=0, max_value=5, value=1,
+        help=("0=关闭自动循环，1-5=校对不过时自动修正并重新校对的最大轮数" if is_zh else "0=off, 1-5=max rounds of auto revision+re-proofread loop"),
+        key="auto_revision_max_loop",
+    )
+    
     if st.button(t("proofread_run"), type="primary", use_container_width=True, key="run_proofread"):
         dept_results = st.session_state.get("dept_results", {})
         with st.spinner(t("proofread_running")):
@@ -2640,45 +2648,104 @@ def render_proofread_tab():
                         st.session_state.auto_revision_result = revision
                         st.rerun()
 
-        # ===== Academic Auto Revision =====
+        # ===== Academic Auto Revision (loop) =====
         if not pr.get("passed") and is_academic:
             st.divider()
-            st.subheader("🔧 " + ("根据校对反馈自动修正报告" if is_zh else "Auto-fix Report based on Proofreading"))
-            
-            ac_revision = st.session_state.get("academic_auto_revision_result")
-            if ac_revision:
-                st.success("✅ " + ("修正完成" if is_zh else "Revision complete"))
-                if ac_revision.get("revision_notes"):
-                    with st.expander("📝 " + ("修正说明" if is_zh else "Revision Notes")):
-                        st.markdown(ac_revision["revision_notes"])
-                
-                rev_report = ac_revision.get("final_report", "")
-                if rev_report:
-                    with st.expander("📄 " + ("修正后报告" if is_zh else "Revised Report")):
-                        st.markdown(rev_report)
-                
-                if st.button("✅ " + ("应用修正结果" if is_zh else "Apply Revision"), type="primary", use_container_width=True, key="apply_ac_auto_revision"):
-                    st.session_state.final_output["final_report"] = rev_report
-                    st.session_state.academic_auto_revision_result = None
-                    st.session_state.proofread_result = None
-                    st.rerun()
-            else:
-                if st.button("🔧 " + ("执行自动修正" if is_zh else "Run Auto Revision"), type="secondary", use_container_width=True, key="run_ac_auto_revision"):
-                    dept_results = st.session_state.get("dept_results", {})
-                    report_text = final.get("final_report", "") or final.get("consensus_report", "") or ""
-                    with st.spinner("🔧 " + ("正在根据校对反馈修正报告..." if is_zh else "Revising report based on proofreading feedback...")):
-                        ac_revision = run_academic_auto_revision(
-                            final_report=report_text,
-                            proofread_result=pr,
-                            all_consensus={k: v["consensus"] for k, v in dept_results.items()},
-                            api_url=st.session_state.api_url,
-                            api_key=st.session_state.api_key,
-                            model=st.session_state.model_name,
-                            lang=st.session_state.lang,
-                            stats=st.session_state.get("current_stats"),
-                        )
-                        st.session_state.academic_auto_revision_result = ac_revision
+            if _max_loop >= 1:
+                loop_result = st.session_state.get("academic_loop_result")
+                if loop_result:
+                    # Show loop results
+                    rounds_done = loop_result.get("rounds_done", 0)
+                    final_passed = loop_result.get("passed", False)
+                    if final_passed:
+                        st.success(f"✅ {('自动修正通过！共' if is_zh else 'Auto-revision passed! ')}{rounds_done}{('轮' if is_zh else ' rounds')}")
+                    else:
+                        st.warning(f"⚠️ {('达到最大轮数限制（' if is_zh else 'Max rounds reached (')}{_max_loop}{('轮），校对仍有问题' if is_zh else '), issues remain')}")
+                    
+                    # Show each round summary
+                    for ri, rinfo in enumerate(loop_result.get("rounds", []), 1):
+                        with st.expander(f"🔄 {('第' if is_zh else 'Round ')}{ri}{('轮' if is_zh else '')} — {'✅' if rinfo.get('passed') else '❌'}"):
+                            if rinfo.get("revision_notes"):
+                                st.markdown(f"**{('修正说明' if is_zh else 'Revision Notes')}:**\n{rinfo['revision_notes']}")
+                            if rinfo.get("issues_summary"):
+                                st.markdown(f"**{('校对结果' if is_zh else 'Proofread Result')}:**\n{rinfo['issues_summary']}")
+                    
+                    # Show final revised report + apply button
+                    rev_report = loop_result.get("final_report", "")
+                    if rev_report:
+                        with st.expander("📄 " + ("修正后报告" if is_zh else "Revised Report")):
+                            st.markdown(rev_report)
+                    if st.button("✅ " + ("应用修正结果" if is_zh else "Apply Revision"), type="primary", use_container_width=True, key="apply_ac_loop_revision"):
+                        st.session_state.final_output["final_report"] = rev_report
+                        st.session_state.academic_loop_result = None
+                        st.session_state.proofread_result = None
                         st.rerun()
+                else:
+                    if st.button("🔄 " + (f"开始自动修正循环（最多{_max_loop}轮）" if is_zh else f"Start Auto-Revision Loop (max {_max_loop} rounds)"), type="secondary", use_container_width=True, key="run_ac_loop"):
+                        dept_results = st.session_state.get("dept_results", {})
+                        report_text = final.get("final_report", "") or final.get("consensus_report", "") or ""
+                        current_report = report_text
+                        current_pr = pr
+                        rounds_log = []
+                        
+                        with st.status("🔄 " + ("自动修正循环中..." if is_zh else "Auto-revision loop running..."), expanded=True) as status:
+                            for round_i in range(1, _max_loop + 1):
+                                st.write(f"--- **{('第' if is_zh else 'Round ')}{round_i}{('轮' if is_zh else '')}** ---")
+                                
+                                # Step 1: Auto-revise
+                                st.write("🔧 " + ("修正中..." if is_zh else "Revising..."))
+                                ac_revision = run_academic_auto_revision(
+                                    final_report=current_report,
+                                    proofread_result=current_pr,
+                                    all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+                                    api_url=st.session_state.api_url,
+                                    api_key=st.session_state.api_key,
+                                    model=st.session_state.model_name,
+                                    lang=st.session_state.lang,
+                                    stats=st.session_state.get("current_stats"),
+                                )
+                                current_report = ac_revision.get("final_report", current_report)
+                                
+                                # Step 2: Re-proofread
+                                st.write("🔍 " + ("重新校对中..." if is_zh else "Re-proofreading..."))
+                                new_pr = run_academic_proofreading(
+                                    final_report=current_report,
+                                    all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+                                    api_url=st.session_state.api_url,
+                                    api_key=st.session_state.api_key,
+                                    model=st.session_state.model_name,
+                                    lang=st.session_state.lang,
+                                    stats=st.session_state.get("current_stats"),
+                                )
+                                current_pr = new_pr
+                                
+                                # Log this round
+                                rounds_log.append({
+                                    "passed": new_pr.get("passed", False),
+                                    "revision_notes": ac_revision.get("revision_notes", ""),
+                                    "issues_summary": new_pr.get("overall", ""),
+                                })
+                                
+                                if new_pr.get("passed"):
+                                    st.write("✅ " + ("校对通过！" if is_zh else "Proofreading passed!"))
+                                    status.update(label="✅ " + ("自动修正完成" if is_zh else "Auto-revision complete"), state="complete")
+                                    break
+                                else:
+                                    remaining = _max_loop - round_i
+                                    st.write("❌ " + (f"仍有问题，剩余{remaining}轮" if is_zh else f"Issues remain, {remaining} rounds left"))
+                            else:
+                                status.update(label="⚠️ " + ("达到最大轮数" if is_zh else "Max rounds reached"), state="complete")
+                        
+                        st.session_state.academic_loop_result = {
+                            "rounds_done": len(rounds_log),
+                            "passed": current_pr.get("passed", False),
+                            "rounds": rounds_log,
+                            "final_report": current_report,
+                        }
+                        st.session_state.proofread_result = current_pr
+                        st.rerun()
+            else:
+                st.info("ℹ️ " + ("滑块设为0，不会自动修正。请手动点击上方修正按钮或调整滑块。" if is_zh else "Slider set to 0, auto-revision disabled. Use manual revision or adjust slider."))
         
         # ===== Director Instruction Correction =====
         st.divider()
