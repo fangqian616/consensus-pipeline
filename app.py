@@ -4209,6 +4209,24 @@ def main():
         layout="wide",
     )
     
+
+    # ---- Keepalive: prevent Streamlit Cloud idle sleep (15min timeout) ----
+    # Sends a HEAD request every 10 minutes to keep container awake.
+    # Invisible to user, does not trigger reruns or state changes.
+    st_components.html(
+        """
+        <script>
+        (function(){
+            var interval = 10 * 60 * 1000;  // 10 minutes
+            setInterval(function(){
+                fetch(window.location.origin + window.location.pathname, {method:'HEAD', mode:'no-cors', cache:'no-store'});
+            }, interval);
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
     # Language welcome page (first visit)
     if not st.session_state.get("_lang_selected", False):
         st.markdown("---")
