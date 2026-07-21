@@ -1,3 +1,13 @@
+---
+AIGC:
+    Label: "1"
+    ContentProducer: 001191110102MACQD9K64018705
+    ProduceID: 3946566099419012_0/project_7662589641924722984-files/推广方案/README_tutorial_update.md
+    ReservedCode1: ""
+    ContentPropagator: 001191110102MACQD9K64028705
+    PropagateID: 3946566099419012#1784598489524
+    ReservedCode2: ""
+---
 # 🧠 Consensus Pipeline
 
 <p align="center">
@@ -184,7 +194,17 @@ No hardcoded keywords. The LLM generates everything based on your topic — excl
 
 ---
 
-## 🚀 Quick Start
+## 📖 Usage Tutorial
+
+Two ways to run Consensus Pipeline: **Streamlit Web UI** (interactive, visual) or **Direct CLI** (headless, scriptable). Both produce the same output — pick based on your workflow.
+
+---
+
+### 🖥️ Option A: Streamlit Web UI
+
+Best for: exploring topics interactively, watching debates in real-time, tweaking department configs on the fly.
+
+#### Step 1: Install & Launch
 
 ```bash
 git clone https://github.com/fangqian616/consensus-pipeline.git
@@ -193,28 +213,146 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-### CLI (headless)
+Your browser opens to `http://localhost:8501`. The sidebar is your control panel — everything starts here.
+
+#### Step 2: Configure API Key & Language
+
+In the left sidebar:
+
+1. **API Key** — Paste your DeepSeek API key (or any OpenAI-compatible key). [Get one here](https://platform.deepseek.com/). The key stays in your session only, never saved to disk.
+2. **Language** — Toggle between 🇨🇳 中文 and 🇬🇧 English. This controls ALL output: debate content, UI labels, and the final report.
+3. **Model** — Defaults to `deepseek-chat`. You can change the API endpoint and model name if using a different provider.
+
+<img src="examples/01_requirement_interview.png" alt="Sidebar Config" width="60%">
+
+#### Step 3: Choose Your Pipeline Mode
+
+The app supports two modes — select the one that matches your goal:
+
+| Mode | Tab | What It Does |
+|------|-----|-------------|
+| **Academic Research** | `📚 Academic` | Literature search → multi-agent debate → literature review with confidence scores |
+| **Creative / Animation** | `🎬 Animation` | Script writing → storyboard → asset generation (for video projects) |
+
+> 💡 For academic literature reviews, use the **Academic** tab. This tutorial focuses on the academic pipeline.
+
+#### Step 4: Start the Academic Pipeline
+
+1. Click the **📚 Academic** tab.
+2. Enter your research topic. Be specific — the AI interviewer will ask follow-up questions to narrow scope. Example topics:
+   - `"Machine learning in carbon price forecasting"`
+   - `"Causal inference methods for energy policy evaluation"`
+   - `"The impact of carbon markets on electricity prices: a systematic review"`
+3. The AI interviewer asks clarifying questions about your scope, constraints, and goals. Answer them — this shapes the entire pipeline.
+4. Review the **auto-generated department config**. The AI creates 10+ debate departments with specialized debaters based on your topic. You can edit, add, or remove departments before starting.
+
+#### Step 5: Watch the Debate
+
+Once you confirm the config, the pipeline runs automatically:
+
+1. **Paper Search** (1-2 min) — Multi-source retrieval from OpenAlex, Semantic Scholar, and arXiv.
+2. **QC Filter** (1-2 min) — 3-layer quality sieve: hard filter → LLM classify → importance tagging. ~65% of papers get excluded.
+3. **Department Debate** (5-20 min) — 10+ departments debate in real-time. Each department runs 2-3 rounds. You can watch the debate unfold in the Streamlit UI.
+4. **Cross-Department Validation** (2-5 min) — Departments check each other's conclusions.
+5. **Report Generation** (1-2 min) — Final literature review with confidence annotations, verified citations, and runnable code.
+
+#### Step 6: Download Results
+
+When the pipeline finishes, you get:
+
+- **📄 Literature Review** (PDF/DOCX) — with per-claim confidence scores
+- **💻 Generated Code** — runnable Python scripts for key methods discussed
+- **📊 Debate Logs** — full debate transcripts for audit
+
+---
+
+### ⌨️ Option B: Direct CLI (Headless)
+
+Best for: batch processing, scripting, CI/CD, or when you don't need the visual UI.
+
+#### Step 1: Install Dependencies
 
 ```bash
-# Set your API key
-export DEEPSEEK_API_KEY=your_key_here
+git clone https://github.com/fangqian616/consensus-pipeline.git
+cd consensus-pipeline
+pip install -r requirements.txt
+```
 
-# Run the full pipeline
+#### Step 2: Set API Key
+
+```bash
+# Linux/macOS
+export DEEPSEEK_API_KEY="sk-your-key-here"
+
+# Windows (PowerShell)
+$env:DEEPSEEK_API_KEY="sk-your-key-here"
+
+# Windows (CMD)
+set DEEPSEEK_API_KEY=sk-your-key-here
+```
+
+> 💡 You can also create a `.env` file in the project root: `DEEPSEEK_API_KEY=sk-your-key-here`
+
+#### Step 3: Run the Pipeline
+
+**Basic usage — English output:**
+
+```bash
 python run_pipeline.py --topic "Machine Learning in Energy Economics" --lang en
 ```
 
+**Chinese output (default):**
+
+```bash
+python run_pipeline.py --topic "碳市场价格预测与能源转型关联机制研究"
+```
+
+**Full parameter reference:**
+
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `--topic` | ✅ Yes | — | Research topic |
-| `--lang` | No | `zh` | Output language: `zh` or `en` |
+| `--topic` | ✅ Yes | — | Research topic (any language) |
+| `--lang` | No | `zh` | Output language: `zh` (Chinese) or `en` (English) |
 
-### Streamlit UI
+#### Step 4: Find Your Output
 
-1. Enter your API key in the sidebar (DeepSeek recommended, any OpenAI-compatible API works)
-2. Go to the **Academic** tab, enter your research topic
-3. AI generates domain config — review and confirm
-4. Watch papers get retrieved, filtered, and debated across 10+ departments
-5. Download the literature review with confidence annotations
+All output files are saved to the `output/` directory:
+
+```
+output/
+├── report_<topic>_<timestamp>.docx    # Word report with confidence annotations
+├── report_<topic>_<timestamp>.pdf     # PDF version
+├── code_<topic>_<timestamp>.py        # Generated runnable code
+└── debate_logs/                       # Full debate transcripts
+```
+
+#### Step 5: Custom API Endpoint (Optional)
+
+Using a different model provider? Set the endpoint and model:
+
+```bash
+export DEEPSEEK_API_KEY="your-key"
+export DEEPSEEK_API_BASE="https://api.openai.com/v1"
+export DEEPSEEK_MODEL="gpt-4o"
+
+python run_pipeline.py --topic "Your Topic" --lang en
+```
+
+Any OpenAI-compatible API works — DeepSeek, OpenAI, local models via Ollama/vLLM, etc.
+
+---
+
+### 🔄 Which Should I Use?
+
+| Scenario | Streamlit | CLI |
+|----------|-----------|-----|
+| First time exploring the tool | ✅ Recommended | — |
+| Want to watch debates in real-time | ✅ | — |
+| Need to tweak department config | ✅ | — |
+| Batch processing multiple topics | — | ✅ |
+| Scripting / automation | — | ✅ |
+| Running on a headless server | — | ✅ |
+| CI/CD pipeline integration | — | ✅ |
 
 ---
 
@@ -342,6 +480,8 @@ MIT License
 ---
 
 > This is a student project, actively developed and tested. Feedback, bug reports, and "have you tried X?" suggestions are all welcome.
+
+---
 
 ---
 
