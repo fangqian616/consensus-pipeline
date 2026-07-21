@@ -1,13 +1,3 @@
----
-AIGC:
-    Label: "1"
-    ContentProducer: 001191110102MACQD9K64018705
-    ProduceID: 3946566099419012_0/project_7662589641924722984-files/推广方案/README_EN_final.md
-    ReservedCode1: ""
-    ContentPropagator: 001191110102MACQD9K64028705
-    PropagateID: 3946566099419012#1784599360365
-    ReservedCode2: ""
----
 # 🧠 Consensus Pipeline
 
 <p align="center">
