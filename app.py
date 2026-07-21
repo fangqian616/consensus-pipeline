@@ -1600,6 +1600,11 @@ def render_input_tab():
 def render_debate_tab():
     is_zh = st.session_state.lang == "zh"
     
+    # Show persisted error from previous run (e.g. 401 Unauthorized) before it gets wiped by rerun
+    if st.session_state.get("_debate_error"):
+        st.error(f"❌ {st.session_state._debate_error}")
+        del st.session_state._debate_error
+    
     # Auto-start debate: synchronous execution
     # Key fix: clear _debate_running IMMEDIATELY on entry, before run_all_debates().
     # If Streamlit triggers a rerun mid-execution (WebSocket reconnect, container hot-reload),
@@ -1611,11 +1616,13 @@ def render_debate_tab():
         try:
             run_all_debates()
         except Exception as e:
-            st.error(f"❌ {('辩论执行出错' if is_zh else 'Debate execution error')}: {e}")
+            # Persist error across rerun so user can see it
+            st.session_state._debate_error = f"{'辩论执行出错' if is_zh else 'Debate execution error'}: {e}"
         st.rerun()
     elif st.session_state.get("_debate_running"):
-        # Stale flag — just clear it
+        # Stale flag — clear it and rerun so radio re-enables
         st.session_state._debate_running = False
+        st.rerun()
     
     if st.session_state.step_mode and st.session_state.step_phase != "idle":
         render_step_mode()
