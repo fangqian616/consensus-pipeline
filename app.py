@@ -1601,19 +1601,21 @@ def render_debate_tab():
     is_zh = st.session_state.lang == "zh"
     
     # Auto-start debate: synchronous execution
-    # Guard: prevent re-entry if debate already completed (e.g. stale _debate_running flag)
+    # Key fix: clear _debate_running IMMEDIATELY on entry, before run_all_debates().
+    # If Streamlit triggers a rerun mid-execution (WebSocket reconnect, container hot-reload),
+    # the flag is already False so we won't re-enter. The debate result is either:
+    #   - completed → debate_completed=True, results intact
+    #   - interrupted → partial results, user can re-run manually
     if st.session_state.get("_debate_running") and not st.session_state.get("debate_completed"):
+        st.session_state._debate_running = False  # Clear FIRST to prevent mid-exec re-entry
         try:
             run_all_debates()
         except Exception as e:
             st.error(f"❌ {('辩论执行出错' if is_zh else 'Debate execution error')}: {e}")
-        finally:
-            st.session_state._debate_running = False
         st.rerun()
     elif st.session_state.get("_debate_running"):
-        # Stale flag — debate already completed, just clear the flag
+        # Stale flag — just clear it
         st.session_state._debate_running = False
-        st.rerun()
     
     if st.session_state.step_mode and st.session_state.step_phase != "idle":
         render_step_mode()
