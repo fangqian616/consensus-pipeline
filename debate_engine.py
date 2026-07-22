@@ -3027,6 +3027,7 @@ def run_academic_summary(
     # === Step 1: Search for real papers ===
     paper_references = ""
     papers_found = []
+    all_papers = []
 
     # Extract core search query from user_topic (which may be a structured plan)
     search_query = user_topic
@@ -3447,12 +3448,26 @@ Based on the above debate content, write a structured academic review report. Re
         "domain_config_active": domain_config is not None if 'domain_config' in dir() else False,
     }
     
+    # Serialize papers for downstream verification (citation-grounded fact check)
+    _papers_data = []
+    for p in all_papers[:20] if has_papers else []:
+        _papers_data.append({
+            "title": getattr(p, "title", ""),
+            "doi": getattr(p, "doi", "") or "",
+            "abstract": getattr(p, "abstract", "") or "",
+            "authors": getattr(p, "authors", []),
+            "year": getattr(p, "year", ""),
+            "journal": getattr(p, "journal", ""),
+            "citation_count": getattr(p, "citation_count", 0),
+        })
+
     return {
         "final_report": report,
         "consensus_report": consensus_text,
         "papers_found": len(papers_found),
         "has_real_references": has_papers,
         "search_info": _search_info,
+        "papers_data": _papers_data,
     }
 
 
