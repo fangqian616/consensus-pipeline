@@ -3990,7 +3990,7 @@ def render_requirement_tab():
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("✅ " + ("需求已明确，进入结构化" if is_zh else "Requirement clear, proceed to structure"), type="primary", key="req_finish_interview"):
-                    # If no AI-generated doc, manually build from user input
+                    # If no auto-generated doc, manually build from user input
                     if not st.session_state.req_document:
                         st.session_state.req_document = RequirementDocument(
                             topic=user_topic or follow_up or "",
