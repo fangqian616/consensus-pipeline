@@ -2517,105 +2517,37 @@ def render_proofread_tab():
     
     
     
-    # ===== Fact Check =====
+    # ===== Fact Check (Citation-Grounded) =====
     with st.expander("🔬 " + ("事实校验（Phase 7.5）" if is_zh else "Fact Check (Phase 7.5)"), expanded=False):
-        st.caption("对共识结论进行交叉验证，锚定文献DOI" if is_zh else "Cross-validate consensus points and anchor DOIs")
-        
-        # ── Meta-discussion filter: skip debate facilitation language ──
-        _FC_META_PATTERNS = frozenset([
-            "好的", "各位", "作为", "主持人", "辩手", "辩论", "采纳", "观点",
-            "我们完全", "我们决定", "达成共识", "本次辩论", "第一轮", "第二轮",
-            "反方", "正方", "质询", "总结陈词", "开场白", "各位同事", "各位观众",
-            "核心决策", "全盘采纳", "完全采纳", "本方案旨在", "本方案的核心",
-            "主持人已", "精彩论述", "深入分析", "仔细审阅", "仔细听取",
-            "综合评估", "最终决策", "综合审阅", "最终共识", "我来", "我做",
-            "感谢", "精彩", "激烈", "出色", "两派", "两辩", "三位",
-            "采纳理由", "核心框架采纳", "核心目标", "理由如下", "具体采纳",
-            "不可妥协", "辩手的方案", "辩手提出", "范式转换",
-            "ok,", "colleagues", "as the moderator", "we adopt",
-            "facilitator", "first round", "second round", "debate",
-            "good,", "everyone,", "team,", "speaking as",
-            "core decision", "final consensus", "let me summarize",
-        ])
-
-        def _fc_is_meta(text: str) -> bool:
-            """True if text is debate facilitation/meta language, not a factual claim."""
-            t = text.lower()
-            hits = sum(1 for p in _FC_META_PATTERNS if p in t)
-            if hits >= 2:
-                return True
-            # Single strong pattern at start of text → also meta
-            strong_starts = (
-                "好的", "各位", "作为", "本方案", "核心决策", "完全采纳",
-                "我们完全", "我们决定", "我来做", "现在我",
-                "采纳", "核心目标", "核心框架",
-                "ok,", "good,", "colleagues", "as the", "now i",
-            )
-            return hits >= 1 and any(t.lstrip("0123456789. *-").startswith(s) for s in strong_starts)
-
-        # ── Extract claims: prefer final report, fallback to dept consensus ──
-        dept_results = st.session_state.get("dept_results", {})
-        all_consensus = []
-
-        # Primary source: final report (actual research findings, not debate process)
         _fc_final = st.session_state.get("final_output", {})
         _fc_report = _fc_final.get("final_report", "") or _fc_final.get("consensus_report", "") or ""
+        _fc_papers = _fc_final.get("papers_data", [])
 
-        if _fc_report:
-            paragraphs = [p.strip() for p in _fc_report.split("\n\n")
-                          if p.strip() and not p.strip().startswith("#")]
-            for para in paragraphs:
-                if len(all_consensus) >= 15:
-                    break
-                if len(para) < 40:
-                    continue
-                # Skip pure list/TOC paragraphs (many bullet items)
-                if para.count("\n- ") > 3 or para.count("\n* ") > 3 or para.count("\n1.") > 3:
-                    continue
-                if _fc_is_meta(para):
-                    continue
-                all_consensus.append(para)
+        if not _fc_report:
+            st.info("需要先完成部门辩论并生成报告才能进行事实校验" if is_zh else "Complete debates and generate report first")
+        else:
+            # Show what we have
+            _has_papers = bool(_fc_papers)
+            _n_refs = len(_fc_papers)
+            if _has_papers:
+                st.caption(
+                    f"基于{_n_refs}篇已检索文献 + 报告引用标记进行原子事实校验（RAG+NLI）"
+                    if is_zh else
+                    f"Atomic fact verification via RAG+NLI against {_n_refs} cached papers + citation markers"
+                )
+            else:
+                st.caption(
+                    "未找到缓存文献，将从报告参考文献部分解析并在线获取摘要"
+                    if is_zh else
+                    "No cached papers found, will parse bibliography and fetch abstracts online"
+                )
 
-        # Fallback: department consensus text (with meta filter)
-        if not all_consensus:
-            for dept_key, dept_data in dept_results.items():
-                consensus = dept_data.get("consensus", "")
-                if not consensus:
-                    continue
-                paragraphs = [p.strip() for p in consensus.split("\n\n")
-                              if p.strip() and not p.strip().startswith("#")]
-                dept_claims = 0
-                for para in paragraphs[:5]:
-                    if dept_claims >= 2:
-                        break
-                    if len(para) < 30:
-                        continue
-                    if _fc_is_meta(para):
-                        continue
-                    all_consensus.append(para)
-                    dept_claims += 1
-
-        if all_consensus:
-            _fc_src = "final report" if _fc_report else "dept consensus"
-            st.info(f"Extracted {len(all_consensus)} claims from {_fc_src} for verification")
-            
             if st.button("🚀 " + ("开始事实校验" if is_zh else "Start Fact Check"), key="fact_check_btn"):
-                # Build search function from AcademicSearchEngine
-                def _search_fn(query, max_results=5):
-                    try:
-                        from academic.search_engine import AcademicSearchEngine
-                        engine = AcademicSearchEngine(quality_levels=["S", "A", "B"], min_results=max_results)
-                        result = engine.search(query, max_results_per_source=max(20, max_results * 4))
-                        papers = result["papers"] + result.get("preprints", [])[:3]  # 期刊+少量高引预印本
-                        return [{"title": p.title, "doi": p.doi, "abstract": p.abstract} for p in papers[:max_results]]
-                    except Exception:
-                        return []
-                
                 # Build LLM function from session config
                 api_url = st.session_state.get("api_url", "")
                 api_key = st.session_state.get("api_key", "")
                 model = st.session_state.get("model_name", "")
-                
+
                 def _llm_fn(system_prompt, user_prompt):
                     import requests as _req
                     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
@@ -2625,46 +2557,105 @@ def render_proofread_tab():
                         return resp.json()["choices"][0]["message"]["content"]
                     except Exception as e:
                         return f"[ERROR] {e}"
-                
-                checker = FactChecker(search_fn=_search_fn, llm_call_fn=_llm_fn if api_key else None)
-                
-                with st.spinner("🔬 " + ("正在校验共识结论..." if is_zh else "Fact-checking consensus...")):
-                    report = checker.check(all_consensus)
-                
-                st.session_state.fact_check_report = report
-            
-            report = st.session_state.get("fact_check_report")
-            if report:
-                st.success(f"Verification complete | Overall confidence: {report.overall_confidence:.0%}")
-                st.write(report.summary)
-                
-                # Show each result
-                for i, r in enumerate(report.results):
+
+                # Build search fallback function
+                def _search_fn(query, max_results=5):
+                    try:
+                        from academic.search_engine import AcademicSearchEngine
+                        engine = AcademicSearchEngine(quality_levels=["S", "A", "B"], min_results=max_results)
+                        result = engine.search(query, max_results_per_source=max(20, max_results * 4))
+                        papers = result["papers"] + result.get("preprints", [])[:3]
+                        return [{"title": p.title, "doi": p.doi, "abstract": p.abstract} for p in papers[:max_results]]
+                    except Exception:
+                        return []
+
+                try:
+                    from requirement.citation_verifier import CitationVerifier
+                    _use_cv = True
+                except ImportError:
+                    _use_cv = False
+
+                if _use_cv:
+                    verifier = CitationVerifier(
+                        llm_call_fn=_llm_fn if api_key else None,
+                        search_fn=_search_fn,
+                        language="zh" if is_zh else "en",
+                        max_claims=20,
+                        max_contexts=15,
+                    )
+                    with st.spinner("🔬 " + ("正在进行引用锚定原子事实校验..." if is_zh else "Running citation-grounded fact verification...")):
+                        cv_report = verifier.verify(_fc_report, papers_data=_fc_papers if _fc_papers else None)
+                    st.session_state.fact_check_report = cv_report
+                    st.session_state.fact_check_type = "citation"
+                else:
+                    # Fallback to legacy FactChecker
+                    checker = FactChecker(search_fn=_search_fn, llm_call_fn=_llm_fn if api_key else None)
+                    # Extract claims from report
+                    _paragraphs = [p.strip() for p in _fc_report.split("\n\n")
+                                   if p.strip() and not p.strip().startswith("#") and len(p.strip()) >= 40]
+                    _claims = [p for p in _paragraphs
+                               if p.count("\n- ") <= 3 and p.count("\n* ") <= 3][:15]
+                    if _claims:
+                        with st.spinner("🔬 " + ("正在校验..." if is_zh else "Fact-checking...")):
+                            fc_report = checker.check(_claims)
+                        st.session_state.fact_check_report = fc_report
+                        st.session_state.fact_check_type = "legacy"
+                    else:
+                        st.warning("未能提取到可验证的事实性论断" if is_zh else "No verifiable claims extracted")
+
+            # ── Display results ──
+            _fc_result = st.session_state.get("fact_check_report")
+            _fc_type = st.session_state.get("fact_check_type", "legacy")
+
+            if _fc_result and _fc_type == "citation":
+                # CitationVerifier report
+                st.success(f"Verification complete | Overall confidence: {_fc_result.overall_confidence:.0%}")
+                st.write(_fc_result.summary)
+
+                # Stats row
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("✅ Verified", _fc_result.verified)
+                c2.metric("⚠️ Partial", _fc_result.partially_verified)
+                c3.metric("❌ Contradicted", _fc_result.contradicted)
+                c4.metric("❓ Unverified", _fc_result.unverified)
+
+                # Per-claim results
+                for i, cv in enumerate(_fc_result.claim_verifications):
+                    status_emoji = {"verified": "✅", "partially_verified": "⚠️", "contradicted": "❌", "unverified": "❓"}
+                    emoji = status_emoji.get(cv.status, "❓")
+                    claim_preview = cv.claim.text[:60] + ("..." if len(cv.claim.text) > 60 else "")
+                    with st.expander(f"{emoji} Claim {i+1}: {claim_preview} ({cv.status})", expanded=cv.status != "verified"):
+                        st.write(f"**Claim**: {cv.claim.text}")
+                        st.write(f"**Status**: {cv.status} | **Confidence**: {cv.confidence:.0%}")
+                        if cv.nli_results:
+                            st.write("**NLI Results**:")
+                            for nli in cv.nli_results:
+                                nli_emoji = {"entail": "✅", "contradict": "❌", "neutral": "➖"}.get(nli.label, "❓")
+                                st.write(f"  {nli_emoji} [{nli.ref_index}] {nli.ref_title[:60]} — {nli.label} ({nli.confidence:.0%})")
+                                if nli.explanation:
+                                    st.caption(f"    {nli.explanation}")
+                                if nli.ref_doi:
+                                    st.caption(f"    DOI: {nli.ref_doi}")
+
+            elif _fc_result and _fc_type == "legacy":
+                # Legacy FactChecker report
+                st.success(f"Verification complete | Overall confidence: {_fc_result.overall_confidence:.0%}")
+                st.write(_fc_result.summary)
+                for i, r in enumerate(_fc_result.results):
                     status_emoji = {"verified": "✅", "partially_verified": "⚠️", "contradicted": "❌", "unverified": "❓"}
                     emoji = status_emoji.get(r.status, "❓")
                     with st.expander(f"{emoji} Claim {i+1}: {r.claim[:50]}... ({r.status})", expanded=r.status != "verified"):
                         st.write(f"**Status**: {r.status} | **Confidence**: {r.confidence:.0%}")
                         if r.supporting_dois:
-                            st.write("**Supporting literature DOI**:")
+                            st.write("**Supporting DOI**:")
                             for doi in r.supporting_dois:
                                 st.write(f"- {doi}")
                         if r.contradicting_dois:
-                            st.write("**Contradicting literature DOI**:")
+                            st.write("**Contradicting DOI**:")
                             for doi in r.contradicting_dois:
                                 st.write(f"- {doi}")
                         if r.notes:
                             st.write(f"**Notes**: {r.notes}")
-                
-                
-        else:
-            if dept_results or _fc_report:
-                st.warning(
-                    "未能提取到可验证的事实性论断（内容可能以流程描述为主）"
-                    if is_zh else
-                    "No verifiable factual claims extracted (content may be mostly process descriptions)"
-                )
-            else:
-                st.info("需要先完成部门辩论才能进行事实校验" if is_zh else "Complete department debates first")
     
     final = st.session_state.get("final_output", {})
     
