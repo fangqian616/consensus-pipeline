@@ -2530,6 +2530,8 @@ def render_proofread_tab():
             "主持人已", "精彩论述", "深入分析", "仔细审阅", "仔细听取",
             "综合评估", "最终决策", "综合审阅", "最终共识", "我来", "我做",
             "感谢", "精彩", "激烈", "出色", "两派", "两辩", "三位",
+            "采纳理由", "核心框架采纳", "核心目标", "理由如下", "具体采纳",
+            "不可妥协", "辩手的方案", "辩手提出", "范式转换",
             "ok,", "colleagues", "as the moderator", "we adopt",
             "facilitator", "first round", "second round", "debate",
             "good,", "everyone,", "team,", "speaking as",
@@ -2546,32 +2548,56 @@ def render_proofread_tab():
             strong_starts = (
                 "好的", "各位", "作为", "本方案", "核心决策", "完全采纳",
                 "我们完全", "我们决定", "我来做", "现在我",
+                "采纳", "核心目标", "核心框架",
                 "ok,", "good,", "colleagues", "as the", "now i",
             )
-            return hits >= 1 and any(t.startswith(s) for s in strong_starts)
+            return hits >= 1 and any(t.lstrip("0123456789. *-").startswith(s) for s in strong_starts)
 
+        # ── Extract claims: prefer final report, fallback to dept consensus ──
         dept_results = st.session_state.get("dept_results", {})
         all_consensus = []
-        for dept_key, dept_data in dept_results.items():
-            consensus = dept_data.get("consensus", "")
-            if not consensus:
-                continue
-            paragraphs = [p.strip() for p in consensus.split("\n\n")
+
+        # Primary source: final report (actual research findings, not debate process)
+        _fc_final = st.session_state.get("final_output", {})
+        _fc_report = _fc_final.get("final_report", "") or _fc_final.get("consensus_report", "") or ""
+
+        if _fc_report:
+            paragraphs = [p.strip() for p in _fc_report.split("\n\n")
                           if p.strip() and not p.strip().startswith("#")]
-            # Scan deeper (up to 5 paragraphs) to find substantive claims
-            dept_claims = 0
-            for para in paragraphs[:5]:
-                if dept_claims >= 2:
+            for para in paragraphs:
+                if len(all_consensus) >= 15:
                     break
-                if len(para) < 30:
+                if len(para) < 40:
+                    continue
+                # Skip pure list/TOC paragraphs (many bullet items)
+                if para.count("\n- ") > 3 or para.count("\n* ") > 3 or para.count("\n1.") > 3:
                     continue
                 if _fc_is_meta(para):
                     continue
                 all_consensus.append(para)
-                dept_claims += 1
+
+        # Fallback: department consensus text (with meta filter)
+        if not all_consensus:
+            for dept_key, dept_data in dept_results.items():
+                consensus = dept_data.get("consensus", "")
+                if not consensus:
+                    continue
+                paragraphs = [p.strip() for p in consensus.split("\n\n")
+                              if p.strip() and not p.strip().startswith("#")]
+                dept_claims = 0
+                for para in paragraphs[:5]:
+                    if dept_claims >= 2:
+                        break
+                    if len(para) < 30:
+                        continue
+                    if _fc_is_meta(para):
+                        continue
+                    all_consensus.append(para)
+                    dept_claims += 1
 
         if all_consensus:
-            st.info(f"Extracted {len(all_consensus)} verifiable claims (filtered from debate summaries)")
+            _fc_src = "final report" if _fc_report else "dept consensus"
+            st.info(f"Extracted {len(all_consensus)} claims from {_fc_src} for verification")
             
             if st.button("🚀 " + ("开始事实校验" if is_zh else "Start Fact Check"), key="fact_check_btn"):
                 # Build search function from AcademicSearchEngine
@@ -2631,11 +2657,11 @@ def render_proofread_tab():
                 
                 
         else:
-            if dept_results:
+            if dept_results or _fc_report:
                 st.warning(
-                    "未从共识文本中提取到可验证的事实性论断（共识内容可能以流程描述为主）"
+                    "未能提取到可验证的事实性论断（内容可能以流程描述为主）"
                     if is_zh else
-                    "No verifiable factual claims extracted from consensus (content may be mostly process descriptions)"
+                    "No verifiable factual claims extracted (content may be mostly process descriptions)"
                 )
             else:
                 st.info("需要先完成部门辩论才能进行事实校验" if is_zh else "Complete department debates first")
