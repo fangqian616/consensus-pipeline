@@ -1077,7 +1077,7 @@ def build_dept_input(dept_key: str) -> str:
         for pk in ["screenwriter", "spatial", "storyboard", "dp", "lighting", "vfx", "sound"]:
             if pk in dept_results:
                 p = DEPARTMENTS.get(pk, {})
-                pn = p["zh_name"] if is_zh else p["en_name"]
+                pn = (p.get("zh_name") if is_zh else p.get("en_name")) or p.get("zh_name") or p.get("en_name") or "?"
                 consensus_label = "共识" if is_zh else "Consensus"
                 parts.append(f"{pn}{consensus_label}：\n{dept_results[pk]['consensus']}" if is_zh else f"{pn} {consensus_label}:\n{dept_results[pk]['consensus']}")
         return "\n\n---\n\n".join(parts)
@@ -1180,13 +1180,13 @@ def run_all_debates(progress_callback=None):
         # P1-P4: Department debates (Pipeline of Consensus)
         for dept_key in DEPT_ORDER:
             dept = DEPARTMENTS.get(dept_key, {})
-            dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+            dept_name = (dept.get("zh_name") if is_zh else dept.get("en_name")) or dept.get("zh_name") or dept.get("en_name") or "?"
             dept_input = build_dept_input(dept_key)
         
             def on_progress(dk, rn, total_r, debater):
                 nonlocal step
                 d = DEPARTMENTS.get(dk, {})
-                dn = d["zh_name"] if is_zh else d["en_name"]
+                dn = (d.get("zh_name") if is_zh else d.get("en_name")) or d.get("zh_name") or d.get("en_name") or "?"
                 if debater == "consensus":
                     # Consensus generation phase
                     pct = min(step / total_steps, 0.99)
@@ -1685,7 +1685,7 @@ def render_debate_tab():
         
         dept = DEPARTMENTS.get(dept_key, {})
         result = dept_results[dept_key]
-        dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+        dept_name = (dept.get("zh_name") if is_zh else dept.get("en_name")) or dept.get("zh_name") or dept.get("en_name") or "?"
         
         with st.expander(f"🎬 **{dept_name}**", expanded=False):
             for log_entry in result.get("debate_log", []):
@@ -1723,7 +1723,7 @@ def render_step_mode():
     
     if dept_index < len(DEPT_ORDER):
         current_dept = DEPARTMENTS.get(DEPT_ORDER[dept_index] if dept_index < len(DEPT_ORDER) else "", {})
-        dept_name = current_dept["zh_name"] if is_zh else current_dept["en_name"]
+        dept_name = (current_dept.get("zh_name") if is_zh else current_dept.get("en_name")) or current_dept.get("zh_name") or current_dept.get("en_name") or "?"
     else:
         dept_name = "---"
     
@@ -1732,7 +1732,7 @@ def render_step_mode():
     if phase == "round_done":
         dept_key = DEPT_ORDER[dept_index]
         dept = DEPARTMENTS.get(dept_key, {})
-        dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+        dept_name = (dept.get("zh_name") if is_zh else dept.get("en_name")) or dept.get("zh_name") or dept.get("en_name") or "?"
         
         st.subheader(t("step_round_title", round=st.session_state.step_round) + f" — {dept_name}")
         
@@ -1777,7 +1777,7 @@ def render_step_mode():
     elif phase == "dept_done":
         dept_key = DEPT_ORDER[dept_index]
         dept = DEPARTMENTS.get(dept_key, {})
-        dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+        dept_name = (dept.get("zh_name") if is_zh else dept.get("en_name")) or dept.get("zh_name") or dept.get("en_name") or "?"
         result = st.session_state.dept_results.get(dept_key, {})
         
         st.subheader(t("step_dept_done", dept=dept_name))
@@ -1826,7 +1826,7 @@ def render_step_mode():
         for dept_key in DEPT_ORDER:
             if dept_key in st.session_state.dept_results:
                 dept = DEPARTMENTS.get(dept_key, {})
-                dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+                dept_name = (dept.get("zh_name") if is_zh else dept.get("en_name")) or dept.get("zh_name") or dept.get("en_name") or "?"
                 result = st.session_state.dept_results[dept_key]
                 with st.expander(f"📋 **{dept_name}**"):
                     st.markdown(result.get("consensus", ""))
@@ -1845,7 +1845,7 @@ def render_step_mode():
                 sr = st.session_state.spatial_review_result
                 for dk, rv in sr.get("reviews", {}).items():
                     dept = DEPARTMENTS.get(dk, {})
-                    dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+                    dept_name = (dept.get("zh_name") if is_zh else dept.get("en_name")) or dept.get("zh_name") or dept.get("en_name") or "?"
                     st.markdown(f"**{dept_name}** Review feedback:")
                     st.markdown(rv)
                     st.divider()
@@ -1875,7 +1875,7 @@ def render_step_mode():
         for dk in DEPT_ORDER:
             if dk in st.session_state.dept_results and DEPT_ORDER.index(dk) < dept_index:
                 dept = DEPARTMENTS.get(dk, {})
-                dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+                dept_name = (dept.get("zh_name") if is_zh else dept.get("en_name")) or dept.get("zh_name") or dept.get("en_name") or "?"
                 result = st.session_state.dept_results[dk]
                 with st.expander(f"✅ **{dept_name}**"):
                     st.markdown(result.get("consensus", ""))
@@ -1919,7 +1919,7 @@ def render_cross_tab():
         st.subheader(t("p2_cross_title"))
         for dk, rv in sr.get("reviews", {}).items():
             dept = DEPARTMENTS.get(dk, {})
-            dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+            dept_name = (dept.get("zh_name") if is_zh else dept.get("en_name")) or dept.get("zh_name") or dept.get("en_name") or "?"
             with st.expander(f"🔍 **{dept_name}** " + ("审核反馈" if is_zh else "Review")):
                 st.markdown(rv)
         with st.expander("📝 " + ("空间板块修订方案" if is_zh else "Revised Spatial Plan")):
@@ -1936,8 +1936,8 @@ def render_cross_tab():
     for cr in cross_results:
         a_dept = DEPARTMENTS.get(cr.get("side_a", ""), {})
         b_dept = DEPARTMENTS.get(cr.get("side_b", ""), {})
-        a_name = a_dept["zh_name"] if is_zh else a_dept["en_name"]
-        b_name = b_dept["zh_name"] if is_zh else b_dept["en_name"]
+        a_name = (a_dept.get("zh_name") if is_zh else a_dept.get("en_name")) or a_dept.get("zh_name") or a_dept.get("en_name") or cr.get("side_a", "?")
+        b_name = (b_dept.get("zh_name") if is_zh else b_dept.get("en_name")) or b_dept.get("zh_name") or b_dept.get("en_name") or cr.get("side_b", "?")
         
         with st.expander(f"⚔️ **{a_name} vs {b_name}** — {cr['topic']}", expanded=False):
             st.markdown(cr.get("debate_result", ""))
@@ -2727,10 +2727,10 @@ def render_proofread_tab():
         for dept_key in _proof_departments:
             if is_academic:
                 dept = _academic_dept_names.get(dept_key, {})
-                dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+                dept_name = (dept.get("zh_name") if is_zh else dept.get("en_name")) or dept.get("zh_name") or dept.get("en_name") or "?"
             else:
                 dept = DEPARTMENTS.get(dept_key, {})
-                dept_name = dept["zh_name"] if is_zh else dept["en_name"]
+                dept_name = (dept.get("zh_name") if is_zh else dept.get("en_name")) or dept.get("zh_name") or dept.get("en_name") or "?"
             review = pr.get("reviews", {}).get(dept_key, "")
             with st.expander(f"🔍 **{dept_name}**"):
                 st.markdown(review)
@@ -2889,7 +2889,7 @@ def render_proofread_tab():
         dept_options = {}
         for dk in DEPT_ORDER:
             dept = DEPARTMENTS.get(dk, {})
-            dept_options[dk] = dept["zh_name"] if is_zh else dept["en_name"]
+            dept_options[dk] = (dept.get("zh_name") if is_zh else dept.get("en_name")) or dept.get("zh_name") or dept.get("en_name") or "?"
         
         col_dept, col_rounds = st.columns([3, 1])
         with col_dept:
