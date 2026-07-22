@@ -3027,7 +3027,7 @@ def run_academic_summary(
     # === Step 1: Search for real papers ===
     paper_references = ""
     papers_found = []
-    all_papers = []
+    all_papers = []  # Initialize to prevent NameError if try block fails
 
     # Extract core search query from user_topic (which may be a structured plan)
     search_query = user_topic
@@ -3454,11 +3454,12 @@ Based on the above debate content, write a structured academic review report. Re
         _papers_data.append({
             "title": getattr(p, "title", ""),
             "doi": getattr(p, "doi", "") or "",
-            "abstract": getattr(p, "abstract", "") or "",
+            "abstract": (getattr(p, "abstract", "") or "")[:2000],
             "authors": getattr(p, "authors", []),
             "year": getattr(p, "year", ""),
             "journal": getattr(p, "journal", ""),
             "citation_count": getattr(p, "citation_count", 0),
+            "url": getattr(p, "url", "") or "",
         })
 
     return {
