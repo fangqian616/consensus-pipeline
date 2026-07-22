@@ -17,6 +17,47 @@ from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 
 
+# ── Content Filters ─────────────────────────────────────────────────────────
+
+_CODE_KEYWORDS_RE = re.compile(
+    r'(?:def |class |import |from \w+ import|return |print\(|np\.|pd\.|plt\.|'
+    r'torch\.|tf\.|dataframe|\.view\(|\.reshape\(|__init__|self\.|lambda |'
+    r'函数|参数|默认值|实例化|调用|字典|列表|变量|模块|对象|方法|属性)',
+    re.IGNORECASE,
+)
+
+_CODE_DESC_PATTERNS = [
+    r'字典包含键', r'函数\s*\w+\s*用于', r'参数\s*\w+\s*的?默认值',
+    r'实例化\s*\w+\s*对象', r'调用\s*\w+\.\w+', r'值为\s*\w+\.\w+\(',
+    r'循环遍历', r'从\s*\w+\s*中筛选', r'使用\s*\w+\.\w+\s*从',
+    r'将\s*\w+\s*添加', r'被赋值给', r'接受\s*\w+\s*作为参数',
+    r'返回的?第[一二三123]\w*个值', r'\w+\.\w+\(\)',
+    r'svdvals', r'bootstrap\s*样本', r'SimpleSCM', r'scm_\w+',
+    r'ate_\w+', r'cate\b', r'generate_counterfactual', r'causal_fairness_test',
+    r'mean_difference|disparate_impact', r'value_counts|normalize=True',
+    r'np\.random\.choice', r'\.iloc\[', r'有放回抽样', r'唯一值',
+    r'子集\s*subset', r'梯度张量|奇异值|重塑为|列向量',
+]
+
+
+def _is_code_description(text: str) -> bool:
+    """Return True if text is primarily a code/API description, not a verifiable factual claim."""
+    if len(_CODE_KEYWORDS_RE.findall(text)) >= 3:
+        return True
+    text_lower = text.lower()
+    for pattern in _CODE_DESC_PATTERNS:
+        if re.search(pattern, text_lower):
+            return True
+    return False
+
+
+def _strip_code_blocks(text: str) -> str:
+    """Remove fenced code blocks and inline code from markdown text."""
+    text = re.sub(r'```[\s\S]*?```', '', text)
+    text = re.sub(r'`[^`]+`', '', text)
+    return text
+
+
 # ── Data Structures ──────────────────────────────────────────────────────────
 
 @dataclass
@@ -385,6 +426,7 @@ If no decomposable factual claims exist, output: {"claims": []}"""
                     cited_indices=ctx.cited_indices,
                 )
                 for ctx in contexts
+                if not _is_code_description(ctx.text[:500])
             ]
 
         claims = []
@@ -392,6 +434,8 @@ If no decomposable factual claims exist, output: {"claims": []}"""
             atomic = self._decompose_single(ctx)
             claims.extend(atomic)
 
+        # Filter out code/API descriptions — not verifiable via paper abstracts
+        claims = [c for c in claims if not _is_code_description(c.text)]
         return claims
 
     def _decompose_single(self, ctx: CitationContext) -> List[AtomicClaim]:
