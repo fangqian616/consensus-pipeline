@@ -12,6 +12,8 @@ import streamlit.components.v1 as st_components
 import json
 import os
 import time
+import uuid
+import tempfile
 from datetime import datetime
 
 
@@ -124,13 +126,22 @@ def browser_notify(title: str, message: str):
 
 
 # ============ Disk Persistence ============
-# Auto-save JSON to disk after each step, survives network loss/crash/shutdown
+# Auto-save to session_state (primary) + per-user file backup (recovery safety net).
+# File backup survives session_state loss within same container lifecycle
+# (e.g. rerun error, script crash). Does NOT survive container restart (OOM, git push).
 
 _AUTOSAVE_PREFIX = "_autosave_"
+_autosave_dir = os.path.join(tempfile.gettempdir(), "consensus_autosave")
+
+def _autosave_file_path(key: str) -> str:
+    """Per-user file path for autosave backup. UUID in session_state makes filename unguessable."""
+    if "_session_uuid" not in st.session_state:
+        st.session_state._session_uuid = uuid.uuid4().hex
+    return os.path.join(_autosave_dir, f"{st.session_state._session_uuid}_{key}.json")
 
 def autosave_result(key: str, data: dict):
     """
-    Persist results to session state (per-user isolated).
+    Persist results to session_state (primary) + file backup (recovery).
     key: e.g. "normal_result", "market_step1", "market_result"
     data: dict data to save
     """
@@ -138,18 +149,42 @@ def autosave_result(key: str, data: dict):
         st.session_state[_AUTOSAVE_PREFIX + key] = data
     except Exception as e:
         import sys
-        print(f"[autosave] Save {key} failed: {e}", file=sys.stderr)
+        print(f"[autosave] Save {key} to session_state failed: {e}", file=sys.stderr)
+    # File backup (best-effort, non-blocking)
+    try:
+        os.makedirs(_autosave_dir, exist_ok=True)
+        with open(_autosave_file_path(key), "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except Exception:
+        pass  # File backup is optional; don't break main flow
 
 def autosave_load(key: str) -> dict | None:
     """
-    Load persisted results from session state.
+    Load persisted results from session_state.
+    Falls back to file backup if session_state is empty (recovery scenario).
     Returns dict or None
     """
-    return st.session_state.get(_AUTOSAVE_PREFIX + key)
+    result = st.session_state.get(_AUTOSAVE_PREFIX + key)
+    if result is not None:
+        return result
+    # Fallback: try file backup (session_state was lost but file survived)
+    try:
+        path = _autosave_file_path(key)
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return None
 
 def autosave_has(key: str) -> bool:
-    """Check if persisted result exists"""
-    return (_AUTOSAVE_PREFIX + key) in st.session_state
+    """Check if persisted result exists (in session_state or file backup)"""
+    if (_AUTOSAVE_PREFIX + key) in st.session_state:
+        return True
+    try:
+        return os.path.exists(_autosave_file_path(key))
+    except Exception:
+        return False
 
 def autosave_list() -> list[str]:
     """List all persisted result keys for current user"""
@@ -163,10 +198,25 @@ def autosave_clear(key: str = None):
     """Clear persisted results. key=None clears all"""
     if key:
         st.session_state.pop(_AUTOSAVE_PREFIX + key, None)
+        try:
+            path = _autosave_file_path(key)
+            if os.path.exists(path):
+                os.remove(path)
+        except Exception:
+            pass
     else:
         for k in list(st.session_state):
             if k.startswith(_AUTOSAVE_PREFIX):
                 del st.session_state[k]
+        # Clean file backups for this session
+        try:
+            uuid_str = st.session_state.get("_session_uuid", "")
+            if uuid_str and os.path.isdir(_autosave_dir):
+                for f in os.listdir(_autosave_dir):
+                    if f.startswith(uuid_str):
+                        os.remove(os.path.join(_autosave_dir, f))
+        except Exception:
+            pass
 
 
 def notify_stage_complete(stage_name: str, detail: str = ""):
@@ -1605,23 +1655,17 @@ def render_debate_tab():
         st.error(f"❌ {st.session_state._debate_error}")
         del st.session_state._debate_error
     
-    # Auto-start debate: synchronous execution
-    # Key fix: clear _debate_running IMMEDIATELY on entry, before run_all_debates().
-    # If Streamlit triggers a rerun mid-execution (WebSocket reconnect, container hot-reload),
-    # the flag is already False so we won't re-enter. The debate result is either:
-    #   - completed → debate_completed=True, results intact
-    #   - interrupted → partial results, user can re-run manually
-    if st.session_state.get("_debate_running") and not st.session_state.get("debate_completed"):
-        st.session_state._debate_running = False  # Clear FIRST to prevent mid-exec re-entry
+    # Simplified guard: original 3-line pattern + error persistence + finally
+    # _debate_running stays True during execution; cleared only in finally after completion.
+    # If rerun happens mid-exec, guard re-enters and debate restarts from scratch
+    # (dept_results is local var, partial results cannot be preserved anyway).
+    if st.session_state.get("_debate_running"):
         try:
             run_all_debates()
         except Exception as e:
-            # Persist error across rerun so user can see it
             st.session_state._debate_error = f"{'辩论执行出错' if is_zh else 'Debate execution error'}: {e}"
-        st.rerun()
-    elif st.session_state.get("_debate_running"):
-        # Stale flag — clear it and rerun so radio re-enables
-        st.session_state._debate_running = False
+        finally:
+            st.session_state._debate_running = False
         st.rerun()
     
     if st.session_state.step_mode and st.session_state.step_phase != "idle":
