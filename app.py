@@ -2521,21 +2521,57 @@ def render_proofread_tab():
     with st.expander("🔬 " + ("事实校验（Phase 7.5）" if is_zh else "Fact Check (Phase 7.5)"), expanded=False):
         st.caption("对共识结论进行交叉验证，锚定文献DOI" if is_zh else "Cross-validate consensus points and anchor DOIs")
         
+        # ── Meta-discussion filter: skip debate facilitation language ──
+        _FC_META_PATTERNS = frozenset([
+            "好的", "各位", "作为", "主持人", "辩手", "辩论", "采纳", "观点",
+            "我们完全", "我们决定", "达成共识", "本次辩论", "第一轮", "第二轮",
+            "反方", "正方", "质询", "总结陈词", "开场白", "各位同事", "各位观众",
+            "核心决策", "全盘采纳", "完全采纳", "本方案旨在", "本方案的核心",
+            "主持人已", "精彩论述", "深入分析", "仔细审阅", "仔细听取",
+            "综合评估", "最终决策", "综合审阅", "最终共识", "我来", "我做",
+            "感谢", "精彩", "激烈", "出色", "两派", "两辩", "三位",
+            "ok,", "colleagues", "as the moderator", "we adopt",
+            "facilitator", "first round", "second round", "debate",
+            "good,", "everyone,", "team,", "speaking as",
+            "core decision", "final consensus", "let me summarize",
+        ])
+
+        def _fc_is_meta(text: str) -> bool:
+            """True if text is debate facilitation/meta language, not a factual claim."""
+            t = text.lower()
+            hits = sum(1 for p in _FC_META_PATTERNS if p in t)
+            if hits >= 2:
+                return True
+            # Single strong pattern at start of text → also meta
+            strong_starts = (
+                "好的", "各位", "作为", "本方案", "核心决策", "完全采纳",
+                "我们完全", "我们决定", "我来做", "现在我",
+                "ok,", "good,", "colleagues", "as the", "now i",
+            )
+            return hits >= 1 and any(t.startswith(s) for s in strong_starts)
+
         dept_results = st.session_state.get("dept_results", {})
         all_consensus = []
         for dept_key, dept_data in dept_results.items():
             consensus = dept_data.get("consensus", "")
-            if consensus:
-                # Split consensus into substantive paragraphs (skip headers and empty lines)
-                paragraphs = [p.strip() for p in consensus.split("\n\n") if p.strip() and not p.strip().startswith("#")]
-                # Take first paragraph from each department as primary claim
-                for para in paragraphs[:2]:
-                    # Only keep paragraphs that look like actual claims (at least 20 chars)
-                    if len(para) >= 20:
-                        all_consensus.append(para)
-        
+            if not consensus:
+                continue
+            paragraphs = [p.strip() for p in consensus.split("\n\n")
+                          if p.strip() and not p.strip().startswith("#")]
+            # Scan deeper (up to 5 paragraphs) to find substantive claims
+            dept_claims = 0
+            for para in paragraphs[:5]:
+                if dept_claims >= 2:
+                    break
+                if len(para) < 30:
+                    continue
+                if _fc_is_meta(para):
+                    continue
+                all_consensus.append(para)
+                dept_claims += 1
+
         if all_consensus:
-            st.info(f"Extracted {len(all_consensus)} claims for verification")
+            st.info(f"Extracted {len(all_consensus)} verifiable claims (filtered from debate summaries)")
             
             if st.button("🚀 " + ("开始事实校验" if is_zh else "Start Fact Check"), key="fact_check_btn"):
                 # Build search function from AcademicSearchEngine
@@ -2595,7 +2631,14 @@ def render_proofread_tab():
                 
                 
         else:
-            st.info("需要先完成部门辩论才能进行事实校验" if is_zh else "Complete department debates first")
+            if dept_results:
+                st.warning(
+                    "未从共识文本中提取到可验证的事实性论断（共识内容可能以流程描述为主）"
+                    if is_zh else
+                    "No verifiable factual claims extracted from consensus (content may be mostly process descriptions)"
+                )
+            else:
+                st.info("需要先完成部门辩论才能进行事实校验" if is_zh else "Complete department debates first")
     
     final = st.session_state.get("final_output", {})
     
