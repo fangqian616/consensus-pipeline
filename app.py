@@ -3045,6 +3045,19 @@ def render_market_tab():
             if include_existing:
                 st.caption("✅ " + ("普通模式结果将作为候选A参与市场竞选，其余候选从API生成" if is_zh else "Normal mode result will join as Candidate A, other candidates generated via API"))
         
+        # Department filter — fewer departments = less memory
+        _all_dept_keys = DEPT_ORDER if DEPT_ORDER else list(DEPARTMENTS.keys())
+        _dept_labels = {k: DEPARTMENTS.get(k, {}).get("zh_name" if is_zh else "en_name", k) for k in _all_dept_keys}
+        _selected_depts = st.multiselect(
+            "🏷️ " + ("选择要跑的部门（越少越省内存）" if is_zh else "Select departments (fewer = less memory)"),
+            options=_all_dept_keys,
+            default=_all_dept_keys,
+            format_func=lambda k: _dept_labels.get(k, k),
+            key="market_dept_filter",
+        )
+        if not _selected_depts:
+            st.warning("⚠️ " + ("至少选择一个部门" if is_zh else "Select at least one department"))
+
         # Start button
         if st.button(t("market_start"), type="primary", use_container_width=True):
             run_market()
@@ -3236,6 +3249,11 @@ def run_market():
     has_existing = include_existing and existing_result and existing_result.get("storyboard_prompt")
     api_candidates = max(num_candidates - 1, 1) if has_existing else num_candidates
 
+    # Department filter from market UI
+    _dept_filter = st.session_state.get("market_dept_filter")
+    if not _dept_filter:
+        _dept_filter = None  # None = all departments
+
     try:
         candidates_result = generate_candidates(
             num_candidates=api_candidates,
@@ -3249,6 +3267,7 @@ def run_market():
             stats=stats,
             progress_callback=on_gen_progress,
             max_workers=st.session_state.market_parallel_workers,
+            dept_filter=_dept_filter,
         )
     except Exception as e:
         st.error(f"❌ Step 1 {('生成候选失败' if is_zh else 'Candidate generation failed')}: {e}")
