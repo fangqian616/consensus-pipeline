@@ -51,6 +51,13 @@ _NON_CLAIM_PATTERNS = [
     r'是论文的作者之一', r'论文来源为', r'论文发表于',
     r'arXiv\s*preprint', r'DOI\s*为', r'发表于\s*\d{4}年?',
     r'作者包括', r'第一作者',
+    # Report self-references (framework/structure descriptions — not external claims)
+    r'报告揭示', r'报告提出', r'本报告', r'报告分析', r'报告指出',
+    r'报告总结', r'报告发现', r'报告构建',
+    r'个研究空白', r'个子方向', r'层结构', r'知识网络',
+    r'通过整合.*[组部]', r'构建了.*框架', r'构建了一套',
+    r'三C\b', r'综合范式', r'失效边界声明', r'完整性验证框架',
+    r'范式转变', r'研究空白',
 ]
 
 _NON_CLAIM_RE = re.compile('|'.join(_NON_CLAIM_PATTERNS), re.IGNORECASE)
