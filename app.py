@@ -3046,8 +3046,17 @@ def render_market_tab():
                 st.caption("✅ " + ("普通模式结果将作为候选A参与市场竞选，其余候选从API生成" if is_zh else "Normal mode result will join as Candidate A, other candidates generated via API"))
         
         # Department filter — fewer departments = less memory
-        _all_dept_keys = DEPT_ORDER if DEPT_ORDER else list(DEPARTMENTS.keys())
-        _dept_labels = {k: DEPARTMENTS.get(k, {}).get("zh_name" if is_zh else "en_name", k) for k in _all_dept_keys}
+        # Use current config (not module-level DEPT_ORDER) so academic mode shows correct departments
+        _mkt_cfg = st.session_state.get("workgroup_config") or get_current_config() or {}
+        _mkt_cfg_depts = _mkt_cfg.get("departments", {})
+        _mkt_cfg_order = _mkt_cfg.get("dept_order", [])
+        _all_dept_keys = _mkt_cfg_order if _mkt_cfg_order else (list(_mkt_cfg_depts.keys()) if _mkt_cfg_depts else list(DEPARTMENTS.keys()))
+        _dept_labels = {k: _mkt_cfg_depts.get(k, DEPARTMENTS.get(k, {})).get("zh_name" if is_zh else "en_name", k) for k in _all_dept_keys}
+        # Clear stale widget cache when config changes (e.g. animation → academic)
+        _cfg_fp = str(sorted(_all_dept_keys))
+        if st.session_state.get("_market_dept_cfg_fp") != _cfg_fp:
+            st.session_state.pop("market_dept_filter", None)
+            st.session_state._market_dept_cfg_fp = _cfg_fp
         _selected_depts = st.multiselect(
             "🏷️ " + ("选择要跑的部门（越少越省内存）" if is_zh else "Select departments (fewer = less memory)"),
             options=_all_dept_keys,
@@ -3249,9 +3258,15 @@ def run_market():
     has_existing = include_existing and existing_result and existing_result.get("storyboard_prompt")
     api_candidates = max(num_candidates - 1, 1) if has_existing else num_candidates
 
-    # Department filter from market UI
+    # Department filter from market UI — validate against current config
     _dept_filter = st.session_state.get("market_dept_filter")
-    if not _dept_filter:
+    if _dept_filter:
+        _mkt_cfg = st.session_state.get("workgroup_config") or get_current_config() or {}
+        _valid_depts = set(_mkt_cfg.get("dept_order", [])) or set(_mkt_cfg.get("departments", {}).keys())
+        _dept_filter = [d for d in _dept_filter if d in _valid_depts]
+        if not _dept_filter:
+            _dept_filter = None  # fallback to all if nothing valid
+    else:
         _dept_filter = None  # None = all departments
 
     try:
