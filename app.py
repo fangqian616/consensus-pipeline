@@ -1624,7 +1624,7 @@ def render_input_tab():
             st.session_state.proofread_result = None
             st.session_state.spatial_review_result = None
             st.session_state._debate_running = True
-            st.session_state._active_main_tab = 1  # switch to debate tab
+            st.session_state._tab_index = 1  # switch to debate tab
             st.rerun()
     
     with btn_col2:
@@ -1666,7 +1666,7 @@ def render_debate_tab():
             st.session_state._debate_error = f"{'辩论执行出错' if is_zh else 'Debate execution error'}: {e}"
         finally:
             st.session_state._debate_running = False
-            st.session_state._active_main_tab = 1  # ensure results tab after completion
+            st.session_state._tab_index = 1  # ensure results tab after completion
         st.rerun()
     
     if st.session_state.step_mode and st.session_state.step_phase != "idle":
@@ -4318,21 +4318,22 @@ def main():
     # Auto-jump to debate tab after Phase 4 confirmation
     if st.session_state.get("_auto_start_debate"):
         st.session_state._auto_start_debate = False
-        st.session_state._active_main_tab = 1  # debate tab
+        st.session_state._tab_index = 1  # debate tab
         # Clear previous results before starting new debate
         st.session_state.debate_completed = False
         st.session_state.dept_results = {}
         st.session_state.final_output = {}
         st.session_state._debate_running = True  # auto-start debate
     
-    if "_active_main_tab" not in st.session_state:
-        st.session_state._active_main_tab = 0
+    # Tab index tracked by _tab_index (not widget-bound, safe to set directly)
+    if "_tab_index" not in st.session_state:
+        st.session_state._tab_index = 0
     
     _debating = st.session_state.get("_debate_running", False)
     
-    # If debate is running, force tab to debate tab (prevent widget disabled reset bug)
+    # If debate is running, force tab to debate tab
     if _debating:
-        st.session_state._active_main_tab = 1
+        st.session_state._tab_index = 1
     
     _tab_labels = [
         t("tab_setup"),
@@ -4340,12 +4341,23 @@ def main():
         t("tab_output_combined"),
         t("tab_tools"),
     ]
+    # If our desired tab differs from radio's current value, force radio reinit
+    _desired_tab = st.session_state._tab_index
+    if st.session_state.get("_main_tab_radio") != _desired_tab:
+        st.session_state.pop("_main_tab_radio", None)
+
+    def _on_tab_change():
+        """Sync radio click back to _tab_index"""
+        st.session_state._tab_index = st.session_state._main_tab_radio
+
     _active_tab = st.radio(
         "",
         options=range(len(_tab_labels)),
         format_func=lambda i: _tab_labels[i],
         horizontal=True,
-        key="_active_main_tab",
+        index=_desired_tab,
+        key="_main_tab_radio",
+        on_change=_on_tab_change,
         label_visibility="collapsed",
     )
     
