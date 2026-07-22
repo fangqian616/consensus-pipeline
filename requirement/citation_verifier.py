@@ -26,8 +26,16 @@ _CODE_KEYWORDS_RE = re.compile(
     re.IGNORECASE,
 )
 
-_CODE_DESC_PATTERNS = [
-    r'字典包含键', r'函数\s*\w+\s*用于', r'参数\s*\w+\s*的?默认值',
+# Patterns indicating code/API descriptions or paper metadata — not verifiable claims
+_NON_CLAIM_PATTERNS = [
+    # Code / API / data-structure descriptions
+    r'字典包含', r'的值通过\s*\w+\(', r'通过\s*\w+\.\w+\(',
+    r'标签列名', r'属性列名', r'属性值为', r'数据源是',
+    r'构造函数', r'label_names', r'protected_attribute',
+    r'BinaryLabelDataset', r'df_\w+', r'data_\w+',
+    r'test_dataset', r'pert_dataset', r'results\s*字典',
+    r'grad_\w+', r'income_binary', r'sex_binary',
+    r'实例\b', r'函数\s*\w+\s*用于', r'参数\s*\w+\s*的?默认值',
     r'实例化\s*\w+\s*对象', r'调用\s*\w+\.\w+', r'值为\s*\w+\.\w+\(',
     r'循环遍历', r'从\s*\w+\s*中筛选', r'使用\s*\w+\.\w+\s*从',
     r'将\s*\w+\s*添加', r'被赋值给', r'接受\s*\w+\s*作为参数',
@@ -37,18 +45,26 @@ _CODE_DESC_PATTERNS = [
     r'mean_difference|disparate_impact', r'value_counts|normalize=True',
     r'np\.random\.choice', r'\.iloc\[', r'有放回抽样', r'唯一值',
     r'子集\s*subset', r'梯度张量|奇异值|重塑为|列向量',
+    r'len\(\w+\)', r'\.value_counts\(', r'\.mean\(\)',
+    # Paper metadata descriptions (author/title/journal/DOI — not content claims)
+    r'该论文的作者是', r'论文标题为', r'论文的标题是',
+    r'是论文的作者之一', r'论文来源为', r'论文发表于',
+    r'arXiv\s*preprint', r'DOI\s*为', r'发表于\s*\d{4}年?',
+    r'作者包括', r'第一作者',
 ]
 
+_NON_CLAIM_RE = re.compile('|'.join(_NON_CLAIM_PATTERNS), re.IGNORECASE)
 
-def _is_code_description(text: str) -> bool:
-    """Return True if text is primarily a code/API description, not a verifiable factual claim."""
-    if len(_CODE_KEYWORDS_RE.findall(text)) >= 3:
-        return True
-    text_lower = text.lower()
-    for pattern in _CODE_DESC_PATTERNS:
-        if re.search(pattern, text_lower):
-            return True
-    return False
+
+def _is_verifiable_claim(text: str) -> bool:
+    """Return True only if text is a verifiable factual claim about research content."""
+    # Code keyword density (threshold 2 — catches short code descriptions)
+    if len(_CODE_KEYWORDS_RE.findall(text)) >= 2:
+        return False
+    # Specific non-claim patterns
+    if _NON_CLAIM_RE.search(text):
+        return False
+    return True
 
 
 def _strip_code_blocks(text: str) -> str:
@@ -220,6 +236,9 @@ class CitationParser:
     @classmethod
     def _flush_paragraph(cls, lines: List[str], section: str, contexts: List[CitationContext]):
         text = ' '.join(lines)
+        # Skip code-dense paragraphs — not verifiable factual claims
+        if not _is_verifiable_claim(text):
+            return
         cited = cls._extract_cited_indices(text)
         if cited:
             contexts.append(CitationContext(
@@ -386,6 +405,7 @@ class AtomicFactDecomposer:
 3. 去除主观评价和流程描述
 4. 每个论断必须是自包含的（不依赖上下文也能理解）
 5. 最多输出5个论断
+6. 严格排除：代码/API描述（函数、参数、变量、数据结构操作）、论文元数据（作者、标题、期刊名、DOI、发表年份）、教程/操作步骤
 
 输出JSON格式：
 {"claims": ["论断1", "论断2", ...]}
@@ -426,7 +446,7 @@ If no decomposable factual claims exist, output: {"claims": []}"""
                     cited_indices=ctx.cited_indices,
                 )
                 for ctx in contexts
-                if not _is_code_description(ctx.text[:500])
+                if not _is_verifiable_claim(ctx.text[:500])
             ]
 
         claims = []
@@ -435,7 +455,7 @@ If no decomposable factual claims exist, output: {"claims": []}"""
             claims.extend(atomic)
 
         # Filter out code/API descriptions — not verifiable via paper abstracts
-        claims = [c for c in claims if not _is_code_description(c.text)]
+        claims = [c for c in claims if _is_verifiable_claim(c.text)]
         return claims
 
     def _decompose_single(self, ctx: CitationContext) -> List[AtomicClaim]:
@@ -716,6 +736,9 @@ class CitationVerifier:
                     continue
                 # Skip pure list paragraphs
                 if para.count("\n- ") > 3 or para.count("\n* ") > 3:
+                    continue
+                # Skip code-dense / non-verifiable paragraphs
+                if not _is_verifiable_claim(para):
                     continue
                 contexts.append(CitationContext(
                     text=para,
