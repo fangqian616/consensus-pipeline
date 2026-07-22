@@ -1666,6 +1666,7 @@ def render_debate_tab():
             st.session_state._debate_error = f"{'辩论执行出错' if is_zh else 'Debate execution error'}: {e}"
         finally:
             st.session_state._debate_running = False
+            st.session_state._active_main_tab = 1  # ensure results tab after completion
         st.rerun()
     
     if st.session_state.step_mode and st.session_state.step_phase != "idle":
@@ -4329,6 +4330,10 @@ def main():
     
     _debating = st.session_state.get("_debate_running", False)
     
+    # If debate is running, force tab to debate tab (prevent widget disabled reset bug)
+    if _debating:
+        st.session_state._active_main_tab = 1
+    
     _tab_labels = [
         t("tab_setup"),
         t("tab_debate_combined"),
@@ -4342,7 +4347,6 @@ def main():
         horizontal=True,
         key="_active_main_tab",
         label_visibility="collapsed",
-        disabled=_debating,
     )
     
     # Tab0: 需求与配置 — sub-tabs
