@@ -1508,17 +1508,19 @@ def _run_single_candidate(
     extra_instructions: str,
     carry_forward: str,
     progress_callback: Callable = None,
+    dept_filter: list = None,
 ) -> Dict:
     """单个候选的完整Pipeline（线程执行体，必须是模块级函数以支持pickle）"""
     import copy
 
     candidate_stats = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "api_calls": 0}
     label = chr(65 + candidate_idx)  # A, B, C...
-    total_depts = len(DEPT_ORDER)
+    active_depts = [d for d in DEPT_ORDER if d in dept_filter] if dept_filter else DEPT_ORDER
+    total_depts = len(active_depts)
 
-    # Run full Pipeline (8 dept debates + spatial review + cross-debate + summary)
+    # Run full Pipeline (dept debates + spatial review + cross-debate + summary)
     dept_results = {}
-    for di, dept_key in enumerate(DEPT_ORDER):
+    for di, dept_key in enumerate(active_depts):
         # Report: which department is running
         if progress_callback:
             progress_callback("dept_start", candidate_idx, dept_key, di, total_depts)
@@ -1545,9 +1547,10 @@ def _run_single_candidate(
         progress_callback("phase", candidate_idx, "spatial_review", 0, 0)
     spatial_consensus = dept_results.get("spatial", {}).get("consensus", "")
     if spatial_consensus:
+        _spatial_reviewers = [d for d in ["storyboard", "dp", "editing"] if d in dept_results]
         spatial_review = run_spatial_review(
             spatial_consensus=spatial_consensus,
-            reviewer_departments=["storyboard", "dp", "editing"],
+            reviewer_departments=_spatial_reviewers,
             api_url=api_url, api_key=api_key, model=model, lang=lang,
             stats=candidate_stats,
         )
@@ -1609,6 +1612,7 @@ def generate_candidates(
     progress_callback: Callable = None,
     stats: dict = None,
     max_workers: int = 3,
+    dept_filter: list = None,
 ) -> Dict:
     """
     市场模式Step1：生成N个候选方案
@@ -1653,6 +1657,7 @@ def generate_candidates(
                 extra_instructions=extra_instructions,
                 carry_forward=carry_forward,
                 progress_callback=_worker_callback,
+                dept_filter=dept_filter,
             )
             futures[future] = i
 
