@@ -2301,8 +2301,8 @@ def run_summary(
     # Build all department consensus
     consensus_text = ""
     for dept_key, consensus in all_consensus.items():
-        dept = DEPARTMENTS[dept_key]
-        name = dept["zh_name"] if is_zh else dept["en_name"]
+        dept = DEPARTMENTS.get(dept_key, {})
+        name = dept.get("zh_name" if is_zh else "en_name", dept_key)
         consensus_text += f"\n### {name}\n{consensus}\n"
     
     # Cross-debate results
