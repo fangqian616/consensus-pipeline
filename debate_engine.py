@@ -2996,12 +2996,12 @@ LIT_STRATEGY_INSTRUCTION_ZH = """
 【检索式要求】
 1. 每条必须是英文自然学术短语（名词性结构为主），严禁出现任何中文词汇
 2. 正确示例："carbon price drivers"、"emissions trading scheme efficiency"、"carbon market liquidity analysis"
-3. 错误示例（严禁）：词序混乱的关键词堆砌（如 "carbon quota allocation policy evaluation causal"）、完整长句、单个词（如 "carbon"）
+3. 错误示例（严禁）：词序混乱的关键词堆砌（如 "carbon quota allocation policy evaluation causal"）、完整长句、单个词（如 "carbon"）、Boolean 检索式（如 "emissions trading AND regional inequality AND causal effect"）——严禁使用 AND/OR/NOT 操作符，目标引擎按自然语言相关性检索，直接写空格分隔的名词短语
 4. 每条 3-6 个单词，覆盖主题的不同子方向（影响因素/作用机制/研究方法/应用场景），可直接在 OpenAlex / Semantic Scholar / arXiv 执行
 【排除信号要求——极度谨慎】
 5. 排除信号仅用于剔除主题之外的文献（例如研究碳市场时可排除 "carbon nanotube"、"astrophysics"、"clinical trial"）
 6. 【严禁】将任何检索式中出现的词汇或其变体列为排除信号。例如检索式含 "machine learning" 时，严禁把 "machine learning"、"deep learning"、"neural network" 列为排除信号——这会杀死全部目标文献
-7. 排除信号 5-8 个即可，宁少勿滥；拿不准就不要列
+7. 排除信号 5-8 个即可，宁少勿滥；拿不准就不要列。【严禁】使用单个通用学术词汇作为排除信号（如 "study"、"analysis"、"review"、"model"、"empirical"、"impact"、"effect"）——这类词几乎出现在每篇论文摘要中，会杀死全部结果。排除信号必须是具体的领域外短语（≥2 个实义词为佳）
 8. 生成后自检：逐条核对排除信号，若其出现在任何一条检索式中，立即删除该排除信号
 9. 共识中必须且只需包含一个上述 JSON 代码块，放在共识文本的末尾"""
 
@@ -3017,12 +3017,12 @@ LIT_STRATEGY_INSTRUCTION_EN = """
 [QUERY REQUIREMENTS]
 1. Every query MUST be a natural English academic phrase (noun-phrase structure). Chinese words are strictly forbidden
 2. GOOD examples: "carbon price drivers", "emissions trading scheme efficiency", "carbon market liquidity analysis"
-3. BAD examples (FORBIDDEN): jumbled keyword piles with broken word order (e.g. "carbon quota allocation policy evaluation causal"), full long sentences, single words (e.g. "carbon")
+3. BAD examples (FORBIDDEN): jumbled keyword piles with broken word order (e.g. "carbon quota allocation policy evaluation causal"), full long sentences, single words (e.g. "carbon"), Boolean search strings (e.g. "emissions trading AND regional inequality AND causal effect") — AND/OR/NOT operators are FORBIDDEN; the target engines run natural-language relevance search, so write plain space-separated noun phrases
 4. 3-6 words per query, covering different sub-directions (drivers / mechanisms / methods / applications), directly executable on OpenAlex / Semantic Scholar / arXiv
 [EXCLUSION SIGNAL REQUIREMENTS — EXTREME CAUTION]
 5. Exclusion signals exist ONLY to filter out off-topic literature (e.g. for a carbon-market topic: "carbon nanotube", "astrophysics", "clinical trial")
 6. [FORBIDDEN] Never list any word appearing in the queries (or its variants) as an exclusion signal. E.g. if a query contains "machine learning", then "machine learning", "deep learning", "neural network" are all FORBIDDEN as exclusion signals — they would kill every target paper
-7. 5-8 signals are enough; fewer is better; when in doubt, leave it out
+7. 5-8 signals are enough; fewer is better; when in doubt, leave it out. [FORBIDDEN] Never use single generic academic words as exclusion signals (e.g. "study", "analysis", "review", "model", "empirical", "impact", "effect") — such words appear in nearly every abstract and would kill ALL results. Exclusion signals must be specific off-topic phrases (preferably 2+ content words)
 8. Self-check before output: verify each exclusion signal against every query; delete any signal that overlaps
 9. The consensus must contain exactly one such JSON code block, placed at the very end"""
 
@@ -3065,6 +3065,33 @@ def _extract_search_strategy(consensus_text: str) -> Optional[Dict[str, Any]]:
     def _has_zh(s: str) -> bool:
         return any('\u4e00' <= c <= '\u9fff' for c in s)
 
+    # v0.11.4: LLMs (in "search strategy expert" role) tend to emit WoS/Scopus
+    # Boolean strings ("A AND B AND C") despite the prompt requiring natural
+    # noun phrases. OpenAlex/S2 run relevance search; the whole AND-string also
+    # becomes an unmatchable phrase in relevance scoring. Strip uppercase
+    # Boolean operators only, keep natural-language "and" untouched.
+    def _strip_bool(q: str) -> str:
+        q = _re.sub(r'\b(?:AND|OR|NOT)\b', ' ', q)
+        return _re.sub(r'\s+', ' ', q).strip()
+
+    # v0.11.4: Generic academic stopwords are forbidden as exclusion signals.
+    # A signal like "study"/"analysis"/"review" matches nearly every abstract;
+    # since a signal hit zeroes relevance, one such word wipes out the ENTIRE
+    # result set (observed on Cloud: 330 fetched -> 0 kept). Real exclusion
+    # signals are specific off-topic phrases ("carbon nanotube",
+    # "clinical trial"). Whole-token match only, so multi-word phrases survive.
+    _GENERIC_EXCL_BLOCKLIST = {
+        "study", "studies", "analysis", "analyses", "research", "review", "reviews",
+        "survey", "surveys", "empirical", "theory", "theoretical", "model", "models",
+        "modeling", "modelling", "method", "methods", "methodology", "approach",
+        "approaches", "result", "results", "paper", "papers", "impact", "impacts",
+        "effect", "effects", "evidence", "application", "applications", "framework",
+        "frameworks", "evaluation", "assessment", "simulation", "experiment",
+        "experiments", "case", "cases", "overview", "perspective", "perspectives",
+        "comment", "commentary", "editorial", "discussion", "introduction",
+        "investigation", "exploration", "examination", "comparison", "development",
+    }
+
     for raw in candidates:
         data = None
         try:
@@ -3079,12 +3106,17 @@ def _extract_search_strategy(consensus_text: str) -> Optional[Dict[str, Any]]:
         queries = data.get("search_queries") or data.get("queries") or []
         if not isinstance(queries, list):
             continue
-        queries = [str(q).strip() for q in queries if q and str(q).strip() and not _has_zh(str(q))]
+        queries = [_strip_bool(str(q).strip()) for q in queries if q and str(q).strip() and not _has_zh(str(q))]
+        queries = [q for q in queries if q]
         if not queries:
             continue
         excl = data.get("exclusion_signals") or data.get("exclusions") or []
         if isinstance(excl, list):
             excl = [str(e).strip() for e in excl if e and str(e).strip() and not _has_zh(str(e))]
+            _blocked = [e for e in excl if e.lower() in _GENERIC_EXCL_BLOCKLIST]
+            if _blocked:
+                print(f"[strategy] Dropped {len(_blocked)} generic-stopword exclusion signals: {_blocked}")
+            excl = [e for e in excl if e.lower() not in _GENERIC_EXCL_BLOCKLIST]
         else:
             excl = []
         print(f"[strategy] Extracted from literature dept: {len(queries)} EN queries, {len(excl)} exclusion signals")
@@ -3118,6 +3150,7 @@ Output ONLY a JSON code block, no other text:
 STRICT REQUIREMENTS:
 - All search_queries MUST be in English only — Chinese keywords are strictly forbidden
 - Queries must be natural noun phrases (GOOD: "carbon price drivers"; BAD: jumbled piles like "carbon quota allocation policy evaluation causal")
+- FORBIDDEN: Boolean operators (AND/OR/NOT) in queries; single generic academic words ("study", "analysis", "review", "model", "empirical") as exclusion signals
 - Each query must be directly executable on OpenAlex / Semantic Scholar / arXiv
 - Exclusion signals are ONLY for clearly off-topic literature (e.g. "astrophysics", "clinical trial")
 - FORBIDDEN: any exclusion signal that overlaps with query words (e.g. if queries contain "machine learning", never exclude "machine learning"/"deep learning"/"neural network") — that kills every target paper
