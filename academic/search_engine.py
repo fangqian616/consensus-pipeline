@@ -272,7 +272,7 @@ class AcademicSearchEngine:
             """Check if paper has at least minimal relevance to the query."""
             if not query:
                 return True  # No query = no filtering
-            relevance = self._compute_relevance(paper, query)
+            relevance = self._compute_relevance(paper, query, domain_config=self.domain_config)
             return relevance >= 0.05
 
         # Stage 1: Relax citation (S/A/C pass through, B-level citations halved)
@@ -740,10 +740,15 @@ class AcademicSearchEngine:
         has_ml = any(w in combined for w in ml_must_have)
 
         penalty = 1.0
-        if not has_domain:
-            penalty *= 0.3  # Unrelated to domain → heavy penalty
-        if not has_ml and not has_domain:
-            penalty *= 0.5  # Unrelated to both ML and domain → additional penalty
+        # v0.11.1: Skip domain penalty entirely when no domain/ml keywords are
+        # configured (e.g. literature-dept strategy supplies no tier_definitions).
+        # Empty keyword sets previously forced penalty=0.15, which made relevance
+        # permanently fall below the 0.15 threshold and wiped out ALL papers.
+        if domain_must_have or ml_must_have:
+            if not has_domain:
+                penalty *= 0.3  # Unrelated to domain → heavy penalty
+            if not has_ml and not has_domain:
+                penalty *= 0.5  # Unrelated to both ML and domain → additional penalty
         # v5.1.8-fix2: Exclude non-energy carbon context (nanomaterials/chemistry etc.)
         # v0.7.0: If no domain_config (fallback mode), keep legacy logic
         if not domain_config and any(ex in combined for ex in carbon_exclude):
