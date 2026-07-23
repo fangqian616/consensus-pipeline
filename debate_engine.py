@@ -3307,7 +3307,7 @@ def run_academic_summary(
 【硬性规则】
 1. 这是学术综述，不是动画脚本或分镜表。严禁出现任何动画/视觉/分镜术语（如"冲击帧""蓄力-释放""速度线""残影""停帧""九宫格""分镜"等）
 2. 每个章节必须有实质性内容段落（每节至少400字），每个章节至少3-4段实质性内容，不能只有标题或要点列表
-3. 整合各部门辩论中有价值的研究发现，但不得描述本系统/共识管线自身的检索流程、筛选机制或基础设施（如"先广后精""四级筛选""DOI溯源""多源定制检索"等系统方法论术语）。报告内容必须全部围绕研究领域本身的学术内容展开
+3. 整合各部门辩论中有价值的研究发现，但不得描述本系统/共识管线自身的检索流程、筛选机制或基础设施（如"先广后精""四级筛选""DOI溯源""多源定制检索"等系统方法论术语）。报告内容必须全部围绕研究领域本身的学术内容展开。禁止在报告正文中出现以下系统内部术语："辩论共识""文献检索组""引用网络组""数据分析组""可视化组""程序部""教程部""编剧部""摄影指导部""分镜部""空间设计部""灯光部""特效部""剪辑部""音效部"等部门名称，以及"多部门协作""辩论流程""共识生成"等系统流程描述——这些是系统内部概念，读者不需要知道。如果需要引用某方面分析，直接以学术方式表达（如"已有研究表明…"而非"数据分析组指出…"）
 4. 参考文献必须且只能使用下方提供的真实论文列表，严禁自行编造任何文献。不得标注"示范性引用""佚名"等。如果提供的论文不足，减少参考文献数量，不得补充虚构文献。引用论文时，只能描述论文标题和摘要中实际出现的研究内容、方法和结论，严禁编造论文中不存在的研究发现——如果论文摘要没有提到某个观点，不得将该观点归因于该论文
 5. 在报告中适当引用真实论文的结论来支撑辩论观点，每篇参考文献至少在正文中被引用一次。引用格式必须使用数字方括号标记（如[1]、[2,3]、[1-3]），严禁使用作者-年份格式（如van Eck & Waltman (2017)）。引用编号必须与论点内容匹配——例如不要用一篇1997年的石油价格论文来支撑2020年代的可再生能源政策论点。每个引用必须对应与该论点主题相关的参考文献。正文中必须频繁出现[1]、[2]等引用标记——每个主要论点段落至少包含1个引用，不得只在末尾参考文献列表中列出编号而在正文中不引用
 6. 禁止自引用——报告中不得出现"本文第X节""本节""上文提到""如第X章所述"等引用报告自身章节结构的表述。所有学术论点必须用外部文献的结论来支撑，不得以报告自身的结构组织作为论点内容。参考文献条目格式为：[序号] 作者. (年份). 标题. 期刊。不得在参考文献条目中添加任何注释、评论或与正文章节的交叉引用
@@ -3353,7 +3353,7 @@ def run_academic_summary(
 【硬性规则】
 1. 这是学术综述，不是动画脚本或分镜表。严禁出现任何动画/视觉/分镜术语
 2. 每个章节必须有实质性内容段落（每节至少300字），每个章节至少3-4段实质性内容，不能只有标题或要点列表
-3. 整合各部门辩论中有价值的研究发现，但不得描述本系统/共识管线自身的检索流程、筛选机制或基础设施（如"先广后精""四级筛选""DOI溯源""多源定制检索"等系统方法论术语）。报告内容必须全部围绕研究领域本身的学术内容展开
+3. 整合各部门辩论中有价值的研究发现，但不得描述本系统/共识管线自身的检索流程、筛选机制或基础设施（如"先广后精""四级筛选""DOI溯源""多源定制检索"等系统方法论术语）。报告内容必须全部围绕研究领域本身的学术内容展开。禁止在报告正文中出现以下系统内部术语："辩论共识""文献检索组""引用网络组""数据分析组""可视化组""程序部""教程部""编剧部""摄影指导部""分镜部""空间设计部""灯光部""特效部""剪辑部""音效部"等部门名称，以及"多部门协作""辩论流程""共识生成"等系统流程描述——这些是系统内部概念，读者不需要知道。如果需要引用某方面分析，直接以学术方式表达（如"已有研究表明…"而非"数据分析组指出…"）
 4. 由于未能检索到外部文献，参考文献部分应列出"辩论来源"（各部门共识），不得编造任何不存在的文献
 5. 禁止自引用——报告中不得出现"本文第X节""本节""上文提到""如第X章所述"等引用报告自身章节结构的表述。禁止在报告末尾添加"报告撰写说明""生成说明""内容声明"等元描述性内容
 6. 报告必须围绕用户指定的研究领域展开，方法论讨论必须与该领域的具体研究内容、应用场景和实际案例结合，不得写成通用的文献计量方法论教程
@@ -3394,7 +3394,7 @@ IMPORTANT: You MUST respond in English only. All output must be in English.
 [HARD RULES]
 1. This is an ACADEMIC REVIEW, NOT an animation script or storyboard. Absolutely no animation/visual/storyboard terminology
 2. Each section must have substantive content paragraphs (at least 200 words per section), not bare bullet points
-3. Integrate valuable research findings from all departments, but do NOT describe the system/pipeline's own search methodology, filtering mechanisms, or infrastructure (e.g., "broad-then-refine", "four-tier screening", "DOI verification", "multi-source retrieval"). All content must focus on the research domain's academic substance
+3. Integrate valuable research findings from all departments, but do NOT describe the system/pipeline's own search methodology, filtering mechanisms, or infrastructure (e.g., "broad-then-refine", "four-tier screening", "DOI verification", "multi-source retrieval"). All content must focus on the research domain's academic substance. Do NOT use internal system terminology in the report body: department names like "Literature Search Group", "Citation Network Group", "Data Analysis Group", "Visualization Group", "Programming Department", "Tutorial Department", "Screenwriting Department", "Cinematography Department", "Storyboard Department", "Spatial Design Department", "Lighting Department", "VFX Department", "Editing Department", "Sound Department", or process descriptions like "debate consensus", "multi-department collaboration", "debate workflow", "consensus generation" — these are internal system concepts invisible to readers. Express analysis in academic language (e.g., "Existing research shows..." instead of "The Data Analysis Group points out...")
 4. References MUST ONLY use the real paper list provided below. Do NOT fabricate any references. Do NOT mark references as "illustrative" or "anonymous". If fewer papers are available, use fewer references rather than inventing fake ones. When citing a paper, you may ONLY describe research content, methods, and conclusions that actually appear in the paper's title or abstract. Do NOT fabricate findings not present in the paper — if the abstract does not mention a point, do NOT attribute that point to the paper
 5. Cite real paper conclusions appropriately to support debate arguments, each reference should be cited at least once in the text. Citation format MUST use numeric bracket markers (e.g., [1], [2,3], [1-3]). Do NOT use author-year format (e.g., van Eck & Waltman (2017)). Citation numbers MUST match the claim content — do not use a 1997 oil price paper to support a 2020s renewable energy policy claim. Each citation must reference a paper topically relevant to the claim. In-text citations [1], [2] etc. MUST appear frequently throughout the body — every major argument paragraph must contain at least one citation marker. Do NOT list reference numbers only at the end without citing them in the body
 6. NO self-references — the report must NOT contain phrases like "Section 1 of this report", "this section", "as discussed above", "as described in Section X" that reference the report's own structure. All academic claims must be supported by external literature, not by the report's own organizational structure. Reference entries must be clean bibliographic format: [number] Author. (Year). Title. Journal. Do NOT add commentary, notes, or cross-references to report sections in reference entries
@@ -3440,7 +3440,7 @@ IMPORTANT: You MUST respond in English only. All output must be in English.
 [HARD RULES]
 1. This is an ACADEMIC REVIEW, NOT an animation script or storyboard. Absolutely no animation/visual/storyboard terminology
 2. Each section must have substantive content paragraphs (at least 200 words per section), not bare bullet points
-3. Integrate valuable research findings from all departments, but do NOT describe the system/pipeline's own search methodology, filtering mechanisms, or infrastructure (e.g., "broad-then-refine", "four-tier screening", "DOI verification", "multi-source retrieval"). All content must focus on the research domain's academic substance
+3. Integrate valuable research findings from all departments, but do NOT describe the system/pipeline's own search methodology, filtering mechanisms, or infrastructure (e.g., "broad-then-refine", "four-tier screening", "DOI verification", "multi-source retrieval"). All content must focus on the research domain's academic substance. Do NOT use internal system terminology in the report body: department names like "Literature Search Group", "Citation Network Group", "Data Analysis Group", "Visualization Group", "Programming Department", "Tutorial Department", "Screenwriting Department", "Cinematography Department", "Storyboard Department", "Spatial Design Department", "Lighting Department", "VFX Department", "Editing Department", "Sound Department", or process descriptions like "debate consensus", "multi-department collaboration", "debate workflow", "consensus generation" — these are internal system concepts invisible to readers. Express analysis in academic language (e.g., "Existing research shows..." instead of "The Data Analysis Group points out...")
 4. Since external literature search was not available, the references section should list "Debate Sources" (department consensuses), do not fabricate any non-existent references
 5. NO self-references — the report must NOT contain phrases like "Section 1 of this report", "this section", "as discussed above", "as described in Section X" that reference the report's own structure. Do NOT add "Report Notes", "Generation Notes", "Content Disclaimer" or any meta-descriptive content at the end of the report
 6. The report MUST focus on the user-specified research domain. Methodology discussions must be integrated with the domain's specific research content, applications, and real-world cases. Do NOT write a generic bibliometrics methodology tutorial
@@ -3483,6 +3483,22 @@ Based on the above debate content, write a structured academic review report. Re
         temperature=0.25, max_tokens=16384, timeout=180,
         stats=stats,
     )
+
+    # Post-process: strip trailing disclaimers and metadata
+    if report:
+        import re as _re
+        _disclaimer_patterns = [
+            _re.compile(r'\n*---\s*\n*本内容.*?(?:生成|AI).*?$', _re.DOTALL),
+            _re.compile(r'\n*---\s*\n*以上内容.*?(?:生成|AI).*?$', _re.DOTALL),
+            _re.compile(r'\n*---\s*\n*This content.*?(?:generated|AI).*?$', _re.DOTALL),
+            _re.compile(r'\n*---\s*\n*The above content.*?(?:generated|AI).*?$', _re.DOTALL),
+            _re.compile(r'\n*⚠?\s*本内容由.*?(?:生成|AI).*?$', _re.DOTALL),
+            _re.compile(r'\n*⚠?\s*This content.*?(?:generated|AI).*?$', _re.DOTALL),
+            _re.compile(r'\n*---\s*\n*免责声明.*?$', _re.DOTALL),
+            _re.compile(r'\n*---\s*\n*Disclaimer.*?$', _re.DOTALL),
+        ]
+        for _pat in _disclaimer_patterns:
+            report = _pat.sub('', report).rstrip()
 
     if not report:
         # Fallback: just concatenate consensus
