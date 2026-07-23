@@ -3268,10 +3268,35 @@ def run_academic_search(
         domain_config = None
         # v0.11: literature-dept strategy takes priority over generate_domain_config
         if strategy and strategy.get("search_queries"):
+            # v0.11.1: derive core domain keywords from the strategy queries so
+            # relevance scoring has a non-empty domain_must_have. Empty
+            # tier_definitions forced a permanent 0.15 penalty that killed all
+            # papers at the relevance sieve. Unigrams + adjacent bigrams.
+            import re as _re_kw
+            _kw_stop = {
+                "and", "or", "the", "of", "in", "for", "on", "with", "a", "an",
+                "to", "from", "by", "at", "is", "are", "using", "based", "via",
+                "through", "into", "over", "between", "among", "review", "study",
+                "studies", "analysis", "research", "survey", "perspective",
+                "approach", "framework", "frameworks", "paper", "papers",
+            }
+            _kw_keep_short = {"ai", "ml", "dl", "llm", "nlp", "iot", "vr", "ar", "xr", "3d"}
+            _core_kw = set()
+            for _q in strategy["search_queries"]:
+                _toks = [t for t in _re_kw.split(r"[\s,/;:()\"\'\[\]{}]+", _q.lower()) if t]
+                _toks = [t for t in _toks if (len(t) > 2 or t in _kw_keep_short) and t not in _kw_stop]
+                _core_kw.update(_toks)
+                _core_kw.update(f"{_toks[i]} {_toks[i+1]}" for i in range(len(_toks) - 1))
+            # Drop overly short exclusion signals (< 4 chars, not whitelisted):
+            # a signal like "game" would wipe out every "game theory" paper.
+            _excl = [
+                s for s in strategy.get("exclusion_signals", [])
+                if isinstance(s, str) and (len(s.strip()) >= 4 or s.strip().lower() in _kw_keep_short)
+            ]
             domain_config = {
                 "query_rotation": list(strategy["search_queries"]),
-                "exclusion_signals": list(strategy.get("exclusion_signals", [])),
-                "tier_definitions": {},
+                "exclusion_signals": _excl,
+                "tier_definitions": {"core": {"keywords": sorted(_core_kw)}},
             }
             strategy_source = "literature_dept"
             print(f"Using literature-dept strategy: {len(domain_config['query_rotation'])} queries, "
