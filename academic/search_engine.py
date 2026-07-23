@@ -178,6 +178,10 @@ class AcademicSearchEngine:
 
         total_fetched = len(all_results)
 
+        if total_fetched == 0:
+            print(f"  ⚠️ WARNING: All search sources returned 0 papers for query '{query}'. "
+                  f"Sources tried: {sources}. Check API availability and rate limits.")
+
         # Deduplication
         deduped = self._deduplicate(all_results)
         after_dedup = len(deduped)
@@ -325,96 +329,116 @@ class AcademicSearchEngine:
         return results
 
     def _search_arxiv(self, query: str, max_results: int) -> List[PaperCandidate]:
-        """arXiv search (v4.4: mark as preprint)"""
-        try:
-            import urllib.request
-            import xml.etree.ElementTree as ET
+        """arXiv search (v4.4: mark as preprint, v0.8.2: retry + longer timeout)"""
+        import urllib.request
+        import xml.etree.ElementTree as ET
+        import urllib.parse as _urlp
+        import time
 
-            import urllib.parse as _urlp
-            url = f"https://export.arxiv.org/api/query?search_query=all:{_urlp.quote_plus(query)}&max_results={max_results}"
-            req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                xml_data = resp.read()
+        url = f"https://export.arxiv.org/api/query?search_query=all:{_urlp.quote_plus(query)}&max_results={max_results}"
 
-            root = ET.fromstring(xml_data)
-            ns = {"atom": "http://www.w3.org/2005/Atom"}
+        for attempt in range(2):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    xml_data = resp.read()
 
-            results = []
-            for entry in root.findall("atom:entry", ns):
-                title = entry.find("atom:title", ns).text.strip().replace("\n", " ")
-                doi_elem = entry.find("atom:arxiv:doi", ns) if entry.find("atom:arxiv:doi", ns) is not None else None
-                doi = doi_elem.text if doi_elem is not None else ""
-                summary = entry.find("atom:summary", ns).text.strip()
-                published = entry.find("atom:published", ns).text[:4]
+                root = ET.fromstring(xml_data)
+                ns = {"atom": "http://www.w3.org/2005/Atom"}
 
-                # Parse authors from arXiv XML
-                authors = []
-                for author_elem in entry.findall("atom:author", ns):
-                    name_elem = author_elem.find("atom:name", ns)
-                    if name_elem is not None and name_elem.text:
-                        authors.append(name_elem.text.strip())
+                results = []
+                for entry in root.findall("atom:entry", ns):
+                    title = entry.find("atom:title", ns).text.strip().replace("\n", " ")
+                    doi_elem = entry.find("atom:arxiv:doi", ns) if entry.find("atom:arxiv:doi", ns) is not None else None
+                    doi = doi_elem.text if doi_elem is not None else ""
+                    summary = entry.find("atom:summary", ns).text.strip()
+                    published = entry.find("atom:published", ns).text[:4]
 
-                results.append(PaperCandidate(
-                    title=title,
-                    doi=doi,
-                    authors=authors,
-                    journal="arXiv",
-                    year=int(published) if published.isdigit() else 0,
-                    abstract=safe_truncate(summary, 500),
-                    source="arxiv",
-                    quality_level="D",
-                    is_preprint=True,  # v4.4: Mark preprints
-                ))
+                    authors = []
+                    for author_elem in entry.findall("atom:author", ns):
+                        name_elem = author_elem.find("atom:name", ns)
+                        if name_elem is not None and name_elem.text:
+                            authors.append(name_elem.text.strip())
 
-            return results
+                    results.append(PaperCandidate(
+                        title=title,
+                        doi=doi,
+                        authors=authors,
+                        journal="arXiv",
+                        year=int(published) if published.isdigit() else 0,
+                        abstract=safe_truncate(summary, 500),
+                        source="arxiv",
+                        quality_level="D",
+                        is_preprint=True,
+                    ))
 
-        except Exception as e:
-            print(f"arXiv search error: {e}")
-            return []
+                return results
+
+            except Exception as e:
+                if attempt < 1:
+                    print(f"  arXiv error ({e}), retrying with longer timeout... (attempt {attempt+1}/2)")
+                    time.sleep(3)
+                    continue
+                print(f"arXiv search error: {e}")
+                return []
 
     def _search_semantic_scholar(self, query: str, max_results: int) -> List[PaperCandidate]:
-        """Semantic Scholar search (v4.4: try fetching h-index)"""
-        try:
-            import urllib.request
+        """Semantic Scholar search (v4.4: try fetching h-index, v0.8.2: retry on 429)"""
+        import urllib.request
+        import urllib.parse as _urlp
+        import time
 
-            import urllib.parse as _urlp
-            url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={_urlp.quote_plus(query)}&limit={max_results}&fields=title,doi,year,abstract,citationCount,journal,authors"
-            req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                data = json.loads(resp.read())
+        url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={_urlp.quote_plus(query)}&limit={max_results}&fields=title,doi,year,abstract,citationCount,journal,authors"
 
-            results = []
-            for paper in data.get("data", []):
-                journal_info = paper.get("journal") or {}
-                journal_name = journal_info.get("name", "") if journal_info else ""
+        for attempt in range(3):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
+                with urllib.request.urlopen(req, timeout=20) as resp:
+                    data = json.loads(resp.read())
 
-                authors = []
-                max_h_index = 0
-                for a in (paper.get("authors") or []):
-                    if a.get("name"):
-                        authors.append(a["name"])
-                    # Try to fetch author h-index
-                    h = a.get("hIndex") or 0
-                    if h and h > max_h_index:
-                        max_h_index = h
+                results = []
+                for paper in data.get("data", []):
+                    journal_info = paper.get("journal") or {}
+                    journal_name = journal_info.get("name", "") if journal_info else ""
 
-                results.append(PaperCandidate(
-                    title=paper.get("title", ""),
-                    doi=paper.get("doi", "") or "",
-                    authors=authors,
-                    journal=journal_name,
-                    year=paper.get("year") or 0,
-                    abstract=safe_truncate(paper.get("abstract") or "", 500),
-                    citation_count=paper.get("citationCount", 0) or 0,
-                    source="semantic_scholar",
-                    author_h_index=max_h_index,
-                ))
+                    authors = []
+                    max_h_index = 0
+                    for a in (paper.get("authors") or []):
+                        if a.get("name"):
+                            authors.append(a["name"])
+                        h = a.get("hIndex") or 0
+                        if h and h > max_h_index:
+                            max_h_index = h
 
-            return results
+                    results.append(PaperCandidate(
+                        title=paper.get("title", ""),
+                        doi=paper.get("doi", "") or "",
+                        authors=authors,
+                        journal=journal_name,
+                        year=paper.get("year") or 0,
+                        abstract=safe_truncate(paper.get("abstract") or "", 500),
+                        citation_count=paper.get("citationCount", 0) or 0,
+                        source="semantic_scholar",
+                        author_h_index=max_h_index,
+                    ))
 
-        except Exception as e:
-            print(f"Semantic Scholar search error: {e}")
-            return []
+                return results
+
+            except urllib.error.HTTPError as e:
+                if e.code == 429 and attempt < 2:
+                    wait = 3 * (attempt + 1)
+                    print(f"  S2 rate limited (429), retrying in {wait}s... (attempt {attempt+1}/3)")
+                    time.sleep(wait)
+                    continue
+                print(f"Semantic Scholar search error: HTTP {e.code}")
+                return []
+            except Exception as e:
+                if attempt < 2:
+                    print(f"  S2 error ({e}), retrying... (attempt {attempt+1}/3)")
+                    time.sleep(2)
+                    continue
+                print(f"Semantic Scholar search error: {e}")
+                return []
 
     def _search_openalex(self, query: str, max_results: int) -> List[PaperCandidate]:
         """OpenAlex search (v4.4: fetch more metadata)"""
