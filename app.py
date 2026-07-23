@@ -27,6 +27,9 @@ from debate_engine import (
     MARKET_CONFIG,
     apply_config, get_current_config, get_current_config_name,
     run_department_debate, run_cross_debate, run_summary, run_academic_summary,
+    run_academic_search, build_papers_summary,
+    _extract_search_strategy, _regenerate_strategy_json,
+    LIT_STRATEGY_INSTRUCTION_ZH, LIT_STRATEGY_INSTRUCTION_EN,
     run_spatial_review, run_proofreading, run_academic_proofreading, run_academic_auto_revision, run_spatial_diagram,
     run_auto_revision, run_director_revision, run_output_edit,
     run_smart_reroll,
@@ -1088,6 +1091,12 @@ def build_dept_input(dept_key: str) -> str:
         # Academic/generic mode: always include research topic as context
         topic_label = "研究主题" if is_zh else "Research Topic"
         topic_line = f"{topic_label}：\n{script}" if is_zh else f"{topic_label}:\n{script}"
+        # v0.11: Inject user-confirmed real papers for post-search academic departments
+        _papers_summary = st.session_state.get("_papers_summary", "")
+        if _papers_summary:
+            _papers_label = ("已确认的真实文献列表（你的讨论必须基于这些真实文献展开，可引用其编号如[1][2]，不得虚构文献内容）" if is_zh
+                             else "Confirmed real literature (your discussion MUST be grounded in these real papers; you may cite them as [1][2]; do NOT fabricate paper content)")
+            topic_line += f"\n\n{_papers_label}:\n{_papers_summary}"
         prev = []
         try:
             _idx = DEPT_ORDER.index(dept_key)
@@ -1183,6 +1192,62 @@ def run_all_debates(progress_callback=None):
         for d in DEPT_ORDER if d in dept_results
     )
     
+    # === v0.11: Academic flow — literature dept first, then real search, then pause for user review ===
+    _cfg_flow = (st.session_state.get("workgroup_config") or get_current_config() or {})
+    _LIT = "literature_search"
+    _academic_flow = (
+        arch_mode != "expert_pool"
+        and _detect_pipeline_mode(_cfg_flow) == "academic"
+        and _LIT in DEPT_ORDER
+    )
+    if _academic_flow and _resume_phase in ("departments", "search"):
+        # Phase A: literature_search department formulates the search strategy
+        if _LIT not in dept_results:
+            dept = DEPARTMENTS.get(_LIT, {})
+            dept_name = (dept.get("zh_name") if is_zh else dept.get("en_name")) or dept.get("zh_name") or dept.get("en_name") or _LIT
+            _lit_msg = f"📚 {dept_name} - " + ("正在制定检索策略..." if is_zh else "formulating search strategy...")
+            if progress_callback:
+                progress_callback(0.05, _lit_msg)
+            else:
+                progress.progress(0.05, text=_lit_msg)
+            _lit_extra = (extra or "") + "\n" + (LIT_STRATEGY_INSTRUCTION_ZH if is_zh else LIT_STRATEGY_INSTRUCTION_EN)
+            result = run_department_debate(
+                department_key=_LIT,
+                input_content=build_dept_input(_LIT),
+                api_url=api_url, api_key=api_key, model=model,
+                rounds=rounds, lang=lang, extra_instructions=_lit_extra,
+                progress_callback=None,
+                carry_forward=st.session_state.carry_forward,
+                stats=stats,
+            )
+            dept_results[_LIT] = result
+            st.session_state.dept_results = dept_results
+            notify_stage_complete(dept_name)
+
+        # 三重保证：提取JSON → 补考生成 → (搜索阶段 fallback generate_domain_config)
+        _lit_consensus = dept_results.get(_LIT, {}).get("consensus", "")
+        _strategy = _extract_search_strategy(_lit_consensus)
+        if not _strategy:
+            print("[v0.11] No valid JSON strategy in literature consensus, regenerating via dedicated LLM call...")
+            _strategy = _regenerate_strategy_json(_lit_consensus, script, api_url, api_key, model)
+        st.session_state._search_strategy = _strategy
+
+        # Phase B: execute real literature search
+        _search_msg = "🔍 " + ("正在检索真实文献（OpenAlex / Semantic Scholar / arXiv，约1-2分钟）..." if is_zh else "Searching real papers (OpenAlex/S2/arXiv, ~1-2 min)...")
+        if progress_callback:
+            progress_callback(0.45, _search_msg)
+        else:
+            progress.progress(0.45, text=_search_msg)
+        _sr = run_academic_search(
+            user_topic=script or st.session_state.get("config_user_input", ""),
+            strategy=_strategy,
+            api_url=api_url, api_key=api_key, model=model, lang=lang,
+        )
+        st.session_state._search_result = _sr
+        st.session_state._debate_phase = "search_review"
+        st.session_state._debate_running = False
+        return  # Pause — user confirms in render_search_review_panel
+
     if arch_mode == "expert_pool":
         # Expert pool mode: scene analysis first, then streamlined debate
         expert_result = run_expert_pool_debate(
@@ -1290,6 +1355,8 @@ def run_all_debates(progress_callback=None):
             cross_results=cross_results,
             api_url=api_url, api_key=api_key, model=model, lang=lang,
             stats=stats,
+            confirmed_papers=st.session_state.get("_confirmed_papers"),
+            confirmed_preprints=st.session_state.get("_confirmed_preprints"),
         )
         notify_stage_complete("学术综述报告生成" if is_zh else "Academic Report")
     else:
@@ -1682,6 +1749,116 @@ def render_input_tab():
             st.rerun()
 
 
+# ============ Search Review Panel (v0.11) ============
+
+def render_search_review_panel():
+    """学术模式 search_review 阶段：展示真实检索结果，用户确认后才进入部门辩论。"""
+    is_zh = st.session_state.lang == "zh"
+    sr = st.session_state.get("_search_result") or {}
+    papers = sr.get("papers", []) or []
+    preprints = sr.get("preprints", []) or []
+    info = sr.get("search_info", {}) or {}
+
+    st.markdown("### 🔍 " + ("文献检索结果确认" if is_zh else "Confirm Literature Search Results"))
+
+    # 检索策略回显
+    queries = info.get("queries", []) or []
+    strategy_src = info.get("strategy_source", "none")
+    _src_label = {
+        "literature_dept": ("文献检索组制定" if is_zh else "by Literature Search dept"),
+        "domain_config": ("自动生成（检索组策略不可用，已回退）" if is_zh else "auto-generated (fallback)"),
+        "fallback": ("基础回退策略" if is_zh else "basic fallback"),
+        "none": ("无" if is_zh else "none"),
+    }.get(strategy_src, strategy_src)
+
+    if queries:
+        with st.expander(("🔎 检索策略（" + _src_label + "）") if is_zh else ("🔎 Search strategy (" + _src_label + ")"), expanded=False):
+            for q in queries:
+                st.markdown(f"- `{q}`")
+
+    # 统计
+    level_counts = {}
+    for p in papers:
+        lv = (p.get("quality_level") or "C")
+        level_counts[lv] = level_counts.get(lv, 0) + 1
+    _lv_detail = " · ".join(f"{lv}:{c}" for lv, c in sorted(level_counts.items()))
+
+    col_a, col_b, col_c = st.columns(3)
+    col_a.metric(("期刊论文" if is_zh else "Journal papers"), len(papers))
+    col_b.metric(("预印本" if is_zh else "Preprints"), len(preprints))
+    col_c.metric(("总抓取" if is_zh else "Total fetched"), info.get("total_fetched", 0))
+    if _lv_detail:
+        st.caption(("质量分级 " if is_zh else "Quality tiers ") + _lv_detail)
+
+    if not papers and not preprints:
+        st.warning("⚠️ " + ("本次检索未找到符合条件的文献。建议调整关键词重新搜索；若直接确认，将按无论文流程生成报告（不含参考文献）。" if is_zh
+                            else "No papers found. Consider adjusting keywords and re-searching; confirming directly will generate a report without references."))
+
+    # 期刊论文 checkbox 列表（默认全选）
+    if papers:
+        st.markdown("**" + ("勾选纳入后续分析的文献（默认全选）：" if is_zh else "Select papers for subsequent analysis (all selected by default):") + "**")
+        for i, p in enumerate(papers):
+            _lv = p.get("quality_level") or "?"
+            _title = p.get("title") or "?"
+            _journal = p.get("journal") or "?"
+            _year = p.get("year") or "?"
+            _cited = p.get("citation_count") or 0
+            label = f"[{_lv}] {_title} — {_journal} ({_year}), " + (f"被引 {_cited}" if is_zh else f"cited {_cited}")
+            st.checkbox(label, value=True, key=f"_sr_paper_{i}")
+
+    # 预印本默认不勾选
+    if preprints:
+        _pre_title = (f"📄 预印本（未经同行评审，默认不纳入，共 {len(preprints)} 篇）" if is_zh
+                      else f"📄 Preprints (not peer-reviewed, excluded by default, {len(preprints)})")
+        with st.expander(_pre_title, expanded=False):
+            for j, p in enumerate(preprints[:15]):
+                _title = p.get("title") or "?"
+                _year = p.get("year") or "?"
+                st.checkbox(f"{_title} ({_year})", value=False, key=f"_sr_pre_{j}")
+
+    st.divider()
+
+    # 操作区
+    btn_confirm, btn_research = st.columns(2)
+    with btn_confirm:
+        if st.button("✅ " + ("确认，开始部门辩论" if is_zh else "Confirm & start department debates"),
+                     type="primary", use_container_width=True):
+            selected = [p for i, p in enumerate(papers) if st.session_state.get(f"_sr_paper_{i}", True)]
+            selected_pre = [p for j, p in enumerate(preprints[:15]) if st.session_state.get(f"_sr_pre_{j}", False)]
+            st.session_state._confirmed_papers = selected
+            st.session_state._confirmed_preprints = selected_pre
+            st.session_state._papers_summary = build_papers_summary(selected + selected_pre)
+            st.session_state._debate_phase = "dept_rest"
+            st.session_state._debate_running = True
+            st.rerun()
+    with btn_research:
+        with st.expander("🔄 " + ("调整关键词重新搜索" if is_zh else "Adjust keywords & re-search")):
+            st.caption(("每行一个检索式（仅英文；中文检索式会被自动过滤）" if is_zh else "One query per line (English only; Chinese queries are auto-filtered)"))
+            edited = st.text_area(
+                "queries",
+                value="\n".join(queries),
+                height=150,
+                label_visibility="collapsed",
+                key="_sr_edit_queries",
+            )
+            if st.button(("执行重新搜索" if is_zh else "Run search again"), type="secondary", use_container_width=True):
+                _is_zh_char = lambda s: any('\u4e00' <= c <= '\u9fff' for c in s)
+                new_queries = [l.strip() for l in edited.split("\n") if l.strip() and not _is_zh_char(l.strip())]
+                if new_queries:
+                    # 清掉旧的勾选状态，避免新旧列表错位
+                    for k in list(st.session_state.keys()):
+                        if k.startswith("_sr_paper_") or k.startswith("_sr_pre_"):
+                            del st.session_state[k]
+                    _old_excl = (st.session_state.get("_search_strategy") or {}).get("exclusion_signals", [])
+                    st.session_state._search_strategy = {"search_queries": new_queries, "exclusion_signals": _old_excl}
+                    st.session_state._search_result = None
+                    st.session_state._debate_phase = "search"
+                    st.session_state._debate_running = True
+                    st.rerun()
+                else:
+                    st.error("❌ " + ("没有可用的英文检索式" if is_zh else "No valid English queries"))
+
+
 # ============ Debate Tab ============
 
 def render_debate_tab():
@@ -1705,7 +1882,13 @@ def render_debate_tab():
             st.session_state._debate_running = False
             st.session_state._tab_index = 1  # ensure results tab after completion
         st.rerun()
-    
+
+    # v0.11: search_review phase — show paper confirmation panel, wait for user
+    if (st.session_state.get("_debate_phase") == "search_review"
+            and not st.session_state.get("debate_completed")):
+        render_search_review_panel()
+        return
+
     if st.session_state.step_mode and st.session_state.step_phase != "idle":
         render_step_mode()
         return
