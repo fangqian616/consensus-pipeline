@@ -2989,32 +2989,42 @@ LIT_STRATEGY_INSTRUCTION_ZH = """
 【本部门特殊任务——必须完成】除常规学术讨论外，部门最终共识的末尾必须包含一个 JSON 代码块，定义本研究主题的系统化文献检索策略，格式严格如下：
 ```json
 {
-  "search_queries": ["6-10条英文检索式", "每条3-8个单词", "覆盖主题的不同子方向、方法视角和应用场景"],
-  "exclusion_signals": ["10-15个英文排除关键词，用于过滤不相关文献"]
+  "search_queries": ["6-8条英文检索式"],
+  "exclusion_signals": ["5-8个英文排除关键词"]
 }
 ```
-【强制要求】
-1. search_queries 中的每一条检索式必须使用英文，严禁出现任何中文词汇
-2. 每条检索式必须可直接在 OpenAlex / Semantic Scholar / arXiv 数据库执行（使用这些数据库支持的通用学术词汇）
-3. 检索式应围绕用户给定的研究主题，既不能过宽（如只写"machine learning"）也不能过窄（如完整句子）
-4. 共识正文中可以先讨论中文表述的检索思路，但 JSON 代码块内的关键词必须是英文
-5. 共识中必须且只需包含一个上述 JSON 代码块，放在共识文本的末尾"""
+【检索式要求】
+1. 每条必须是英文自然学术短语（名词性结构为主），严禁出现任何中文词汇
+2. 正确示例："carbon price drivers"、"emissions trading scheme efficiency"、"carbon market liquidity analysis"
+3. 错误示例（严禁）：词序混乱的关键词堆砌（如 "carbon quota allocation policy evaluation causal"）、完整长句、单个词（如 "carbon"）
+4. 每条 3-6 个单词，覆盖主题的不同子方向（影响因素/作用机制/研究方法/应用场景），可直接在 OpenAlex / Semantic Scholar / arXiv 执行
+【排除信号要求——极度谨慎】
+5. 排除信号仅用于剔除主题之外的文献（例如研究碳市场时可排除 "carbon nanotube"、"astrophysics"、"clinical trial"）
+6. 【严禁】将任何检索式中出现的词汇或其变体列为排除信号。例如检索式含 "machine learning" 时，严禁把 "machine learning"、"deep learning"、"neural network" 列为排除信号——这会杀死全部目标文献
+7. 排除信号 5-8 个即可，宁少勿滥；拿不准就不要列
+8. 生成后自检：逐条核对排除信号，若其出现在任何一条检索式中，立即删除该排除信号
+9. 共识中必须且只需包含一个上述 JSON 代码块，放在共识文本的末尾"""
 
 LIT_STRATEGY_INSTRUCTION_EN = """
 
 [SPECIAL TASK — MANDATORY] In addition to the regular academic discussion, the department's final consensus MUST end with a JSON code block defining a systematic literature search strategy for the research topic, in exactly this format:
 ```json
 {
-  "search_queries": ["6-10 English search queries", "3-8 words each", "covering different sub-directions, methodological perspectives and application scenarios"],
-  "exclusion_signals": ["10-15 English exclusion keywords for filtering irrelevant papers"]
+  "search_queries": ["6-8 English search queries"],
+  "exclusion_signals": ["5-8 English exclusion keywords"]
 }
 ```
-[STRICT REQUIREMENTS]
-1. Every query in search_queries MUST be in English. Chinese words are strictly forbidden
-2. Each query must be directly executable on OpenAlex / Semantic Scholar / arXiv (use common academic vocabulary supported by these databases)
-3. Queries should focus on the user's research topic — neither too broad (e.g. just "machine learning") nor too narrow (e.g. full sentences)
-4. The consensus body may discuss search strategy in any language, but keywords inside the JSON block MUST be English
-5. The consensus must contain exactly one such JSON code block, placed at the very end"""
+[QUERY REQUIREMENTS]
+1. Every query MUST be a natural English academic phrase (noun-phrase structure). Chinese words are strictly forbidden
+2. GOOD examples: "carbon price drivers", "emissions trading scheme efficiency", "carbon market liquidity analysis"
+3. BAD examples (FORBIDDEN): jumbled keyword piles with broken word order (e.g. "carbon quota allocation policy evaluation causal"), full long sentences, single words (e.g. "carbon")
+4. 3-6 words per query, covering different sub-directions (drivers / mechanisms / methods / applications), directly executable on OpenAlex / Semantic Scholar / arXiv
+[EXCLUSION SIGNAL REQUIREMENTS — EXTREME CAUTION]
+5. Exclusion signals exist ONLY to filter out off-topic literature (e.g. for a carbon-market topic: "carbon nanotube", "astrophysics", "clinical trial")
+6. [FORBIDDEN] Never list any word appearing in the queries (or its variants) as an exclusion signal. E.g. if a query contains "machine learning", then "machine learning", "deep learning", "neural network" are all FORBIDDEN as exclusion signals — they would kill every target paper
+7. 5-8 signals are enough; fewer is better; when in doubt, leave it out
+8. Self-check before output: verify each exclusion signal against every query; delete any signal that overlaps
+9. The consensus must contain exactly one such JSON code block, placed at the very end"""
 
 
 def _extract_search_strategy(consensus_text: str) -> Optional[Dict[str, Any]]:
@@ -3100,15 +3110,17 @@ def _regenerate_strategy_json(
 Output ONLY a JSON code block, no other text:
 ```json
 {
-  "search_queries": ["6-10 English search queries, 3-8 words each, covering different sub-directions of the topic"],
-  "exclusion_signals": ["10-15 English exclusion keywords for filtering irrelevant papers"]
+  "search_queries": ["6-8 English search queries, 3-6 words each, natural academic noun phrases covering different sub-directions"],
+  "exclusion_signals": ["5-8 English exclusion keywords for off-topic papers only"]
 }
 ```
 
 STRICT REQUIREMENTS:
 - All search_queries MUST be in English only — Chinese keywords are strictly forbidden
+- Queries must be natural noun phrases (GOOD: "carbon price drivers"; BAD: jumbled piles like "carbon quota allocation policy evaluation causal")
 - Each query must be directly executable on OpenAlex / Semantic Scholar / arXiv
-- Neither too broad (single common term) nor too narrow (full sentence)
+- Exclusion signals are ONLY for clearly off-topic literature (e.g. "astrophysics", "clinical trial")
+- FORBIDDEN: any exclusion signal that overlaps with query words (e.g. if queries contain "machine learning", never exclude "machine learning"/"deep learning"/"neural network") — that kills every target paper
 - If the discussion lacks a usable strategy, design one yourself based on the topic"""
 
     user_msg = f"Research topic: {topic[:500]}\n\nDiscussion content:\n{consensus_text[:8000]}"
