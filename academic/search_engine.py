@@ -211,6 +211,17 @@ class AcademicSearchEngine:
         # Sort preprints by citations, take top
         preprints.sort(key=lambda p: -p.citation_count)
 
+        # v0.8.2: Filter preprints through relevance — no unfiltered preprints
+        # Preprints must pass the same _compute_relevance() check as journal papers
+        # This prevents astronomy/Bitcoin/irrelevant arXiv papers from leaking through
+        if self.include_preprints and preprints and query:
+            filtered_preprints = []
+            for p in preprints:
+                rel = self._compute_relevance(p, query, domain_config=self.domain_config)
+                if rel >= 0.15:  # Same threshold as journal papers
+                    filtered_preprints.append(p)
+            preprints = filtered_preprints
+
         stats = {
             "total_fetched": total_fetched,
             "after_dedup": after_dedup,
