@@ -472,7 +472,10 @@ class AcademicSearchEngine:
             import urllib.request
 
             import urllib.parse as _urlp
-            url = f"https://api.openalex.org/works?search={_urlp.quote_plus(query)}&per_page={max_results}&select=id,doi,title,publication_year,cited_by_count,authorships,primary_location,type,abstract_inverted_index"
+            # mailto enters the OpenAlex polite pool (separate, more generous rate
+            # limit). Without it, shared-IP deployments (e.g. cloud free tier) get
+            # throttled hard — observed fetch collapse from ~30/query to ~4/query.
+            url = f"https://api.openalex.org/works?search={_urlp.quote_plus(query)}&per_page={max_results}&mailto=xiaxia@coze.email&select=id,doi,title,publication_year,cited_by_count,authorships,primary_location,type,abstract_inverted_index"
             req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
             with urllib.request.urlopen(req, timeout=20) as resp:
                 data = json.loads(resp.read())

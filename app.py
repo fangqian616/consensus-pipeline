@@ -1854,8 +1854,9 @@ def render_search_review_panel():
                     for k in list(st.session_state.keys()):
                         if k.startswith("_sr_paper_") or k.startswith("_sr_pre_"):
                             del st.session_state[k]
-                    _old_excl = (st.session_state.get("_search_strategy") or {}).get("exclusion_signals", [])
-                    st.session_state._search_strategy = {"search_queries": new_queries, "exclusion_signals": _old_excl}
+                    # 手动改检索式时丢弃 LLM 旧排除信号：它针对旧查询词生成，
+                    # 换主题/换词后保留只会误杀（曾致带 machine learning 的新查询全灭）
+                    st.session_state._search_strategy = {"search_queries": new_queries, "exclusion_signals": []}
                     st.session_state._search_result = None
                     st.session_state._debate_phase = "search"
                     st.session_state._debate_running = True
