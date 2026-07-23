@@ -3256,7 +3256,7 @@ def run_academic_summary(
                 authors_str = ", ".join(p.authors[:3]) if p.authors else "Unknown"
                 if len(p.authors) > 3:
                     authors_str += " et al."
-                ref_lines.append(f"{i}. {authors_str} ({p.year}). {p.title}. {p.journal}, cited by {p.citation_count}. DOI: {p.doi or 'N/A'}")
+                ref_lines.append(f"[{i}] {authors_str} ({p.year}). {p.title}. {p.journal}, cited by {p.citation_count}. DOI: {p.doi or 'N/A'}")
             paper_references = "\n".join(ref_lines)
             print(f"Academic search complete: {total_fetched} fetched, "
                   f"{len(papers_found)} unique papers, {len(preprints)} preprints, "
@@ -3299,15 +3299,16 @@ def run_academic_summary(
 2. 每个章节必须有实质性内容段落（每节至少400字），每个章节至少3-4段实质性内容，不能只有标题或要点列表
 3. 必须涵盖所有参与辩论的部门的贡献，不得遗漏任何部门的共识
 4. 参考文献必须且只能使用下方提供的真实论文列表，严禁自行编造任何文献。不得标注"示范性引用""佚名"等。如果提供的论文不足，减少参考文献数量，不得补充虚构文献
-5. 在报告中适当引用真实论文的结论来支撑辩论观点，每篇参考文献至少在正文中被引用一次
-6. 方法论比较要有深度：优缺点、适用场景、计算成本、数据需求
-7. 趋势分析基于辩论中揭示的演变轨迹
-8. 反证必须包含：有效批评、失败案例、适用边界
-9. 研究空白从"为什么没人做"和"做了有什么价值"两个角度分析
-10. 学术但可读的语言，避免空话套话和模糊表述
-11. 报告字数 >= 6000字，确保每个章节有充分的论述深度，尽量详细展开每个章节
-12. 第6章「代码实现」必须基于辩论中讨论的该领域具体分析方法（如因果推断、统计建模、机器学习技术等），而非共识管线本身的基础设施代码。必须包含实际代码块（用```python```标记），展示如何用Python实现辩论共识中提到的核心分析方法，不能只描述代码思路
-13. 第7章「教程」必须是围绕该领域具体分析方法的分步骤实操指南，而非共识管线的使用教程。包含该领域分析方法的实现步骤、示例代码、进阶用法说明"""
+5. 在报告中适当引用真实论文的结论来支撑辩论观点，每篇参考文献至少在正文中被引用一次。引用格式必须使用数字方括号标记（如[1]、[2,3]、[1-3]），严禁使用作者-年份格式（如van Eck & Waltman (2017)）
+6. 报告必须围绕用户指定的研究领域展开，方法论讨论必须与该领域的具体研究内容、应用场景和实际案例结合，不得写成通用的文献计量方法论教程
+7. 方法论比较要有深度：优缺点、适用场景、计算成本、数据需求
+8. 趋势分析基于辩论中揭示的演变轨迹
+9. 反证必须包含：有效批评、失败案例、适用边界
+10. 研究空白从"为什么没人做"和"做了有什么价值"两个角度分析
+11. 学术但可读的语言，避免空话套话和模糊表述
+12. 报告字数 >= 6000字，确保每个章节有充分的论述深度，尽量详细展开每个章节
+13. 第6章「代码实现」必须基于辩论中讨论的该领域具体分析方法（如因果推断、统计建模、机器学习技术等），而非共识管线本身的基础设施代码。必须包含实际代码块（用```python```标记），展示如何用Python实现辩论共识中提到的核心分析方法，不能只描述代码思路
+14. 第7章「教程」必须是围绕该领域具体分析方法的分步骤实操指南，而非共识管线的使用教程。包含该领域分析方法的实现步骤、示例代码、进阶用法说明"""
 
             user_prompt = f"""请撰写「{search_query}」领域的学术动向综述报告。
 
@@ -3331,7 +3332,7 @@ def run_academic_summary(
 5. 结论与建议
 6. 代码实现（基于程序部辩论共识，提供该领域具体分析方法的Python代码示例：①快速入门——领域核心分析方法的实现，展示从数据加载到结果输出的完整流程；②进阶增强——辩论中提到的进阶技术实现；③高级定制——该领域前沿方法的复现与调优。代码必须围绕辩论中讨论的具体分析方法，不得写成共识管线的基础设施代码。每个代码块用```python```标记，提供真实可运行的关键片段，不要伪代码）
 7. 教程（基于教程部辩论共识，输出围绕该领域分析方法的三级递进教程：①零基础入门——该领域基础分析方法的实现步骤与示例；②进阶实战——该领域进阶技术的应用与避坑指南；③高级定制——该领域前沿方法的复现与调优。教程必须围绕辩论中讨论的具体分析方法，不得写成共识管线的使用教程。每步含操作命令、示例代码、预期输出）
-8. 参考文献（使用上方真实论文列表，格式：作者. (年份). 标题. 期刊。）"""
+8. 参考文献（使用上方真实论文列表，格式：[序号] 作者. (年份). 标题. 期刊。序号必须与正文中的[1]、[2]等引用标记一一对应）"""
         else:
             system_prompt = """【重要】你必须使用中文回答。所有输出必须是中文。
 
@@ -3342,14 +3343,15 @@ def run_academic_summary(
 2. 每个章节必须有实质性内容段落（每节至少300字），每个章节至少3-4段实质性内容，不能只有标题或要点列表
 3. 必须涵盖所有参与辩论的部门的贡献，不得遗漏任何部门的共识
 4. 由于未能检索到外部文献，参考文献部分应列出"辩论来源"（各部门共识），不得编造任何不存在的文献
-5. 方法论比较要有深度：优缺点、适用场景、计算成本、数据需求
-6. 趋势分析基于辩论中揭示的演变轨迹
-7. 反证必须包含：有效批评、失败案例、适用边界
-8. 研究空白从"为什么没人做"和"做了有什么价值"两个角度分析
-9. 学术但可读的语言，避免空话套话和模糊表述
-10. 报告字数 >= 4000字，尽量详细展开每个章节
-11. 第6章「代码实现」必须基于辩论中讨论的该领域具体分析方法，而非共识管线本身的基础设施。必须包含实际的代码块（用markdown代码块格式），不能只描述代码思路，要输出可运行的关键代码片段
-12. 第7章「教程」必须是围绕该领域具体分析方法的分步骤实操指南，而非共识管线的使用教程。包含环境配置命令、基础示例代码、进阶用法说明"""
+5. 报告必须围绕用户指定的研究领域展开，方法论讨论必须与该领域的具体研究内容、应用场景和实际案例结合，不得写成通用的文献计量方法论教程
+6. 方法论比较要有深度：优缺点、适用场景、计算成本、数据需求
+7. 趋势分析基于辩论中揭示的演变轨迹
+8. 反证必须包含：有效批评、失败案例、适用边界
+9. 研究空白从"为什么没人做"和"做了有什么价值"两个角度分析
+10. 学术但可读的语言，避免空话套话和模糊表述
+11. 报告字数 >= 4000字，尽量详细展开每个章节
+12. 第6章「代码实现」必须基于辩论中讨论的该领域具体分析方法，而非共识管线本身的基础设施。必须包含实际的代码块（用markdown代码块格式），不能只描述代码思路，要输出可运行的关键代码片段
+13. 第7章「教程」必须是围绕该领域具体分析方法的分步骤实操指南，而非共识管线的使用教程。包含环境配置命令、基础示例代码、进阶用法说明"""
 
             user_prompt = f"""请撰写「{search_query}」领域的学术动向综述报告。
 
@@ -3381,15 +3383,16 @@ IMPORTANT: You MUST respond in English only. All output must be in English.
 2. Each section must have substantive content paragraphs (at least 200 words per section), not bare bullet points
 3. Must cover ALL participating departments' contributions, do not omit any department's consensus
 4. References MUST ONLY use the real paper list provided below. Do NOT fabricate any references. Do NOT mark references as "illustrative" or "anonymous". If fewer papers are available, use fewer references rather than inventing fake ones
-5. Cite real paper conclusions appropriately to support debate arguments, each reference should be cited at least once in the text
-6. Methodology comparison must have depth: pros/cons, applicable scenarios, computational costs, data requirements
-7. Trend analysis based on evolution trajectories revealed in debates
-8. Counter-evidence must be included: valid criticisms, failure cases, applicability boundaries
-9. Research gaps analyzed from "why hasn't anyone done this" and "what value would it bring" perspectives
-10. Academic but accessible language, avoid filler and vague statements
-11. Report length >= 5000 words, ensure each section has sufficient depth, expand each section thoroughly with 3-4 substantive paragraphs
-12. Section 6 "Code Implementation" must be based on the specific analytical methods discussed in the debate (e.g., causal inference, statistical modeling, ML techniques), NOT the consensus pipeline infrastructure. Must include actual code blocks (marked with ```python```) demonstrating how to implement the core analytical methods discussed in the debate consensus, not just code descriptions
-13. Section 7 "Tutorial" must be a step-by-step guide on the domain's specific analytical methods, NOT a usage tutorial for the consensus pipeline. Include methodology implementation steps, example code, and advanced usage notes"""
+5. Cite real paper conclusions appropriately to support debate arguments, each reference should be cited at least once in the text. Citation format MUST use numeric bracket markers (e.g., [1], [2,3], [1-3]). Do NOT use author-year format (e.g., van Eck & Waltman (2017))
+6. The report MUST focus on the user-specified research domain. Methodology discussions must be integrated with the domain's specific research content, applications, and real-world cases. Do NOT write a generic bibliometrics methodology tutorial
+7. Methodology comparison must have depth: pros/cons, applicable scenarios, computational costs, data requirements
+8. Trend analysis based on evolution trajectories revealed in debates
+9. Counter-evidence must be included: valid criticisms, failure cases, applicability boundaries
+10. Research gaps analyzed from "why hasn't anyone done this" and "what value would it bring" perspectives
+11. Academic but accessible language, avoid filler and vague statements
+12. Report length >= 5000 words, ensure each section has sufficient depth, expand each section thoroughly with 3-4 substantive paragraphs
+13. Section 6 "Code Implementation" must be based on the specific analytical methods discussed in the debate (e.g., causal inference, statistical modeling, ML techniques), NOT the consensus pipeline infrastructure. Must include actual code blocks (marked with ```python```) demonstrating how to implement the core analytical methods discussed in the debate consensus, not just code descriptions
+14. Section 7 "Tutorial" must be a step-by-step guide on the domain's specific analytical methods, NOT a usage tutorial for the consensus pipeline. Include methodology implementation steps, example code, and advanced usage notes"""
 
             user_prompt = f"""Please write an academic trend review report on "{search_query}".
 
@@ -3413,7 +3416,7 @@ Based on the above debate content and real literature, write a structured academ
 5. Conclusions & Recommendations
 6. Code Implementation (based on programming dept consensus, provide Python code for the domain's specific analytical methods: (1) Quick Start — implementation of core analytical methods, showing a complete data-to-results workflow; (2) Advanced Enhancement — implementation of advanced techniques discussed in the debate; (3) Advanced Customization — reproduction and tuning of cutting-edge methods. Code must focus on the analytical methods discussed in the debate, NOT the consensus pipeline infrastructure. Use ```python``` blocks, provide real runnable snippets, no pseudocode)
 7. Tutorial (based on tutorial dept consensus, 3-tier progressive guide on the domain's analytical methods: (1) Beginner — implementation steps and examples for the domain's basic analytical methods; (2) Intermediate — application of advanced techniques with pitfalls to avoid; (3) Advanced — reproduction and tuning of cutting-edge methods. Tutorial must focus on the analytical methods discussed in the debate, NOT a usage guide for the consensus pipeline. Each step includes commands, example code, expected output)
-8. References (use the real paper list above, format: Authors. (Year). Title. Journal.)"""
+8. References (use the real paper list above, format: [number] Authors. (Year). Title. Journal. Numbers must correspond to [1], [2] etc. citation markers in the text)"""
         else:
             system_prompt = """You are a senior academic review writing expert. Your task is to synthesize multi-group debate consensus into a structured academic trend review report.
 
@@ -3424,14 +3427,15 @@ IMPORTANT: You MUST respond in English only. All output must be in English.
 2. Each section must have substantive content paragraphs (at least 200 words per section), not bare bullet points
 3. Must cover ALL participating departments' contributions, do not omit any department's consensus
 4. Since external literature search was not available, the references section should list "Debate Sources" (department consensuses), do not fabricate any non-existent references
-5. Methodology comparison must have depth: pros/cons, applicable scenarios, computational costs, data requirements
-6. Trend analysis based on evolution trajectories revealed in debates
-7. Counter-evidence must be included: valid criticisms, failure cases, applicability boundaries
-8. Research gaps analyzed from "why hasn't anyone done this" and "what value would it bring" perspectives
-9. Academic but accessible language, avoid filler and vague statements
-10. Report length >= 4500 words, ensure each section has sufficient depth, expand each section thoroughly with 3-4 substantive paragraphs
-11. Section 6 "Code Implementation" must be based on the specific analytical methods discussed in the debate, NOT the consensus pipeline infrastructure. Must include actual code blocks (in markdown code block format), not just descriptions of code ideas - output runnable key code snippets
-12. Section 7 "Tutorial" must be a step-by-step guide on the domain's specific analytical methods, NOT a usage tutorial for the consensus pipeline. Include environment setup commands, basic example code, and advanced usage notes"""
+5. The report MUST focus on the user-specified research domain. Methodology discussions must be integrated with the domain's specific research content, applications, and real-world cases. Do NOT write a generic bibliometrics methodology tutorial
+6. Methodology comparison must have depth: pros/cons, applicable scenarios, computational costs, data requirements
+7. Trend analysis based on evolution trajectories revealed in debates
+8. Counter-evidence must be included: valid criticisms, failure cases, applicability boundaries
+9. Research gaps analyzed from "why hasn't anyone done this" and "what value would it bring" perspectives
+10. Academic but accessible language, avoid filler and vague statements
+11. Report length >= 4500 words, ensure each section has sufficient depth, expand each section thoroughly with 3-4 substantive paragraphs
+12. Section 6 "Code Implementation" must be based on the specific analytical methods discussed in the debate, NOT the consensus pipeline infrastructure. Must include actual code blocks (in markdown code block format), not just descriptions of code ideas - output runnable key code snippets
+13. Section 7 "Tutorial" must be a step-by-step guide on the domain's specific analytical methods, NOT a usage tutorial for the consensus pipeline. Include environment setup commands, basic example code, and advanced usage notes"""
 
             user_prompt = f"""Please write an academic trend review report on "{search_query}".
 
