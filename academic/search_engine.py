@@ -673,6 +673,11 @@ class AcademicSearchEngine:
             "课程思政", "教学设计", "教学改革", "教学改革", "教育发展",
             "obesity", "dietary", "nutrition", "weight loss", "body mass",
             "肥胖", "膳食", "营养", "减肥",
+            # Astronomy/astrophysics — "dark energy" matches "energy" in domain_must_have
+            "dark energy", "dark matter", "galaxy", "galaxies", "galactic",
+            "telescope", "astronomical", "astrophysics", "cosmological",
+            "supernova", "redshift", "exoplanet", "nebula", "pulsar",
+            "quasar", "black hole", "cosmic microwave", "stellar evolution",
         }
         if any(ex in combined for ex in _universal_exclude):
             return 0.0  # Universal rejection: education/pedagogy/nutrition noise
