@@ -3297,9 +3297,9 @@ def run_academic_summary(
 【硬性规则】
 1. 这是学术综述，不是动画脚本或分镜表。严禁出现任何动画/视觉/分镜术语（如"冲击帧""蓄力-释放""速度线""残影""停帧""九宫格""分镜"等）
 2. 每个章节必须有实质性内容段落（每节至少400字），每个章节至少3-4段实质性内容，不能只有标题或要点列表
-3. 必须涵盖所有参与辩论的部门的贡献，不得遗漏任何部门的共识
+3. 整合各部门辩论中有价值的研究发现，但不得描述本系统/共识管线自身的检索流程、筛选机制或基础设施（如"先广后精""四级筛选""DOI溯源""多源定制检索"等系统方法论术语）。报告内容必须全部围绕研究领域本身的学术内容展开
 4. 参考文献必须且只能使用下方提供的真实论文列表，严禁自行编造任何文献。不得标注"示范性引用""佚名"等。如果提供的论文不足，减少参考文献数量，不得补充虚构文献
-5. 在报告中适当引用真实论文的结论来支撑辩论观点，每篇参考文献至少在正文中被引用一次。引用格式必须使用数字方括号标记（如[1]、[2,3]、[1-3]），严禁使用作者-年份格式（如van Eck & Waltman (2017)）
+5. 在报告中适当引用真实论文的结论来支撑辩论观点，每篇参考文献至少在正文中被引用一次。引用格式必须使用数字方括号标记（如[1]、[2,3]、[1-3]），严禁使用作者-年份格式（如van Eck & Waltman (2017)）。引用编号必须与论点内容匹配——例如不要用一篇1997年的石油价格论文来支撑2020年代的可再生能源政策论点。每个引用必须对应与该论点主题相关的参考文献
 6. 报告必须围绕用户指定的研究领域展开，方法论讨论必须与该领域的具体研究内容、应用场景和实际案例结合，不得写成通用的文献计量方法论教程
 7. 方法论比较要有深度：优缺点、适用场景、计算成本、数据需求
 8. 趋势分析基于辩论中揭示的演变轨迹
@@ -3341,7 +3341,7 @@ def run_academic_summary(
 【硬性规则】
 1. 这是学术综述，不是动画脚本或分镜表。严禁出现任何动画/视觉/分镜术语
 2. 每个章节必须有实质性内容段落（每节至少300字），每个章节至少3-4段实质性内容，不能只有标题或要点列表
-3. 必须涵盖所有参与辩论的部门的贡献，不得遗漏任何部门的共识
+3. 整合各部门辩论中有价值的研究发现，但不得描述本系统/共识管线自身的检索流程、筛选机制或基础设施（如"先广后精""四级筛选""DOI溯源""多源定制检索"等系统方法论术语）。报告内容必须全部围绕研究领域本身的学术内容展开
 4. 由于未能检索到外部文献，参考文献部分应列出"辩论来源"（各部门共识），不得编造任何不存在的文献
 5. 报告必须围绕用户指定的研究领域展开，方法论讨论必须与该领域的具体研究内容、应用场景和实际案例结合，不得写成通用的文献计量方法论教程
 6. 方法论比较要有深度：优缺点、适用场景、计算成本、数据需求
@@ -3381,9 +3381,9 @@ IMPORTANT: You MUST respond in English only. All output must be in English.
 [HARD RULES]
 1. This is an ACADEMIC REVIEW, NOT an animation script or storyboard. Absolutely no animation/visual/storyboard terminology
 2. Each section must have substantive content paragraphs (at least 200 words per section), not bare bullet points
-3. Must cover ALL participating departments' contributions, do not omit any department's consensus
+3. Integrate valuable research findings from all departments, but do NOT describe the system/pipeline's own search methodology, filtering mechanisms, or infrastructure (e.g., "broad-then-refine", "four-tier screening", "DOI verification", "multi-source retrieval"). All content must focus on the research domain's academic substance
 4. References MUST ONLY use the real paper list provided below. Do NOT fabricate any references. Do NOT mark references as "illustrative" or "anonymous". If fewer papers are available, use fewer references rather than inventing fake ones
-5. Cite real paper conclusions appropriately to support debate arguments, each reference should be cited at least once in the text. Citation format MUST use numeric bracket markers (e.g., [1], [2,3], [1-3]). Do NOT use author-year format (e.g., van Eck & Waltman (2017))
+5. Cite real paper conclusions appropriately to support debate arguments, each reference should be cited at least once in the text. Citation format MUST use numeric bracket markers (e.g., [1], [2,3], [1-3]). Do NOT use author-year format (e.g., van Eck & Waltman (2017)). Citation numbers MUST match the claim content — do not use a 1997 oil price paper to support a 2020s renewable energy policy claim. Each citation must reference a paper topically relevant to the claim
 6. The report MUST focus on the user-specified research domain. Methodology discussions must be integrated with the domain's specific research content, applications, and real-world cases. Do NOT write a generic bibliometrics methodology tutorial
 7. Methodology comparison must have depth: pros/cons, applicable scenarios, computational costs, data requirements
 8. Trend analysis based on evolution trajectories revealed in debates
@@ -3425,7 +3425,7 @@ IMPORTANT: You MUST respond in English only. All output must be in English.
 [HARD RULES]
 1. This is an ACADEMIC REVIEW, NOT an animation script or storyboard. Absolutely no animation/visual/storyboard terminology
 2. Each section must have substantive content paragraphs (at least 200 words per section), not bare bullet points
-3. Must cover ALL participating departments' contributions, do not omit any department's consensus
+3. Integrate valuable research findings from all departments, but do NOT describe the system/pipeline's own search methodology, filtering mechanisms, or infrastructure (e.g., "broad-then-refine", "four-tier screening", "DOI verification", "multi-source retrieval"). All content must focus on the research domain's academic substance
 4. Since external literature search was not available, the references section should list "Debate Sources" (department consensuses), do not fabricate any non-existent references
 5. The report MUST focus on the user-specified research domain. Methodology discussions must be integrated with the domain's specific research content, applications, and real-world cases. Do NOT write a generic bibliometrics methodology tutorial
 6. Methodology comparison must have depth: pros/cons, applicable scenarios, computational costs, data requirements
