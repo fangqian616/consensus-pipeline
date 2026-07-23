@@ -58,6 +58,13 @@ _NON_CLAIM_PATTERNS = [
     r'通过整合.*[组部]', r'构建了.*框架', r'构建了一套',
     r'三C\b', r'综合范式', r'失效边界声明', r'完整性验证框架',
     r'范式转变', r'研究空白',
+    # System methodology / pipeline process descriptions (not external claims)
+    r'共识方案', r'辩论.*揭示', r'精查组', r'筛选体系', r'四级质量',
+    r'无DOI.*无资格', r'先广后精', r'多源定制检索', r'文献网络',
+    r'核心文献池', r'范式跃迁', r'单维效率', r'系统协同',
+    # Report self-references (section pointers in body text)
+    r'本文第\d*\.?\d*[节章]', r'本[节章]\s', r'本文.*探讨',
+    r'本文.*指出', r'本文.*分析', r'本文.*构建',
 ]
 
 _NON_CLAIM_RE = re.compile('|'.join(_NON_CLAIM_PATTERNS), re.IGNORECASE)
@@ -241,18 +248,32 @@ class CitationParser:
         return contexts
 
     @classmethod
+    def _split_sentences(cls, text: str) -> List[str]:
+        """Split text into sentences, handling Chinese and English punctuation."""
+        parts = re.split(r'(?<=[。；！？.!?])\s*', text)
+        return [p.strip() for p in parts if p.strip()]
+
+    @classmethod
     def _flush_paragraph(cls, lines: List[str], section: str, contexts: List[CitationContext]):
         text = ' '.join(lines)
         # Skip code-dense paragraphs — not verifiable factual claims
         if not _is_verifiable_claim(text):
             return
-        cited = cls._extract_cited_indices(text)
-        if cited:
-            contexts.append(CitationContext(
-                text=text,
-                cited_indices=cited,
-                section=section,
-            ))
+        # Sentence-level extraction: each sentence gets its own citations
+        # This prevents claims from inheriting citations of neighboring sentences
+        for sent in cls._split_sentences(text):
+            sent = sent.strip()
+            if len(sent) < 15:
+                continue
+            if not _is_verifiable_claim(sent):
+                continue
+            cited = cls._extract_cited_indices(sent)
+            if cited:
+                contexts.append(CitationContext(
+                    text=sent,
+                    cited_indices=cited,
+                    section=section,
+                ))
 
     @classmethod
     def _extract_cited_indices(cls, text: str) -> List[int]:
@@ -445,7 +466,7 @@ If no decomposable factual claims exist, output: {"claims": []}"""
     def decompose(self, contexts: List[CitationContext]) -> List[AtomicClaim]:
         """Decompose citation contexts into atomic claims."""
         if not self.llm_call_fn:
-            # Fallback: treat each context paragraph as a single claim
+            # Fallback: treat each context as a single claim
             return [
                 AtomicClaim(
                     text=ctx.text[:500],
@@ -453,7 +474,7 @@ If no decomposable factual claims exist, output: {"claims": []}"""
                     cited_indices=ctx.cited_indices,
                 )
                 for ctx in contexts
-                if not _is_verifiable_claim(ctx.text[:500])
+                if _is_verifiable_claim(ctx.text[:500])
             ]
 
         claims = []
@@ -638,7 +659,7 @@ Output JSON:
         elif contradicts > 0 and entails == 0:
             return "contradicted", max(0.1, avg_conf - 0.1 * contradicts)
         else:
-            return "unverified", avg_conf * 0.3  # Low confidence for neutral
+            return "unverified", 0.0  # Neutral = no evidence found
 
 
 # ── Main Pipeline ────────────────────────────────────────────────────────────
@@ -672,6 +693,23 @@ class CitationVerifier:
         self.resolver = ReferenceResolver(search_fn=search_fn)
         self.decomposer = AtomicFactDecomposer(llm_call_fn=llm_call_fn, language=language)
         self.nli = NLIVerifier(llm_call_fn=llm_call_fn, language=language)
+
+    @staticmethod
+    def _match_papers_to_text(text: str, ref_dict: Dict[int, Reference]) -> List[int]:
+        """Find most relevant paper indices for a text by keyword overlap."""
+        text_words = set(re.findall(r'[a-zA-Z]{4,}|[\u4e00-\u9fff]{2,}', text.lower()))
+
+        scored = []
+        for idx, ref in ref_dict.items():
+            ref_text = (ref.title + " " + ref.abstract).lower()
+            ref_words = set(re.findall(r'[a-zA-Z]{4,}|[\u4e00-\u9fff]{2,}', ref_text))
+            overlap = len(text_words & ref_words)
+            if overlap > 0:
+                scored.append((overlap, idx))
+
+        scored.sort(reverse=True)
+        # Return top 2 most relevant papers
+        return [idx for _, idx in scored[:2]] if scored else []
 
     def verify(
         self,
@@ -736,7 +774,6 @@ class CitationVerifier:
         # If no citation contexts but we have papers_data, extract all substantive
         # paragraphs as contexts (they may reference papers without [N] markers)
         if not contexts and papers_data:
-            all_indices = list(ref_dict.keys())
             for para in report_text.split("\n\n"):
                 para = para.strip()
                 if len(para) < 60 or para.startswith("#"):
@@ -747,11 +784,15 @@ class CitationVerifier:
                 # Skip code-dense / non-verifiable paragraphs
                 if not _is_verifiable_claim(para):
                     continue
-                contexts.append(CitationContext(
-                    text=para,
-                    cited_indices=all_indices,  # Verify against all papers
-                    section="",
-                ))
+                # Match paragraph to most relevant papers by keyword overlap
+                # instead of assigning ALL papers (which causes false neutral NLI)
+                relevant_indices = self._match_papers_to_text(para, ref_dict)
+                if relevant_indices:
+                    contexts.append(CitationContext(
+                        text=para,
+                        cited_indices=relevant_indices,
+                        section="",
+                    ))
             contexts = contexts[:self.max_contexts]
 
         # Limit contexts to avoid excessive LLM calls
@@ -778,9 +819,14 @@ class CitationVerifier:
         report.unverified = sum(1 for cv in report.claim_verifications if cv.status == "unverified")
 
         if report.claim_verifications:
-            report.overall_confidence = sum(
-                cv.confidence for cv in report.claim_verifications
-            ) / len(report.claim_verifications)
+            total_claims = len(report.claim_verifications)
+            weighted = sum(
+                1.0 if cv.status == "verified"
+                else 0.5 if cv.status == "partially_verified"
+                else 0.0
+                for cv in report.claim_verifications
+            )
+            report.overall_confidence = weighted / total_claims
 
         src = "cached papers" if papers_data else "bibliography"
         report.summary = (
