@@ -3185,10 +3185,9 @@ def run_academic_summary(
 
         # === Multi-query search with cross-query deduplication (pipeline integration) ===
         se = AcademicSearchEngine(
-            min_citations=1,
+            min_citations=3,
             min_results=20,
-            include_preprints=False,  # v0.8.2: No arXiv preprints — user requires journal papers only
-            quality_levels=["S", "A", "B", "C"],  # v0.8.2: Include C-level (unclassified journals like economics journals)
+            include_preprints=False,  # v0.8.2: No arXiv preprints — journal papers only
             domain_config=domain_config,  # v0.7.0: Enable config-driven exclusion filtering
         )
 
