@@ -5,7 +5,7 @@ AI 3D Animation Debate Engine v3.0 — Consensus Pipeline Edition
 import json
 import time
 import requests
-from typing import List, Dict, Optional, Callable
+from typing import List, Dict, Optional, Callable, Any
 
 # ============ Department Execution Order ============
 DEPT_ORDER = ["screenwriter", "spatial", "storyboard", "dp", "lighting", "vfx", "sound", "editing"]
@@ -2981,89 +2981,212 @@ IMPORTANT:
         "video_prompt": video_result or "逐镜视频提示词生成失败",
     }
 
-# ============ Academic Summary (for academic mode) ============
+# ============ Academic Search Strategy & Execution (v0.11) ============
 
-def run_academic_summary(
-    user_topic: str,
-    all_consensus: Dict[str, str],
-    cross_results: list,
+# 文献检索组 JSON 策略强限定指令（注入 extra_instructions）
+LIT_STRATEGY_INSTRUCTION_ZH = """
+
+【本部门特殊任务——必须完成】除常规学术讨论外，部门最终共识的末尾必须包含一个 JSON 代码块，定义本研究主题的系统化文献检索策略，格式严格如下：
+```json
+{
+  "search_queries": ["6-10条英文检索式", "每条3-8个单词", "覆盖主题的不同子方向、方法视角和应用场景"],
+  "exclusion_signals": ["10-15个英文排除关键词，用于过滤不相关文献"]
+}
+```
+【强制要求】
+1. search_queries 中的每一条检索式必须使用英文，严禁出现任何中文词汇
+2. 每条检索式必须可直接在 OpenAlex / Semantic Scholar / arXiv 数据库执行（使用这些数据库支持的通用学术词汇）
+3. 检索式应围绕用户给定的研究主题，既不能过宽（如只写"machine learning"）也不能过窄（如完整句子）
+4. 共识正文中可以先讨论中文表述的检索思路，但 JSON 代码块内的关键词必须是英文
+5. 共识中必须且只需包含一个上述 JSON 代码块，放在共识文本的末尾"""
+
+LIT_STRATEGY_INSTRUCTION_EN = """
+
+[SPECIAL TASK — MANDATORY] In addition to the regular academic discussion, the department's final consensus MUST end with a JSON code block defining a systematic literature search strategy for the research topic, in exactly this format:
+```json
+{
+  "search_queries": ["6-10 English search queries", "3-8 words each", "covering different sub-directions, methodological perspectives and application scenarios"],
+  "exclusion_signals": ["10-15 English exclusion keywords for filtering irrelevant papers"]
+}
+```
+[STRICT REQUIREMENTS]
+1. Every query in search_queries MUST be in English. Chinese words are strictly forbidden
+2. Each query must be directly executable on OpenAlex / Semantic Scholar / arXiv (use common academic vocabulary supported by these databases)
+3. Queries should focus on the user's research topic — neither too broad (e.g. just "machine learning") nor too narrow (e.g. full sentences)
+4. The consensus body may discuss search strategy in any language, but keywords inside the JSON block MUST be English
+5. The consensus must contain exactly one such JSON code block, placed at the very end"""
+
+
+def _extract_search_strategy(consensus_text: str) -> Optional[Dict[str, Any]]:
+    """从文献检索组共识中提取 JSON 检索策略（强限定版）。
+
+    校验规则：
+    - 必须能解析出含 search_queries 的 JSON 对象
+    - search_queries 必须是非空字符串列表
+    - 中文 query 逐条过滤；过滤后为空则判无效
+    """
+    import re as _re
+    import json as _json
+
+    if not consensus_text:
+        return None
+
+    candidates = []
+    # 1) ```json ... ``` fenced blocks
+    for m in _re.finditer(r'```(?:json)?\s*(\{.*?\})\s*```', consensus_text, _re.DOTALL):
+        candidates.append(m.group(1))
+    # 2) bare JSON object containing "search_queries"
+    if not candidates:
+        idx = consensus_text.find('"search_queries"')
+        if idx >= 0:
+            start = consensus_text.rfind('{', 0, idx)
+            if start >= 0:
+                depth = 0
+                for i in range(start, len(consensus_text)):
+                    ch = consensus_text[i]
+                    if ch == '{':
+                        depth += 1
+                    elif ch == '}':
+                        depth -= 1
+                        if depth == 0:
+                            candidates.append(consensus_text[start:i + 1])
+                            break
+
+    def _has_zh(s: str) -> bool:
+        return any('\u4e00' <= c <= '\u9fff' for c in s)
+
+    for raw in candidates:
+        data = None
+        try:
+            data = _json.loads(raw)
+        except Exception:
+            try:
+                data = _json.loads(_re.sub(r',\s*([}\]])', r'\1', raw))
+            except Exception:
+                continue
+        if not isinstance(data, dict):
+            continue
+        queries = data.get("search_queries") or data.get("queries") or []
+        if not isinstance(queries, list):
+            continue
+        queries = [str(q).strip() for q in queries if q and str(q).strip() and not _has_zh(str(q))]
+        if not queries:
+            continue
+        excl = data.get("exclusion_signals") or data.get("exclusions") or []
+        if isinstance(excl, list):
+            excl = [str(e).strip() for e in excl if e and str(e).strip() and not _has_zh(str(e))]
+        else:
+            excl = []
+        print(f"[strategy] Extracted from literature dept: {len(queries)} EN queries, {len(excl)} exclusion signals")
+        return {"search_queries": queries, "exclusion_signals": excl}
+
+    print("[strategy] No valid JSON strategy found in literature consensus")
+    return None
+
+
+def _regenerate_strategy_json(
+    consensus_text: str,
+    topic: str,
     api_url: str,
     api_key: str,
     model: str = "deepseek-v4-flash",
-    lang: str = "zh",
-    stats: dict = None,
-) -> Dict:
-    """
-    Academic mode summary: search real papers + synthesize debate consensus into academic review.
-    Two-step: (1) Search real papers via AcademicSearchEngine (2) LLM synthesizes report with real references.
-    """
-    is_zh = lang == "zh"
+) -> Optional[Dict[str, Any]]:
+    """补考机制：检索组共识中无合法 JSON 时，单独调 LLM 把讨论内容转成结构化检索策略。
+    输出经 _extract_search_strategy 同一套强限定校验。"""
+    import requests as _req
 
-    # Build all department consensus
-    consensus_parts = []
-    for dept_key, consensus in all_consensus.items():
-        dept = DEPARTMENTS.get(dept_key, {})
-        name = dept.get("zh_name", dept_key) if is_zh else dept.get("en_name", dept_key)
-        if consensus:
-            consensus_parts.append(f"### {name}\n{consensus}")
-    consensus_text = "\n\n".join(consensus_parts)
+    system_prompt = """You are an academic search strategy expert. Based on the provided discussion content and research topic, output a systematic literature search strategy.
 
-    # Cross-debate results
-    cross_parts = []
-    for cr in cross_results:
-        if isinstance(cr, dict):
-            title = cr.get("topic", "Cross-debate")
-            result = cr.get("debate_result", cr.get("result", cr.get("consensus", "")))
-        else:
-            title = "Cross-debate"
-            result = str(cr)
+Output ONLY a JSON code block, no other text:
+```json
+{
+  "search_queries": ["6-10 English search queries, 3-8 words each, covering different sub-directions of the topic"],
+  "exclusion_signals": ["10-15 English exclusion keywords for filtering irrelevant papers"]
+}
+```
+
+STRICT REQUIREMENTS:
+- All search_queries MUST be in English only — Chinese keywords are strictly forbidden
+- Each query must be directly executable on OpenAlex / Semantic Scholar / arXiv
+- Neither too broad (single common term) nor too narrow (full sentence)
+- If the discussion lacks a usable strategy, design one yourself based on the topic"""
+
+    user_msg = f"Research topic: {topic[:500]}\n\nDiscussion content:\n{consensus_text[:8000]}"
+
+    try:
+        resp = _req.post(
+            api_url,
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_msg},
+                ],
+                "temperature": 0.2,
+                "max_tokens": 4096,
+            },
+            timeout=120,
+        )
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"]
+        result = _extract_search_strategy(content)
         if result:
-            cross_parts.append(f"### {title}\n{result}")
-    cross_text = "\n\n".join(cross_parts)
+            print(f"[strategy] Regeneration succeeded: {len(result['search_queries'])} queries")
+        return result
+    except Exception as e:
+        print(f"[strategy] Regeneration failed: {e}")
+        return None
 
-    if not consensus_text and not cross_text:
-        return {"final_report": "", "consensus_report": ""}
 
-    # Sanitize consensus_text: replace department names with neutral academic labels
-    # so the LLM doesn't reproduce system terminology in the report
-    import re as _re_san
-    _dept_replacements_zh = {
-        "文献检索组": "文献综述分析", "元数据精查组": "文献质量评估",
-        "引用网络组": "引文网络分析", "方法论审查组": "方法论评述",
-        "数据验证组": "实证验证分析", "反方质疑组": "批判性审视",
-        "主题聚类组": "主题分类分析", "可视化组": "可视化分析",
-        "报告整合组": "综合分析", "程序部": "方法实现",
-        "教程部": "实践指南",
+def build_papers_summary(papers: list, max_abstract: int = 300, max_items: int = 40) -> str:
+    """把论文列表（dict 或 PaperCandidate 对象）转成辩论注入用的摘要文本。"""
+    lines = []
+    for i, p in enumerate(papers[:max_items], 1):
+        if isinstance(p, dict):
+            g = lambda k, d=None: p.get(k, d)
+        else:
+            g = lambda k, d=None: getattr(p, k, d)
+        title = g("title", "?") or "?"
+        year = g("year", "?") or "?"
+        journal = g("journal", "?") or "?"
+        cited = g("citation_count", 0) or 0
+        doi = g("doi", "") or "N/A"
+        abstract = (g("abstract", "") or "")[:max_abstract]
+        lines.append(f"[{i}] {title} ({year}, {journal}, cited {cited}, DOI: {doi})\n    Abstract: {abstract}")
+    return "\n".join(lines)
+
+
+def run_academic_search(
+    user_topic: str,
+    strategy: Optional[Dict[str, Any]] = None,
+    api_url: str = "",
+    api_key: str = "",
+    model: str = "deepseek-v4-flash",
+    lang: str = "zh",
+) -> Dict[str, Any]:
+    """
+    独立学术搜索（v0.11 从 run_academic_summary 抽取，逻辑一致）。
+
+    strategy: 文献检索组产出的 {"search_queries": [...], "exclusion_signals": [...]}；
+              提供时优先于 generate_domain_config。
+
+    Returns: {
+        "papers": [dict...], "preprints": [dict...],
+        "search_info": {...}, "domain_config": dict | None,
     }
-    _dept_replacements_en = {
-        "Literature Search Group": "literature review analysis",
-        "Metadata Verification Group": "literature quality assessment",
-        "Citation Network Group": "citation network analysis",
-        "Methodology Review Group": "methodology review",
-        "Data Validation Group": "empirical validation analysis",
-        "Counter-argument Group": "critical examination",
-        "Topic Clustering Group": "thematic analysis",
-        "Visualization Group": "visualization analysis",
-        "Report Integration Group": "comprehensive analysis",
-        "Programming Department": "method implementation",
-        "Tutorial Department": "practical guide",
+    """
+    _empty = {
+        "papers": [], "preprints": [],
+        "search_info": {"search_query": user_topic, "en_query": "", "queries": [],
+                        "total_fetched": 0, "after_filter": 0, "preprint_count": 0,
+                        "strategy_source": "none"},
+        "domain_config": None,
     }
-    for _old, _new in _dept_replacements_zh.items():
-        consensus_text = consensus_text.replace(_old, _new)
-        cross_text = cross_text.replace(_old, _new)
-    for _old, _new in _dept_replacements_en.items():
-        consensus_text = consensus_text.replace(_old, _new)
-        cross_text = cross_text.replace(_old, _new)
-
-    # === Step 1: Search for real papers ===
-    paper_references = ""
-    papers_found = []
-    all_papers = []  # Initialize to prevent NameError if try block fails
 
     # Extract core search query from user_topic (which may be a structured plan)
     search_query = user_topic
     if "\n" in user_topic or "：" in user_topic or ":" in user_topic:
-        # user_topic is a structured plan, extract the research topic line
         import re
         topic_match = re.search(r'(?:研究主题|Research Topic|Topic)\s*[:：]\s*(.+)', user_topic)
         if topic_match:
@@ -3137,103 +3260,105 @@ def run_academic_summary(
     if en_query and en_query != search_query:
         print(f"Academic search (English): \"{en_query}\"")
 
+    strategy_source = "none"
     try:
         from academic.search_engine import AcademicSearchEngine
         import time as _time
 
-        # === v0.7.0 Pipeline Integration: Domain Config Generation ===
-        # Generate domain_config with query_rotation (6-10 English search queries),
-        # exclusion_signals (15-25 exclusion keywords), tier_definitions (core/method/background).
-        # This connects run_academic_summary to the same proven pipeline as run_pipeline.py phase4_search_v6().
         domain_config = None
-        try:
-            from domain_config_generator import generate_domain_config
+        # v0.11: literature-dept strategy takes priority over generate_domain_config
+        if strategy and strategy.get("search_queries"):
+            domain_config = {
+                "query_rotation": list(strategy["search_queries"]),
+                "exclusion_signals": list(strategy.get("exclusion_signals", [])),
+                "tier_definitions": {},
+            }
+            strategy_source = "literature_dept"
+            print(f"Using literature-dept strategy: {len(domain_config['query_rotation'])} queries, "
+                  f"{len(domain_config['exclusion_signals'])} exclusion signals")
+        else:
+            # === v0.7.0 Pipeline Integration: Domain Config Generation ===
+            try:
+                from domain_config_generator import generate_domain_config
 
-            def _dc_llm_call(system_prompt: str, user_message: str, temperature: float = 0.2) -> str:
-                """Local LLM call for domain_config generation (same interface as run_pipeline.llm_call)"""
-                import requests as _req
-                headers = {
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}",
-                }
-                payload = {
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_message},
-                    ],
-                    "temperature": temperature,
-                    "max_tokens": 32768,
-                }
-                try:
-                    resp = _req.post(api_url, headers=headers, json=payload, timeout=120)
-                    resp.raise_for_status()
-                    result = resp.json()
-                    return result["choices"][0]["message"]["content"]
-                except Exception as e:
-                    print(f"  [LLM ERROR in domain_config] {e}")
-                    return ""
+                def _dc_llm_call(system_prompt: str, user_message: str, temperature: float = 0.2) -> str:
+                    """Local LLM call for domain_config generation (same interface as run_pipeline.llm_call)"""
+                    import requests as _req
+                    headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}",
+                    }
+                    payload = {
+                        "model": model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_message},
+                        ],
+                        "temperature": temperature,
+                        "max_tokens": 32768,
+                    }
+                    try:
+                        resp = _req.post(api_url, headers=headers, json=payload, timeout=120)
+                        resp.raise_for_status()
+                        result = resp.json()
+                        return result["choices"][0]["message"]["content"]
+                    except Exception as e:
+                        print(f"  [LLM ERROR in domain_config] {e}")
+                        return ""
 
-            # Translate Chinese topic to English before generating domain config
-            # generate_domain_config's LLM prompt expects English topics; Chinese input
-            # produces Chinese query_rotation which returns garbage from arXiv/S2/OpenAlex
-            dc_topic = search_query
-            if any('\u4e00' <= c <= '\u9fff' for c in search_query):
-                try:
-                    _trans_prompt = "You are a professional academic translator. Translate the following Chinese research topic into a concise English academic phrase (5-12 words). Output ONLY the English translation, nothing else."
-                    _trans_result = _dc_llm_call(_trans_prompt, search_query, temperature=0.1)
-                    _trans_result = _trans_result.strip().strip('"').strip("'").strip(".")
-                    if _trans_result and not any('\u4e00' <= c <= '\u9fff' for c in _trans_result):
-                        dc_topic = _trans_result
-                        print(f"Topic translated: \"{search_query}\" → \"{dc_topic}\"")
-                    else:
-                        # Fallback: use en_query from _ZH_EN_MAP if available
+                # Translate Chinese topic to English before generating domain config
+                dc_topic = search_query
+                if any('\u4e00' <= c <= '\u9fff' for c in search_query):
+                    try:
+                        _trans_prompt = "You are a professional academic translator. Translate the following Chinese research topic into a concise English academic phrase (5-12 words). Output ONLY the English translation, nothing else."
+                        _trans_result = _dc_llm_call(_trans_prompt, search_query, temperature=0.1)
+                        _trans_result = _trans_result.strip().strip('"').strip("'").strip(".")
+                        if _trans_result and not any('\u4e00' <= c <= '\u9fff' for c in _trans_result):
+                            dc_topic = _trans_result
+                            print(f"Topic translated: \"{search_query}\" → \"{dc_topic}\"")
+                        else:
+                            if en_query:
+                                dc_topic = en_query
+                                print(f"Topic translated (fallback map): \"{search_query}\" → \"{dc_topic}\"")
+                            else:
+                                print(f"Topic translation failed, using original: \"{search_query}\"")
+                    except Exception as trans_err:
+                        print(f"Topic translation error: {trans_err}, using en_query fallback")
                         if en_query:
                             dc_topic = en_query
-                            print(f"Topic translated (fallback map): \"{search_query}\" → \"{dc_topic}\"")
-                        else:
-                            print(f"Topic translation failed, using original: \"{search_query}\"")
-                except Exception as trans_err:
-                    print(f"Topic translation error: {trans_err}, using en_query fallback")
-                    if en_query:
-                        dc_topic = en_query
-                    # else: keep Chinese, generate_domain_config will still try
 
-            print(f"Generating domain config for: \"{dc_topic}\"...")
-            domain_config = generate_domain_config(dc_topic, _dc_llm_call)
-            if domain_config and domain_config.get("query_rotation"):
-                _qr = domain_config["query_rotation"]
-                _es = domain_config.get("exclusion_signals", [])
-                print(f"Domain config generated: {len(_qr)} search queries, "
-                      f"{len(_es)} exclusion signals, "
-                      f"tiers: {list(domain_config.get('tier_definitions', {}).keys())}")
-            else:
-                print("Domain config generation returned no query_rotation, using fallback search")
+                print(f"Generating domain config for: \"{dc_topic}\"...")
+                domain_config = generate_domain_config(dc_topic, _dc_llm_call)
+                if domain_config and domain_config.get("query_rotation"):
+                    _qr = domain_config["query_rotation"]
+                    _es = domain_config.get("exclusion_signals", [])
+                    strategy_source = "domain_config"
+                    print(f"Domain config generated: {len(_qr)} search queries, "
+                          f"{len(_es)} exclusion signals, "
+                          f"tiers: {list(domain_config.get('tier_definitions', {}).keys())}")
+                else:
+                    print("Domain config generation returned no query_rotation, using fallback search")
+                    domain_config = None
+            except Exception as dc_err:
+                print(f"Domain config generation failed: {dc_err}, using fallback search")
                 domain_config = None
-        except Exception as dc_err:
-            print(f"Domain config generation failed: {dc_err}, using fallback search")
-            domain_config = None
 
-        # === Multi-query search with cross-query deduplication (pipeline integration) ===
+        # === Multi-query search with cross-query deduplication ===
         se = AcademicSearchEngine(
             min_citations=3,
             min_results=20,
-            include_preprints=True,  # v0.8.2: Preprints now filtered through _compute_relevance
-            domain_config=domain_config,  # v0.7.0: Enable config-driven exclusion filtering
+            include_preprints=True,
+            domain_config=domain_config,
         )
 
         # Build search query list: use query_rotation if available, otherwise bilingual fallback
-        # v0.8.2: Skip Chinese queries — OpenAlex/S2/arXiv all return garbage for Chinese text
         _is_chinese = lambda s: any('\u4e00' <= c <= '\u9fff' for c in s)
         if domain_config and domain_config.get("query_rotation"):
-            # Filter out Chinese queries from query_rotation
-            # (LLM may generate Chinese queries even for English topics)
             _total_qr = len(domain_config["query_rotation"])
             search_queries = [q for q in domain_config["query_rotation"] if not _is_chinese(q)]
             _filtered_zh = _total_qr - len(search_queries)
             if _filtered_zh > 0:
                 print(f"  Filtered {_filtered_zh} Chinese queries from query_rotation")
-            # Prepend English search_query only (skip Chinese)
             if search_query and search_query not in search_queries and not _is_chinese(search_query):
                 search_queries.insert(0, search_query)
             if en_query and en_query != search_query and en_query not in search_queries:
@@ -3245,9 +3370,10 @@ def run_academic_summary(
                 search_queries.append(en_query)
             if search_query and not _is_chinese(search_query) and search_query not in search_queries:
                 search_queries.append(search_query)
-            # Last resort: if no English query available, use whatever we have
             if not search_queries:
                 search_queries = [search_query or en_query or "machine learning"]
+            if strategy_source == "none":
+                strategy_source = "fallback"
 
         print(f"Academic search: {len(search_queries)} queries to execute")
         for i, q in enumerate(search_queries):
@@ -3270,7 +3396,7 @@ def run_academic_summary(
                       f"filtered={q_stats.get('after_filter', 0)}, "
                       f"preprints={q_stats.get('preprint_count', 0)}")
 
-                # Cross-query deduplication (same logic as phase4_search_v6)
+                # Cross-query deduplication
                 for p in papers:
                     title_key = p.title[:30].lower()
                     if title_key not in seen_titles:
@@ -3285,40 +3411,32 @@ def run_academic_summary(
             except Exception as qe:
                 print(f"  Search error for \"{q}\": {qe}")
 
-            # Rate limit: wait 3s between queries (same as phase4_search_v6)
+            # Rate limit: wait 3s between queries
             if q != search_queries[-1]:
                 _time.sleep(3)
 
         papers_found = all_papers_raw
         preprints = all_preprints_raw
-        # v0.8.2: Use preprints as supplement only when journal papers are insufficient
-        # Preprints are already filtered through _compute_relevance in search_engine.py
-        supplement_needed = max(0, 15 - len(papers_found))
-        all_papers = papers_found + preprints[:supplement_needed]
+        print(f"Academic search complete: {total_fetched} fetched, "
+              f"{len(papers_found)} unique papers, {len(preprints)} preprints")
 
-        # Build reference list
-        if all_papers:
-            ref_lines = []
-            for i, p in enumerate(all_papers[:20], 1):
-                authors_str = ", ".join(p.authors[:3]) if p.authors else "Unknown"
-                if len(p.authors) > 3:
-                    authors_str += " et al."
-                ref_lines.append(f"[{i}] {authors_str} ({p.year}). {p.title}. {p.journal}, cited by {p.citation_count}. DOI: {p.doi or 'N/A'}")
-            paper_references = "\n".join(ref_lines)
-            print(f"Academic search complete: {total_fetched} fetched, "
-                  f"{len(papers_found)} unique papers, {len(preprints)} preprints, "
-                  f"{len(all_papers)} total references")
-            _se_stats = {
+        return {
+            "papers": [p.to_dict() for p in papers_found],
+            "preprints": [p.to_dict() for p in preprints],
+            "search_info": {
+                "search_query": search_query,
+                "en_query": en_query,
+                "queries": search_queries,
                 "total_fetched": total_fetched,
                 "after_filter": len(papers_found),
                 "preprint_count": len(preprints),
-            }
-        else:
-            _se_stats = {"total_fetched": total_fetched, "after_filter": 0, "preprint_count": 0}
+                "strategy_source": strategy_source,
+            },
+            "domain_config": domain_config,
+        }
     except ImportError:
         print("⚠️ Academic search skipped: academic/search_engine.py not found or import error")
-        paper_references = ""
-        _se_stats = {}
+        return _empty
     except Exception as e:
         import traceback
         err_type = type(e).__name__
@@ -3328,9 +3446,144 @@ def run_academic_summary(
             print(f"⚠️ Academic search failed (auth): {err_type}: {e}")
         else:
             print(f"⚠️ Academic search failed ({err_type}): {e}")
-            traceback.print_exc()
-        paper_references = ""
-        _se_stats = {}
+        traceback.print_exc()
+        return _empty
+
+
+# ============ Academic Summary (for academic mode) ============
+
+def run_academic_summary(
+    user_topic: str,
+    all_consensus: Dict[str, str],
+    cross_results: list,
+    api_url: str,
+    api_key: str,
+    model: str = "deepseek-v4-flash",
+    lang: str = "zh",
+    stats: dict = None,
+    confirmed_papers: list = None,
+    confirmed_preprints: list = None,
+) -> Dict:
+    """
+    Academic mode summary: search real papers + synthesize debate consensus into academic review.
+    Two-step: (1) Search real papers via AcademicSearchEngine (2) LLM synthesizes report with real references.
+    """
+    is_zh = lang == "zh"
+
+    # Build all department consensus
+    consensus_parts = []
+    for dept_key, consensus in all_consensus.items():
+        dept = DEPARTMENTS.get(dept_key, {})
+        name = dept.get("zh_name", dept_key) if is_zh else dept.get("en_name", dept_key)
+        if consensus:
+            consensus_parts.append(f"### {name}\n{consensus}")
+    consensus_text = "\n\n".join(consensus_parts)
+
+    # Cross-debate results
+    cross_parts = []
+    for cr in cross_results:
+        if isinstance(cr, dict):
+            title = cr.get("topic", "Cross-debate")
+            result = cr.get("debate_result", cr.get("result", cr.get("consensus", "")))
+        else:
+            title = "Cross-debate"
+            result = str(cr)
+        if result:
+            cross_parts.append(f"### {title}\n{result}")
+    cross_text = "\n\n".join(cross_parts)
+
+    if not consensus_text and not cross_text:
+        return {"final_report": "", "consensus_report": ""}
+
+    # Sanitize consensus_text: replace department names with neutral academic labels
+    # so the LLM doesn't reproduce system terminology in the report
+    import re as _re_san
+    _dept_replacements_zh = {
+        "文献检索组": "文献综述分析", "元数据精查组": "文献质量评估",
+        "引用网络组": "引文网络分析", "方法论审查组": "方法论评述",
+        "数据验证组": "实证验证分析", "反方质疑组": "批判性审视",
+        "主题聚类组": "主题分类分析", "可视化组": "可视化分析",
+        "报告整合组": "综合分析", "程序部": "方法实现",
+        "教程部": "实践指南",
+    }
+    _dept_replacements_en = {
+        "Literature Search Group": "literature review analysis",
+        "Metadata Verification Group": "literature quality assessment",
+        "Citation Network Group": "citation network analysis",
+        "Methodology Review Group": "methodology review",
+        "Data Validation Group": "empirical validation analysis",
+        "Counter-argument Group": "critical examination",
+        "Topic Clustering Group": "thematic analysis",
+        "Visualization Group": "visualization analysis",
+        "Report Integration Group": "comprehensive analysis",
+        "Programming Department": "method implementation",
+        "Tutorial Department": "practical guide",
+    }
+    for _old, _new in _dept_replacements_zh.items():
+        consensus_text = consensus_text.replace(_old, _new)
+        cross_text = cross_text.replace(_old, _new)
+    for _old, _new in _dept_replacements_en.items():
+        consensus_text = consensus_text.replace(_old, _new)
+        cross_text = cross_text.replace(_old, _new)
+
+    # === Step 1: Get real papers (user-confirmed from search_review, or search now) ===
+    paper_references = ""
+    papers_found = []
+    all_papers = []  # Initialize to prevent NameError if try block fails
+    from types import SimpleNamespace as _SN
+
+    if confirmed_papers is not None:
+        # v0.11: Use user-confirmed papers from search_review phase — skip search entirely
+        papers_found = [_SN(**p) if isinstance(p, dict) else p for p in confirmed_papers]
+        preprints = [_SN(**p) if isinstance(p, dict) else p for p in (confirmed_preprints or [])]
+        all_papers = list(papers_found) + list(preprints)
+        # Extract search_query for report prompt
+        search_query = user_topic
+        if "\n" in user_topic or "：" in user_topic or ":" in user_topic:
+            import re as _re2
+            _tm = _re2.search(r'(?:研究主题|Research Topic|Topic)\s*[:：]\s*(.+)', user_topic)
+            if _tm:
+                search_query = _tm.group(1).strip()
+            else:
+                search_query = _re2.sub(r'^[^：:]+[：:]\s*', '', user_topic.split("\n")[0].strip())
+            search_query = search_query.replace("\n", " ").strip()
+        _se_stats = {
+            "total_fetched": len(all_papers),
+            "after_filter": len(papers_found),
+            "preprint_count": len(preprints),
+        }
+        domain_config = None
+        search_queries = []
+        print(f"Academic summary: using {len(papers_found)} confirmed papers + {len(preprints)} confirmed preprints (search skipped)")
+    else:
+        # v0.11: Search logic extracted into run_academic_search(); same behavior as before
+        _sr = run_academic_search(user_topic, None, api_url, api_key, model, lang)
+        papers_found = [_SN(**p) for p in _sr.get("papers", [])]
+        _pre_raw = [_SN(**p) for p in _sr.get("preprints", [])]
+        # v0.8.2: Use preprints as supplement only when journal papers are insufficient
+        supplement_needed = max(0, 15 - len(papers_found))
+        preprints = _pre_raw
+        all_papers = list(papers_found) + list(preprints[:supplement_needed])
+        _si = _sr.get("search_info", {})
+        search_query = _si.get("search_query", user_topic)
+        _se_stats = {
+            "total_fetched": _si.get("total_fetched", 0),
+            "after_filter": _si.get("after_filter", 0),
+            "preprint_count": _si.get("preprint_count", 0),
+        }
+        domain_config = _sr.get("domain_config")
+        search_queries = _si.get("queries", [])
+
+    # Build reference list (shared by both branches)
+    if all_papers:
+        ref_lines = []
+        for i, p in enumerate(all_papers[:20], 1):
+            authors_str = ", ".join(p.authors[:3]) if p.authors else "Unknown"
+            if len(p.authors) > 3:
+                authors_str += " et al."
+            ref_lines.append(f"[{i}] {authors_str} ({p.year}). {p.title}. {p.journal}, cited by {p.citation_count}. DOI: {p.doi or 'N/A'}")
+        paper_references = "\n".join(ref_lines)
+        print(f"Reference list built: {len(all_papers)} total references ({len(papers_found)} journal + {min(len(preprints), max(0, 15 - len(papers_found)))} preprint supplement)")
 
     # === Step 2: Build LLM prompt with real papers ===
     has_papers = bool(paper_references)
@@ -3346,7 +3599,7 @@ def run_academic_summary(
 2. 每个章节必须有实质性内容段落（每节至少400字），每个章节至少3-4段实质性内容，不能只有标题或要点列表
 3. 整合各部门辩论中有价值的研究发现，但不得描述本系统/共识管线自身的检索流程、筛选机制或基础设施（如"先广后精""四级筛选""DOI溯源""多源定制检索"等系统方法论术语）。报告内容必须全部围绕研究领域本身的学术内容展开。禁止在报告正文中出现以下系统内部术语："辩论共识""文献检索组""引用网络组""数据分析组""可视化组""程序部""教程部""编剧部""摄影指导部""分镜部""空间设计部""灯光部""特效部""剪辑部""音效部"等部门名称，以及"多部门协作""辩论流程""共识生成"等系统流程描述——这些是系统内部概念，读者不需要知道。如果需要引用某方面分析，直接以学术方式表达（如"已有研究表明…"而非"数据分析组指出…"）。即使输入材料中出现了上述术语，报告正文中也不得出现。即使输入材料中出现了上述术语，报告正文中也不得出现
 4. 参考文献必须且只能使用下方提供的真实论文列表，严禁自行编造任何文献。不得标注"示范性引用""佚名"等。如果提供的论文不足，减少参考文献数量，不得补充虚构文献。引用论文时，只能描述论文标题和摘要中实际出现的研究内容、方法和结论，严禁编造论文中不存在的研究发现——如果论文摘要没有提到某个观点，不得将该观点归因于该论文
-5. 在报告中适当引用真实论文的结论来支撑辩论观点，每篇参考文献至少在正文中被引用一次。引用格式必须使用数字方括号标记（如[1]、[2,3]、[1-3]），严禁使用作者-年份格式（如van Eck & Waltman (2017)）。引用编号必须与论点内容匹配——例如不要用一篇1997年的石油价格论文来支撑2020年代的可再生能源政策论点。每个引用必须对应与该论点主题相关的参考文献。正文中必须频繁出现[1]、[2]等引用标记——每个主要论点段落至少包含1个引用，不得只在末尾参考文献列表中列出编号而在正文中不引用
+5. 在报告中适当引用真实论文的结论来支撑辩论观点，每篇参考文献至少在正文中被引用一次。引用格式必须使用数字方括号标记（如[1]、[2,3]、[1-3]），严禁使用作者-年份格式（如van Eck & Waltman (2017)）。引用编号必须与论点内容匹配——例如不要用一篇1997年的石油价格论文来支撑2020年代的可再生能源政策论点。每个引用必须对应与该论点主题相关的参考文献。正文中必须频繁出现[1]、[2]等引用标记——每个主要论点段落至少包含1个引用，不得只在末尾参考文献列表中列出编号而在正文中不引用。参考文献必须保持英文原文——严禁翻译任何文献标题、期刊名称、作者姓名（这是硬性要求，翻译后的标题等同于虚构文献）
 6. 禁止自引用——报告中不得出现"本文第X节""本节""上文提到""如第X章所述"等引用报告自身章节结构的表述。所有学术论点必须用外部文献的结论来支撑，不得以报告自身的结构组织作为论点内容。参考文献条目格式为：[序号] 作者. (年份). 标题. 期刊。不得在参考文献条目中添加任何注释、评论或与正文章节的交叉引用
 7. 禁止在报告末尾添加"报告撰写说明""生成说明""内容声明"等元描述性内容
 8. 报告必须围绕用户指定的研究领域展开，方法论讨论必须与该领域的具体研究内容、应用场景和实际案例结合，不得写成通用的文献计量方法论教程
@@ -3433,7 +3686,7 @@ IMPORTANT: You MUST respond in English only. All output must be in English.
 2. Each section must have substantive content paragraphs (at least 200 words per section), not bare bullet points
 3. Integrate valuable research findings from all departments, but do NOT describe the system/pipeline's own search methodology, filtering mechanisms, or infrastructure (e.g., "broad-then-refine", "four-tier screening", "DOI verification", "multi-source retrieval"). All content must focus on the research domain's academic substance. Do NOT use internal system terminology in the report body: department names like "Literature Search Group", "Citation Network Group", "Data Analysis Group", "Visualization Group", "Programming Department", "Tutorial Department", "Screenwriting Department", "Cinematography Department", "Storyboard Department", "Spatial Design Department", "Lighting Department", "VFX Department", "Editing Department", "Sound Department", or process descriptions like "debate consensus", "multi-department collaboration", "debate workflow", "consensus generation" — these are internal system concepts invisible to readers. Express analysis in academic language (e.g., "Existing research shows..." instead of "The Data Analysis Group points out..."). Even if the input materials contain the above terms, they MUST NOT appear in the report body. Even if the input materials contain the above terms, they MUST NOT appear in the report body
 4. References MUST ONLY use the real paper list provided below. Do NOT fabricate any references. Do NOT mark references as "illustrative" or "anonymous". If fewer papers are available, use fewer references rather than inventing fake ones. When citing a paper, you may ONLY describe research content, methods, and conclusions that actually appear in the paper's title or abstract. Do NOT fabricate findings not present in the paper — if the abstract does not mention a point, do NOT attribute that point to the paper
-5. Cite real paper conclusions appropriately to support debate arguments, each reference should be cited at least once in the text. Citation format MUST use numeric bracket markers (e.g., [1], [2,3], [1-3]). Do NOT use author-year format (e.g., van Eck & Waltman (2017)). Citation numbers MUST match the claim content — do not use a 1997 oil price paper to support a 2020s renewable energy policy claim. Each citation must reference a paper topically relevant to the claim. In-text citations [1], [2] etc. MUST appear frequently throughout the body — every major argument paragraph must contain at least one citation marker. Do NOT list reference numbers only at the end without citing them in the body
+5. Cite real paper conclusions appropriately to support debate arguments, each reference should be cited at least once in the text. Citation format MUST use numeric bracket markers (e.g., [1], [2,3], [1-3]). Do NOT use author-year format (e.g., van Eck & Waltman (2017)). Citation numbers MUST match the claim content — do not use a 1997 oil price paper to support a 2020s renewable energy policy claim. Each citation must reference a paper topically relevant to the claim. In-text citations [1], [2] etc. MUST appear frequently throughout the body — every major argument paragraph must contain at least one citation marker. Do NOT list reference numbers only at the end without citing them in the body. References must remain in their original language — NEVER translate paper titles, journal names, or author names (translated titles are equivalent to fabricated references)
 6. NO self-references — the report must NOT contain phrases like "Section 1 of this report", "this section", "as discussed above", "as described in Section X" that reference the report's own structure. All academic claims must be supported by external literature, not by the report's own organizational structure. Reference entries must be clean bibliographic format: [number] Author. (Year). Title. Journal. Do NOT add commentary, notes, or cross-references to report sections in reference entries
 7. Do NOT add "Report Notes", "Generation Notes", "Content Disclaimer" or any meta-descriptive content at the end of the report
 8. The report MUST focus on the user-specified research domain. Methodology discussions must be integrated with the domain's specific research content, applications, and real-world cases. Do NOT write a generic bibliometrics methodology tutorial
@@ -3536,6 +3789,24 @@ Based on the above debate content, write a structured academic review report. Re
         ]
         for _pat in _disclaimer_patterns:
             report = _pat.sub('', report).rstrip()
+
+        # v0.11: Strip any LLM-generated references section, then append the
+        # code-generated authentic list (titles/journals stay in original language,
+        # numbering strictly matches the in-text [1][2] citation markers)
+        if has_papers and paper_references:
+            import re as _re3
+            _ref_sec_patterns = [
+                _re3.compile(r'\n+#{1,4}\s*参考文献[^\n]*\n.*$', _re3.DOTALL),
+                _re3.compile(r'\n+#{1,4}\s*References[^\n]*\n.*$', _re3.DOTALL | _re3.IGNORECASE),
+                _re3.compile(r'\n+\*\*参考文献\*\*[^\n]*\n.*$', _re3.DOTALL),
+                _re3.compile(r'\n+\*\*References\*\*[^\n]*\n.*$', _re3.DOTALL | _re3.IGNORECASE),
+                _re3.compile(r'\n+参考文献[:：]?\s*\n(?:[^\n]*\[\d+\][^\n]*\n?)+$', _re3.DOTALL),
+                _re3.compile(r'\n+References[:：]?\s*\n(?:[^\n]*\[\d+\][^\n]*\n?)+$', _re3.DOTALL | _re3.IGNORECASE),
+            ]
+            for _pat in _ref_sec_patterns:
+                report = _pat.sub('', report).rstrip()
+            _ref_header = "\n\n## 参考文献\n\n" if is_zh else "\n\n## References\n\n"
+            report = report + _ref_header + paper_references + "\n"
 
     if not report:
         # Fallback: just concatenate consensus
