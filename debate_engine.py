@@ -3796,12 +3796,12 @@ Based on the above debate content, write a structured academic review report. Re
         if has_papers and paper_references:
             import re as _re3
             _ref_sec_patterns = [
-                _re3.compile(r'\n+#{1,4}\s*参考文献[^\n]*\n.*$', _re3.DOTALL),
-                _re3.compile(r'\n+#{1,4}\s*References[^\n]*\n.*$', _re3.DOTALL | _re3.IGNORECASE),
-                _re3.compile(r'\n+\*\*参考文献\*\*[^\n]*\n.*$', _re3.DOTALL),
-                _re3.compile(r'\n+\*\*References\*\*[^\n]*\n.*$', _re3.DOTALL | _re3.IGNORECASE),
-                _re3.compile(r'\n+参考文献[:：]?\s*\n(?:[^\n]*\[\d+\][^\n]*\n?)+$', _re3.DOTALL),
-                _re3.compile(r'\n+References[:：]?\s*\n(?:[^\n]*\[\d+\][^\n]*\n?)+$', _re3.DOTALL | _re3.IGNORECASE),
+                _re3.compile(r'\n+#{1,4}\s*(?:\d+[.、]?\s*)?参考文献[^\n]*\n.*$', _re3.DOTALL),
+                _re3.compile(r'\n+#{1,4}\s*(?:\d+[.、]?\s*)?References[^\n]*\n.*$', _re3.DOTALL | _re3.IGNORECASE),
+                _re3.compile(r'\n+\*\*(?:\d+[.、]?\s*)?参考文献\*\*[^\n]*\n.*$', _re3.DOTALL),
+                _re3.compile(r'\n+\*\*(?:\d+[.、]?\s*)?References\*\*[^\n]*\n.*$', _re3.DOTALL | _re3.IGNORECASE),
+                _re3.compile(r'\n+(?:\d+[.、]?\s*)?参考文献[:：]?\s*\n(?:[^\n]*\[\d+\][^\n]*\n?)+$', _re3.DOTALL),
+                _re3.compile(r'\n+(?:\d+[.、]?\s*)?References[:：]?\s*\n(?:[^\n]*\[\d+\][^\n]*\n?)+$', _re3.DOTALL | _re3.IGNORECASE),
             ]
             for _pat in _ref_sec_patterns:
                 report = _pat.sub('', report).rstrip()
