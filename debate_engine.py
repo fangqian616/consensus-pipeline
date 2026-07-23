@@ -3192,18 +3192,25 @@ def run_academic_summary(
         )
 
         # Build search query list: use query_rotation if available, otherwise bilingual fallback
+        # v0.8.2: Skip Chinese queries — OpenAlex/S2/arXiv all return garbage for Chinese text
+        _is_chinese = lambda s: any('\u4e00' <= c <= '\u9fff' for c in s)
         if domain_config and domain_config.get("query_rotation"):
             search_queries = list(domain_config["query_rotation"])
-            # Prepend original search_query and en_query if not already included
-            if search_query and search_query not in search_queries:
+            # Prepend English search_query only (skip Chinese)
+            if search_query and search_query not in search_queries and not _is_chinese(search_query):
                 search_queries.insert(0, search_query)
             if en_query and en_query != search_query and en_query not in search_queries:
                 search_queries.append(en_query)
         else:
-            # Fallback: bilingual search (original + English)
-            search_queries = [search_query]
-            if en_query and en_query != search_query:
+            # Fallback: English queries only
+            search_queries = []
+            if en_query and not _is_chinese(en_query):
                 search_queries.append(en_query)
+            if search_query and not _is_chinese(search_query) and search_query not in search_queries:
+                search_queries.append(search_query)
+            # Last resort: if no English query available, use whatever we have
+            if not search_queries:
+                search_queries = [search_query or en_query or "machine learning"]
 
         print(f"Academic search: {len(search_queries)} queries to execute")
         for i, q in enumerate(search_queries):
