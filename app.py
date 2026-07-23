@@ -755,6 +755,8 @@ def init_state():
         "current_start_time": None,  # 当前运行的开始时间
         "current_end_time": None,  # 当前运行的结束时间
         "_debate_running": False,  # 辩论进行中（同步执行，用于禁用tab切换）
+        "_debate_fingerprint": None,  # v0.10: 配置指纹，用于rerun隔离
+        "_debate_phase": "departments",  # v0.10: 当前辩论阶段 departments/cross/summary/done
         # v2.4 Market
         "market_result": None,  # Market mode结果
         "market_num_candidates": 3,
@@ -1154,13 +1156,32 @@ def run_all_debates(progress_callback=None):
         return
     
     # === Pipeline / Expert Pool Mode ===
-    dept_results = {}
+    # v0.10: Resume support — config fingerprint for isolation
+    import hashlib as _hl
+    _fp = _hl.md5(f"{api_url}|{api_key}|{model}|{script}|{lang}|{rounds}".encode()).hexdigest()
+    _saved_fp = st.session_state.get("_debate_fingerprint")
+    if _saved_fp and _saved_fp != _fp:
+        # Config changed (different user/API/topic) — discard stale partial results
+        st.session_state.dept_results = {}
+        st.session_state.cross_results = []
+        st.session_state._debate_phase = "departments"
+    elif not _saved_fp:
+        st.session_state._debate_phase = "departments"
+    st.session_state._debate_fingerprint = _fp
+
+    # Read from session_state (survives Streamlit rerun)
+    dept_results = st.session_state.get("dept_results", {})
+    _resume_phase = st.session_state.get("_debate_phase", "departments")
     total_steps = len(DEPT_ORDER) * rounds * 3
     if progress_callback:
         progress_callback(0.0, t("debate_progress"))
     else:
         progress = st.progress(0, text=t("debate_progress"))
-    step = 0
+    # Calculate step offset from already-completed departments
+    step = sum(
+        len(DEPARTMENTS.get(d, {}).get("debaters", [])) * rounds
+        for d in DEPT_ORDER if d in dept_results
+    )
     
     if arch_mode == "expert_pool":
         # Expert pool mode: scene analysis first, then streamlined debate
@@ -1179,6 +1200,9 @@ def run_all_debates(progress_callback=None):
     else:
         # P1-P4: Department debates (Pipeline of Consensus)
         for dept_key in DEPT_ORDER:
+            # v0.10: Skip already-completed departments (resume after rerun)
+            if dept_key in dept_results:
+                continue
             dept = DEPARTMENTS.get(dept_key, {})
             dept_name = (dept.get("zh_name") if is_zh else dept.get("en_name")) or dept.get("zh_name") or dept.get("en_name") or "?"
             dept_input = build_dept_input(dept_key)
@@ -1211,6 +1235,7 @@ def run_all_debates(progress_callback=None):
                 stats=stats,
             )
             dept_results[dept_key] = result
+            st.session_state.dept_results = dept_results  # v0.10: Persist immediately for rerun resume
             notify_stage_complete(dept_name)
     
     # P2: Spatial planning cross-review
@@ -1229,29 +1254,36 @@ def run_all_debates(progress_callback=None):
             notify_stage_complete("空间交叉审核" if is_zh else "Spatial Review")
     
     st.session_state.dept_results = dept_results
+    st.session_state._debate_phase = "cross"
     
-    # P5: Cross-debate
+    # P5: Cross-debate (re-run if not yet reached summary phase; cross-debate is fast and safe to re-run)
     cross_results = []
-    for cd in P5_CROSS_DEBATES:
-        a_key, b_key = cd.get("side_a"), cd.get("side_b")
-        if not a_key or not b_key:
-            continue
-        if a_key in dept_results and b_key in dept_results:
-            cr = run_cross_debate(
-                cross_config=cd,
-                dept_a_consensus=dept_results[a_key]["consensus"],
-                dept_b_consensus=dept_results[b_key]["consensus"],
-                api_url=api_url, api_key=api_key, model=model, lang=lang,
-                stats=stats,
-            )
-            cross_results.append(cr)
-    st.session_state.cross_results = cross_results
+    if _resume_phase not in ("summary", "done"):
+        for cd in P5_CROSS_DEBATES:
+            a_key, b_key = cd.get("side_a"), cd.get("side_b")
+            if not a_key or not b_key:
+                continue
+            if a_key in dept_results and b_key in dept_results:
+                cr = run_cross_debate(
+                    cross_config=cd,
+                    dept_a_consensus=dept_results[a_key]["consensus"],
+                    dept_b_consensus=dept_results[b_key]["consensus"],
+                    api_url=api_url, api_key=api_key, model=model, lang=lang,
+                    stats=stats,
+                )
+                cross_results.append(cr)
+        st.session_state.cross_results = cross_results
+    
+    st.session_state._debate_phase = "summary"
     
     # P6: Summary AI — branch on academic vs animation mode
     _cfg = (st.session_state.get("workgroup_config") or get_current_config() or {})
     _is_academic = _detect_pipeline_mode(_cfg) == "academic"
 
-    if _is_academic:
+    # v0.10: Skip summary if already completed (resume from rerun)
+    if st.session_state.get("final_output") and _resume_phase == "summary":
+        final = st.session_state.final_output
+    elif _is_academic:
         final = run_academic_summary(
             user_topic=script or st.session_state.get("config_user_input", ""),
             all_consensus={k: v["consensus"] for k, v in dept_results.items()},
@@ -1273,6 +1305,7 @@ def run_all_debates(progress_callback=None):
     st.session_state.final_output = final
     st.session_state.debate_completed = True
     st.session_state.current_end_time = time.time()
+    st.session_state._debate_phase = "done"
     autosave_result("normal_result", final)
     if progress_callback:
         progress_callback(1.0, "✅ " + ("全部辩论完成！" if is_zh else "All debates complete!"))
@@ -1624,6 +1657,8 @@ def render_input_tab():
             st.session_state.proofread_result = None
             st.session_state.spatial_review_result = None
             st.session_state._debate_running = True
+            st.session_state._debate_fingerprint = None  # v0.10: clear for fresh start
+            st.session_state._debate_phase = "departments"
             st.session_state._tab_index = 1  # switch to debate tab
             st.rerun()
     
@@ -1641,6 +1676,8 @@ def render_input_tab():
             st.session_state.step_all_arguments = []
             st.session_state.step_debate_log = []
             st.session_state.step_corrections = []
+            st.session_state._debate_fingerprint = None  # v0.10
+            st.session_state._debate_phase = "departments"  # v0.10
             step_run_round()
             st.rerun()
 
@@ -1655,10 +1692,10 @@ def render_debate_tab():
         st.error(f"❌ {st.session_state._debate_error}")
         del st.session_state._debate_error
     
-    # Simplified guard: original 3-line pattern + error persistence + finally
-    # _debate_running stays True during execution; cleared only in finally after completion.
-    # If rerun happens mid-exec, guard re-enters and debate restarts from scratch
-    # (dept_results is local var, partial results cannot be preserved anyway).
+    # v0.10: Resume support — _debate_running stays True during execution.
+    # If rerun happens mid-exec, guard re-enters run_all_debates() which
+    # reads dept_results from session_state and skips completed departments.
+    # Config fingerprint ensures isolation (different user/API/topic = fresh start).
     if st.session_state.get("_debate_running"):
         try:
             run_all_debates()
