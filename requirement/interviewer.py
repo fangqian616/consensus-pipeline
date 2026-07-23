@@ -39,6 +39,7 @@ class RequirementDocument:
 DOMAIN_INTERVIEW_TEMPLATES = {
     "academic_research": {
         "domain_name": "Academic Research",
+        "domain_name_zh": "学术调研",
         "required_dimensions": [
             "Research topic and core questions",
             "Discipline and interdisciplinary scope",
@@ -47,11 +48,25 @@ DOMAIN_INTERVIEW_TEMPLATES = {
             "Paper quality standard (CSSCI/SCI tier)",
             "Expected deliverable (group meeting report/survey paper/research plan)",
         ],
+        "required_dimensions_zh": [
+            "研究主题和核心问题",
+            "学科领域和跨学科范围",
+            "时间范围（近3/5/10年）",
+            "方法论偏好（计量/机器学习/混合方法）",
+            "论文质量标准（CSSCI/SCI级别）",
+            "预期成果（组会汇报/综述论文/研究计划）",
+        ],
         "follow_up_questions": [
             "Are you focused on phenomenon description or causal mechanisms?",
             "Which search sources to cover? arXiv/Semantic Scholar/OpenAlex?",
             "Do you need citation network analysis?",
             "Who is the final audience? Advisor/peers/reviewers?",
+        ],
+        "follow_up_questions_zh": [
+            "您侧重于现象描述还是因果机制？",
+            "需要覆盖哪些检索来源？arXiv/Semantic Scholar/OpenAlex？",
+            "是否需要引用网络分析？",
+            "最终受众是谁？导师/同行/审稿人？",
         ],
         "domain_specific_fields": {
             "search_sources": ["arxiv", "semantic_scholar", "openalex"],
@@ -61,6 +76,7 @@ DOMAIN_INTERVIEW_TEMPLATES = {
     },
     "animation": {
         "domain_name": "Animation",
+        "domain_name_zh": "动画制作",
         "required_dimensions": [
             "Creative goal (short film/storyboard/video prompt)",
             "Visual style and references",
@@ -68,10 +84,22 @@ DOMAIN_INTERVIEW_TEMPLATES = {
             "Technical constraints (3D/2D/hybrid)",
             "Target platform and audience",
         ],
+        "required_dimensions_zh": [
+            "创作目标（短片/分镜/视频提示词）",
+            "视觉风格和参考作品",
+            "叙事结构（线性/非线性/实验性）",
+            "技术约束（3D/2D/混合）",
+            "目标平台和受众",
+        ],
         "follow_up_questions": [
             "Any reference works or visual styles?",
             "What is the expected duration?",
             "Need sound effects and music?",
+        ],
+        "follow_up_questions_zh": [
+            "有参考作品或视觉风格吗？",
+            "预期时长是多少？",
+            "需要音效和配乐吗？",
         ],
         "domain_specific_fields": {
             "visual_style": "",
@@ -81,6 +109,7 @@ DOMAIN_INTERVIEW_TEMPLATES = {
     },
     "general": {
         "domain_name": "General",
+        "domain_name_zh": "通用",
         "required_dimensions": [
             "Core objectives",
             "Domain scope",
@@ -88,7 +117,15 @@ DOMAIN_INTERVIEW_TEMPLATES = {
             "Expected deliverable",
             "Quality criteria",
         ],
+        "required_dimensions_zh": [
+            "核心目标",
+            "领域范围",
+            "约束条件",
+            "预期成果",
+            "质量标准",
+        ],
         "follow_up_questions": [],
+        "follow_up_questions_zh": [],
         "domain_specific_fields": {},
     },
 }
@@ -120,6 +157,7 @@ class RequirementInterviewer:
         llm_call_fn=None,
         domain_hint: Optional[str] = None,
         max_rounds: int = 8,
+        language: str = "en",
     ):
         """
         Args:
@@ -127,9 +165,11 @@ class RequirementInterviewer:
                          If None, uses built-in rule engine (no external LLM dependency)
             domain_hint: Domain hint, e.g. "academic_research", "animation"
             max_rounds: Maximum dialogue rounds
+            language: "zh" for Chinese, "en" for English
         """
         self.llm_call_fn = llm_call_fn
         self.max_rounds = max_rounds
+        self.language = language
         self.history: List[Dict[str, str]] = []
         self.doc = RequirementDocument()
         self._domain_template = None
@@ -160,7 +200,10 @@ class RequirementInterviewer:
         self._domain_template = DOMAIN_INTERVIEW_TEMPLATES.get(
             self._detected_domain, DOMAIN_INTERVIEW_TEMPLATES["general"]
         )
-        self.doc.domain = self._domain_template["domain_name"]
+        if self.language == "zh":
+            self.doc.domain = self._domain_template.get("domain_name_zh", self._domain_template["domain_name"])
+        else:
+            self.doc.domain = self._domain_template["domain_name"]
 
         # Initialize domain-specific fields
         if self._domain_template.get("domain_specific_fields"):
@@ -278,8 +321,12 @@ class RequirementInterviewer:
     def _generate_question_rule_based(self) -> str:
         """Rule-based question generation (no external LLM dependency)"""
         template = self._domain_template
-        required = template.get("required_dimensions", [])
-        follow_ups = template.get("follow_up_questions", [])
+        if self.language == "zh":
+            required = template.get("required_dimensions_zh", template.get("required_dimensions", []))
+            follow_ups = template.get("follow_up_questions_zh", template.get("follow_up_questions", []))
+        else:
+            required = template.get("required_dimensions", [])
+            follow_ups = template.get("follow_up_questions", [])
 
         # Find dimensions not yet asked about
         unasked = []
@@ -291,6 +338,8 @@ class RequirementInterviewer:
         if unasked:
             next_q = unasked[0]
             self._asked_questions.append(next_q.split("（")[0].split("(")[0].strip())
+            if self.language == "zh":
+                return f"请告诉我：{next_q}？"
             return f"Please tell me: {next_q}?"
 
         # Required dimensions covered; use follow_ups for deeper probing
@@ -299,6 +348,8 @@ class RequirementInterviewer:
             idx = max(0, idx)
             return follow_ups[idx]
 
+        if self.language == "zh":
+            return "还有什么要补充的吗？如果没有，我们可以开始生成配置了。"
         return "Anything else to add? If not, we can start generating the configuration."
 
     def _generate_question_with_llm(self) -> str:
