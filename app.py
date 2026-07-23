@@ -1775,6 +1775,11 @@ def render_search_review_panel():
         with st.expander(("🔎 检索策略（" + _src_label + "）") if is_zh else ("🔎 Search strategy (" + _src_label + ")"), expanded=False):
             for q in queries:
                 st.markdown(f"- `{q}`")
+            _excl = ((sr.get("domain_config") or {}).get("exclusion_signals") or [])
+            if _excl:
+                st.markdown(("**排除信号（含以下内容的文献会被剔除）：**" if is_zh else "**Exclusion signals (papers containing these are removed):**"))
+                for _s in _excl:
+                    st.markdown(f"- `{_s}`")
 
     # 统计
     level_counts = {}
