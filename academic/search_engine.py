@@ -127,6 +127,27 @@ class AcademicSearchEngine:
         self.min_results = min_results
         self.include_preprints = include_preprints
         self.domain_config = domain_config
+        # v0.11.2: Drop exclusion signals that conflict with the search queries
+        # themselves. E.g. excluding "machine learning" while the query rotation
+        # contains "machine learning" unconditionally zeroes every fetched paper.
+        if self.domain_config:
+            _qr = [q for q in (self.domain_config.get("query_rotation") or []) if isinstance(q, str)]
+            _es = self.domain_config.get("exclusion_signals") or []
+            if _qr and _es:
+                _qtext = " ".join(_qr).lower()
+                _kept, _dropped = [], []
+                for _s in _es:
+                    if not isinstance(_s, str) or not _s.strip():
+                        continue
+                    _sl = _s.strip().lower()
+                    if _sl in _qtext or any(_q.lower() in _sl for _q in _qr):
+                        _dropped.append(_s)
+                    else:
+                        _kept.append(_s)
+                if _dropped:
+                    print(f"  [domain_config] Dropped {len(_dropped)} exclusion signals "
+                          f"conflicting with search queries: {_dropped}")
+                self.domain_config = {**self.domain_config, "exclusion_signals": _kept}
 
     def search(
         self,
@@ -206,7 +227,12 @@ class AcademicSearchEngine:
 
         # Quantity guarantee fallback: if filtered results < min_results, progressively relax filters
         if len(filtered) < self.min_results:
+            _before_em = len(filtered)
             filtered = self._ensure_minimum(journal_papers, filtered, query=query)
+            if len(filtered) > _before_em:
+                print(f"    [ensure_minimum] rescued {len(filtered) - _before_em} papers (now {len(filtered)})")
+            elif len(filtered) < self.min_results:
+                print(f"    [ensure_minimum] nothing rescuable (still {len(filtered)} < {self.min_results})")
 
         # Sort by level
         level_order = {"S": 0, "A": 1, "B": 2, "C": 3, "D": 4}
@@ -543,15 +569,18 @@ class AcademicSearchEngine:
         current_year = datetime.datetime.now().year
         result = []
         b_accepted = 0
+        _k_level = _k_cit = _k_h = _k_rel = 0
 
         for paper in papers:
             # Stage 1: Source ranking
             if paper.quality_level not in self.quality_levels:
+                _k_level += 1
                 continue
 
             # B-level: keep at most 2 representatives
             if paper.quality_level == "B":
                 if b_accepted >= 2:
+                    _k_level += 1
                     continue
                 b_accepted += 1
 
@@ -561,25 +590,33 @@ class AcademicSearchEngine:
 
             if not is_recent and paper.citation_count < self.min_citations:
                 if paper.quality_level != "S":
+                    _k_cit += 1
                     continue
 
             if not is_recent and years_since_pub > 0:
                 yearly_avg = paper.citation_count / years_since_pub
                 if yearly_avg < self.min_yearly_citations and paper.quality_level not in ["S", "A"]:
+                    _k_cit += 1
                     continue
 
             # Stage 3: Downweight non-S papers with author h-index < 5
             if paper.author_h_index and paper.author_h_index < 5:
                 if paper.quality_level not in ["S"]:
+                    _k_h += 1
                     continue
 
             # Stage 4: Content relevance filtering (v5.1 activated, v0.7.0: domain_config driven)
             if query:
                 relevance = self._compute_relevance(paper, query, domain_config=self.domain_config)
                 if relevance < relevance_threshold:
+                    _k_rel += 1
                     continue
 
             result.append(paper)
+
+        if papers:
+            print(f"    [sieves] in={len(papers)} killed(level={_k_level}, citations={_k_cit}, "
+                  f"h_index={_k_h}, relevance={_k_rel}) -> kept={len(result)}")
 
         return result
 
