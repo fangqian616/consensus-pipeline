@@ -5032,6 +5032,14 @@ def main():
                 st.rerun()
         st.stop()
 
+    # v0.11.6: extend checkpoint protection to the pre-debate phase — the run
+    # id now attaches to the URL the moment the main UI is entered, and every
+    # rerun persists the current inputs, so a session death while filling in
+    # the brief (before any debate starts) restores the form instead of
+    # wiping the user back to the language gate with an empty form.
+    _ck_ensure_run_id()
+    save_checkpoint()
+
     render_sidebar()
 
     # v0.11.5: manual checkpoint restore via uploaded file — bulletproof
@@ -5044,7 +5052,7 @@ def main():
 
     st.title(t("title"))
     st.caption(t("subtitle"))
-    st.caption("build: be80c95+ckpt2")  # 版本标记，确认部署用
+    st.caption("build: be80c95+ckpt3")  # 版本标记，确认部署用
     if st.session_state.get("_ck_missing"):
         st.warning("⚠️ " + ("链接里带有断点 ID，但云端磁盘上未找到对应断点文件（实例可能已被平台重置）。"
                             "如果你之前下载过断点文件，可在下方上传恢复；否则请忽略此提示重新开始。"
