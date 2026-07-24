@@ -1181,6 +1181,8 @@ def run_all_debates(progress_callback=None):
     # Read from session_state (survives Streamlit rerun)
     dept_results = st.session_state.get("dept_results", {})
     _resume_phase = st.session_state.get("_debate_phase", "departments")
+    print(f"[diag] run_all_debates: resume_phase={_resume_phase} fp_match={_saved_fp == _fp} "
+          f"depts_done={list(dept_results.keys())} step_mode={st.session_state.get('step_mode')}")
     total_steps = len(DEPT_ORDER) * rounds * 3
     if progress_callback:
         progress_callback(0.0, t("debate_progress"))
@@ -1835,6 +1837,8 @@ def render_search_review_panel():
             st.session_state._papers_summary = build_papers_summary(selected + selected_pre)
             st.session_state._debate_phase = "dept_rest"
             st.session_state._debate_running = True
+            print(f"[diag] confirm clicked: {len(selected)} papers + {len(selected_pre)} preprints, "
+                  f"phase=dept_rest, running=True")
             st.rerun()
     with btn_research:
         with st.expander("🔄 " + ("调整关键词重新搜索" if is_zh else "Adjust keywords & re-search")):
@@ -1869,6 +1873,10 @@ def render_search_review_panel():
 
 def render_debate_tab():
     is_zh = st.session_state.lang == "zh"
+    print(f"[diag] debate_tab enter: running={st.session_state.get('_debate_running')} "
+          f"phase={st.session_state.get('_debate_phase')} completed={st.session_state.get('debate_completed')} "
+          f"step_mode={st.session_state.get('step_mode')} step_phase={st.session_state.get('step_phase')} "
+          f"depts={list(st.session_state.get('dept_results', {}).keys())}")
     
     # Show persisted error from previous run (e.g. 401 Unauthorized) before it gets wiped by rerun
     if st.session_state.get("_debate_error"):
@@ -4657,6 +4665,11 @@ def main():
     
     st.title(t("title"))
     st.caption(t("subtitle"))
+    st.caption("build: 4b5e4e4+diag1")  # v0.11.2 诊断版本标记，确认部署用
+    print(f"[diag] app start: running={st.session_state.get('_debate_running')} "
+          f"phase={st.session_state.get('_debate_phase')} tab={st.session_state.get('_tab_index')} "
+          f"widget={st.session_state.get('_main_tab_radio')} completed={st.session_state.get('debate_completed')} "
+          f"depts={list(st.session_state.get('dept_results', {}).keys())}")
     
     # Auto-jump to debate tab after Phase 4 confirmation
     if st.session_state.get("_auto_start_debate"):
@@ -4674,8 +4687,19 @@ def main():
     
     _debating = st.session_state.get("_debate_running", False)
     
-    # If debate is running, force tab to debate tab
-    if _debating:
+    # v0.11.2: 辩论进行中（含中断待恢复状态）一律锁定辩论tab，
+    # 防止任何路径（on_change回写/session部分异常）跳回需求页导致用户以为进度丢失
+    _phase_now = st.session_state.get("_debate_phase", "departments")
+    _debate_in_progress = (
+        _debating
+        or (_phase_now in ("dept_rest", "cross", "summary")
+            and bool(st.session_state.get("dept_results"))
+            and not st.session_state.get("debate_completed"))
+    )
+    if _debate_in_progress:
+        if st.session_state._tab_index != 1:
+            print(f"[diag] force tab1: running={_debating} phase={_phase_now} "
+                  f"old_tab={st.session_state._tab_index} widget={st.session_state.get('_main_tab_radio')}")
         st.session_state._tab_index = 1
     
     _tab_labels = [
@@ -4691,6 +4715,9 @@ def main():
 
     def _on_tab_change():
         """Sync radio click back to _tab_index"""
+        print(f"[diag] on_tab_change: widget={st.session_state._main_tab_radio} "
+              f"old_tab={st.session_state._tab_index} running={st.session_state.get('_debate_running')} "
+              f"phase={st.session_state.get('_debate_phase')}")
         st.session_state._tab_index = st.session_state._main_tab_radio
 
     _active_tab = st.radio(
