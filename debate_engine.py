@@ -1038,7 +1038,8 @@ def call_api(
             last_error = f"ERROR: API超时(timeout={timeout}s, 第{attempt}次尝试)"
             if attempt < max_retries:
                 time.sleep(retry_delay * attempt)
-        except requests.exceptions.ConnectionError as e:
+        except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError) as e:
+            # ChunkedEncodingError = 响应体读到一半被对端RST, 同样属于可重试的网络瞬断
             last_error = f"ERROR: 网络连接失败(第{attempt}次尝试): {e}"
             if attempt < max_retries:
                 time.sleep(retry_delay * attempt)
