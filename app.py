@@ -1797,6 +1797,18 @@ def render_search_review_panel():
     if _lv_detail:
         st.caption(("质量分级 " if is_zh else "Quality tiers ") + _lv_detail)
 
+    # 各数据源抓取数：哪个源挂了直接可见（Cloud 共享 IP 常限流 OpenAlex/S2）
+    _per_src = info.get("per_source") or {}
+    if _per_src:
+        _SRC_NAMES = {"arxiv": "arXiv", "openalex": "OpenAlex", "semantic_scholar": "S2", "crossref": "Crossref"}
+        st.caption(("数据源抓取：" if is_zh else "Fetched per source: ")
+                   + " · ".join(f"{_SRC_NAMES.get(k, k)} {v}" for k, v in sorted(_per_src.items())))
+
+    if not papers and preprints:
+        st.warning("⚠️ " + ("期刊论文为 0：期刊数据源（OpenAlex / S2 / Crossref）本次均未返回结果，通常是云端出口 IP 被临时限流。当前仅检索到预印本。建议稍后点「调整关键词重新搜索」重试；或展开下方预印本勾选部分后继续。"
+                            if is_zh else
+                            "No journal papers: all journal sources (OpenAlex / S2 / Crossref) returned 0, likely temporary rate-limiting. Only preprints found. Retry later via re-search, or include some preprints below."))
+
     if not papers and not preprints:
         st.warning("⚠️ " + ("本次检索未找到符合条件的文献。建议调整关键词重新搜索；若直接确认，将按无论文流程生成报告（不含参考文献）。" if is_zh
                             else "No papers found. Consider adjusting keywords and re-searching; confirming directly will generate a report without references."))
@@ -4665,7 +4677,7 @@ def main():
     
     st.title(t("title"))
     st.caption(t("subtitle"))
-    st.caption("build: 4b5e4e4+diag1")  # v0.11.2 诊断版本标记，确认部署用
+    st.caption("build: f13f23b+crossref1")  # 版本标记，确认部署用
     print(f"[diag] app start: running={st.session_state.get('_debate_running')} "
           f"phase={st.session_state.get('_debate_phase')} tab={st.session_state.get('_tab_index')} "
           f"widget={st.session_state.get('_main_tab_radio')} completed={st.session_state.get('debate_completed')} "

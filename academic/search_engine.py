@@ -177,11 +177,11 @@ class AcademicSearchEngine:
                 }
             }
         """
-        sources = sources or ["arxiv", "semantic_scholar", "openalex"]
+        sources = sources or ["arxiv", "semantic_scholar", "openalex", "crossref"]
 
         # Parallel retrieval
         all_results = []
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        with ThreadPoolExecutor(max_workers=4) as executor:
             futures = {}
             for source in sources:
                 future = executor.submit(
@@ -198,6 +198,14 @@ class AcademicSearchEngine:
                     print(f"Search source {source} failed: {e}")
 
         total_fetched = len(all_results)
+
+        # Per-source fetch stats: makes it visible which source is down
+        # (e.g. OpenAlex/S2 throttled on shared cloud IPs -> journals silently 0)
+        _per_source: Dict[str, int] = {}
+        for _p in all_results:
+            _per_source[_p.source] = _per_source.get(_p.source, 0) + 1
+        if _per_source:
+            print(f"    [sources] fetched per source: {_per_source}")
 
         if total_fetched == 0:
             print(f"  ⚠️ WARNING: All search sources returned 0 papers for query '{query}'. "
@@ -257,6 +265,7 @@ class AcademicSearchEngine:
             "after_dedup": after_dedup,
             "after_filter": len(filtered),
             "preprint_count": len(preprints),
+            "per_source": _per_source,
         }
 
         return {
@@ -351,6 +360,8 @@ class AcademicSearchEngine:
             results = self._search_semantic_scholar(query, max_results)
         elif source == "openalex":
             results = self._search_openalex(query, max_results)
+        elif source == "crossref":
+            results = self._search_crossref(query, max_results)
 
         return results
 
@@ -527,6 +538,76 @@ class AcademicSearchEngine:
 
         except Exception as e:
             print(f"OpenAlex search error: {e}")
+            return []
+
+    def _search_crossref(self, query: str, max_results: int) -> List[PaperCandidate]:
+        """Crossref search: journal-article only metadata source.
+
+        Free, keyless, cloud-IP friendly fallback for journal papers when
+        OpenAlex/S2 are throttled on shared cloud egress IPs. Uses the polite
+        pool via mailto. Only type=journal-article is kept, so everything it
+        returns counts as a journal paper (never a preprint).
+        """
+        import urllib.request
+        import urllib.parse as _urlp
+        import re as _re
+
+        try:
+            url = (
+                f"https://api.crossref.org/works?query={_urlp.quote_plus(query)}"
+                f"&rows={max_results}&filter=type:journal-article"
+                f"&mailto=xiaxia@coze.email"
+                f"&select=DOI,title,author,issued,container-title,is-referenced-by-count,abstract,type"
+            )
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "ConsensusPipeline/4.4 (mailto:xiaxia@coze.email)"},
+            )
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                data = json.loads(resp.read())
+
+            items = (data.get("message") or {}).get("items", [])
+            results = []
+            for it in items:
+                title_list = it.get("title") or []
+                title = title_list[0].strip() if title_list and title_list[0] else ""
+                if not title:
+                    continue
+
+                ct = it.get("container-title") or []
+                journal_name = ct[0] if ct else ""
+
+                authors = []
+                for a in (it.get("author") or []):
+                    name = " ".join(x for x in [a.get("given", ""), a.get("family", "")] if x).strip()
+                    if name:
+                        authors.append(name)
+
+                year = 0
+                date_parts = (it.get("issued") or {}).get("date-parts") or []
+                if date_parts and date_parts[0] and date_parts[0][0]:
+                    year = int(date_parts[0][0])
+
+                # Crossref abstracts are JATS XML — strip tags
+                abstract_raw = it.get("abstract") or ""
+                abstract_text = _re.sub(r"<[^>]+>", " ", abstract_raw)
+                abstract_text = _re.sub(r"\s+", " ", abstract_text).strip()
+
+                results.append(PaperCandidate(
+                    title=title,
+                    doi=it.get("DOI", "") or "",
+                    authors=authors,
+                    journal=journal_name,
+                    year=year,
+                    abstract=safe_truncate(abstract_text, 500),
+                    citation_count=it.get("is-referenced-by-count", 0) or 0,
+                    source="crossref",
+                ))
+
+            return results
+
+        except Exception as e:
+            print(f"Crossref search error: {e}")
             return []
 
     def _deduplicate(self, papers: List[PaperCandidate]) -> List[PaperCandidate]:
