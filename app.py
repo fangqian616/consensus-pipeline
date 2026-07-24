@@ -1119,6 +1119,195 @@ def build_dept_input(dept_key: str) -> str:
 
 # ============ One-Click Full Debate ============
 
+# ============ v0.11.5: Disk checkpoint — survive page reload / instance restart ============
+# Streamlit session state lives only as long as the websocket session. On
+# Streamlit Cloud the session dies whenever the page is reloaded (iOS Safari
+# backgrounding/lock-screen does this aggressively), the proxy drops an idle
+# websocket during a long LLM call, or the instance restarts — and EVERYTHING
+# (search results, finished departments) is lost, dumping the user back at the
+# requirement page. This is the real reason "jump back to 需求调研" kept
+# happening across fixes: every previous fix only changed what happens INSIDE
+# a session. Checkpointing the run to disk after every atomic stage + carrying
+# the run id in the URL query param lets a fresh session pick up exactly where
+# the old one died. api_key is NEVER persisted.
+_CK_VERSION = 1
+_CK_KEYS = [
+    # debate progress
+    "_debate_phase", "_debate_fingerprint", "dept_results", "cross_results",
+    "final_output", "debate_completed", "spatial_review_result", "expert_pool_result",
+    # academic search state
+    "_search_strategy", "_search_result", "_confirmed_papers", "_confirmed_preprints",
+    "_papers_summary",
+    # inputs/config needed to resume identically (api_key/custom_api_key
+    # deliberately excluded — credentials never touch the disk)
+    "script", "positive_prompt", "negative_prompt", "character_refs",
+    "extra_instructions", "carry_forward", "lang", "api_url", "model_name",
+    "debate_rounds", "architecture_mode", "step_mode",
+    "model_profile", "custom_api_url", "custom_model_name",
+    "workgroup_config", "workgroup_name", "pipeline_mode",
+]
+
+
+def _ck_dir():
+    d = os.environ.get("CP_CHECKPOINT_DIR") or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), ".checkpoints")
+    try:
+        os.makedirs(d, exist_ok=True)
+    except Exception:
+        d = tempfile.mkdtemp(prefix="ckpt_")
+    return d
+
+
+def _ck_get_run_id():
+    rid = None
+    try:
+        rid = st.query_params.get("run")
+    except Exception:
+        rid = None
+    if not rid:
+        rid = st.session_state.get("_ck_run_fallback")
+    return rid or None
+
+
+def _ck_set_run_id(rid):
+    try:
+        st.query_params["run"] = rid
+    except Exception:
+        pass
+    st.session_state._ck_run_fallback = rid
+
+
+def _ck_ensure_run_id():
+    rid = _ck_get_run_id()
+    if not rid:
+        rid = uuid.uuid4().hex[:10]
+        _ck_set_run_id(rid)
+    return rid
+
+
+def _ck_new_run_id():
+    rid = uuid.uuid4().hex[:10]
+    _ck_set_run_id(rid)
+    return rid
+
+
+def save_checkpoint():
+    rid = _ck_get_run_id()
+    if not rid:
+        return
+    state = {}
+    for k in _CK_KEYS:
+        if k in st.session_state:
+            state[k] = st.session_state[k]
+    payload = {"version": _CK_VERSION, "run_id": rid, "saved_at": time.time(), "state": state}
+    try:
+        path = os.path.join(_ck_dir(), f"ckpt_{rid}.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, default=str)
+    except Exception as e:
+        print(f"[ckpt] save failed: {e}")
+
+
+def load_checkpoint(rid):
+    try:
+        path = os.path.join(_ck_dir(), f"ckpt_{rid}.json")
+        if not os.path.exists(path):
+            return None
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"[ckpt] load failed: {e}")
+        return None
+
+
+def apply_checkpoint_state(state):
+    for k, v in (state or {}).items():
+        st.session_state[k] = v
+    # The sidebar force-rewrites api_url/model_name/architecture_mode from its
+    # profile/mode selectboxes on every render. Seed those widget keys BEFORE
+    # the widgets are created, or a restored non-default config gets silently
+    # reset to the default profile — the config fingerprint then mismatches
+    # and the resumed run would wipe its own progress.
+    if (state or {}).get("model_profile"):
+        st.session_state["model_profile_select"] = state["model_profile"]
+    if (state or {}).get("architecture_mode"):
+        st.session_state["arch_mode_select"] = state["architecture_mode"]
+    st.session_state._lang_selected = True
+    st.session_state._restored_from_disk = True
+    # api_key is never persisted — the user must re-enter it and click resume;
+    # never auto-start the LLM chain off a restored session.
+    st.session_state._debate_running = False
+    st.session_state._tab_index = 2 if st.session_state.get("debate_completed") else 1
+
+
+def maybe_restore_checkpoint():
+    """Once per fresh session: if the URL carries a run id with a checkpoint
+    on disk, rebuild the run state so a reload/restart doesn't lose progress."""
+    if st.session_state.get("_ck_restore_checked"):
+        return
+    st.session_state._ck_restore_checked = True
+    rid = _ck_get_run_id()
+    if not rid:
+        return
+    data = load_checkpoint(rid)
+    if not data or not isinstance(data, dict) or not data.get("state"):
+        st.session_state._ck_missing = True
+        print(f"[ckpt] run={rid} in URL but no checkpoint on disk (instance disk wiped?)")
+        return
+    apply_checkpoint_state(data["state"])
+    print(f"[ckpt] restored run={rid} phase={st.session_state.get('_debate_phase')} "
+          f"depts={list((st.session_state.get('dept_results') or {}).keys())} "
+          f"completed={st.session_state.get('debate_completed')}")
+
+
+def _ck_cleanup(max_age_days=7):
+    try:
+        d = _ck_dir()
+        now = time.time()
+        for fn in os.listdir(d):
+            if fn.startswith("ckpt_") and fn.endswith(".json"):
+                p = os.path.join(d, fn)
+                if now - os.path.getmtime(p) > max_age_days * 86400:
+                    os.remove(p)
+    except Exception:
+        pass
+
+
+def _ck_download_payload():
+    rid = _ck_get_run_id()
+    if not rid:
+        return None
+    data = load_checkpoint(rid)
+    if not data:
+        return None
+    return json.dumps(data, ensure_ascii=False, indent=1, default=str)
+
+
+def _ck_render_upload_restore(key_suffix):
+    """Upload a previously downloaded checkpoint file and restore from it.
+    Bulletproof fallback for the case where the server disk itself was wiped."""
+    is_zh = st.session_state.get("lang", "zh") == "zh"
+    _up = st.file_uploader(
+        ("上传之前下载的断点 JSON 文件" if is_zh else "Upload a previously downloaded checkpoint JSON"),
+        type=["json"], key=f"_ck_upload_file_{key_suffix}")
+    if _up is not None and st.button(("恢复此断点" if is_zh else "Restore this checkpoint"),
+                                     type="primary", key=f"_ck_upload_apply_{key_suffix}"):
+        try:
+            _data = json.loads(_up.getvalue().decode("utf-8"))
+            _st_ = _data.get("state") if isinstance(_data, dict) else None
+            if not _st_:
+                raise ValueError("missing state")
+            _rid = _data.get("run_id") or uuid.uuid4().hex[:10]
+            _ck_set_run_id(_rid)
+            apply_checkpoint_state(_st_)
+            save_checkpoint()  # re-materialize on disk for future reloads
+            st.success("✅ " + ("断点已恢复，请重新输入 API Key 后点击继续" if is_zh
+                                else "Checkpoint restored — re-enter your API key and resume"))
+            st.rerun()
+        except Exception as _e:
+            st.error(("断点文件无效" if is_zh else "Invalid checkpoint file") + f": {_e}")
+
+
 def run_all_debates(progress_callback=None):
     """Execute full debate flow (non-step mode).
     
@@ -1170,6 +1359,9 @@ def run_all_debates(progress_callback=None):
         return
     
     # === Pipeline / Expert Pool Mode ===
+    # v0.11.5: every run carries a checkpoint run id (URL query param) so a
+    # page reload / instance restart can be recovered from disk.
+    _ck_ensure_run_id()
     # v0.10: Resume support — config fingerprint for isolation
     import hashlib as _hl
     _fp = _hl.md5(f"{api_url}|{api_key}|{model}|{script}|{lang}|{rounds}".encode()).hexdigest()
@@ -1182,6 +1374,7 @@ def run_all_debates(progress_callback=None):
     elif not _saved_fp:
         st.session_state._debate_phase = "departments"
     st.session_state._debate_fingerprint = _fp
+    save_checkpoint()  # persist (possibly freshly-wiped) state at run start
 
     # v0.11.3: Re-assert this session's config into process-wide globals.
     # Streamlit shares module globals (DEPARTMENTS/DEPT_ORDER) across sessions;
@@ -1262,6 +1455,7 @@ def run_all_debates(progress_callback=None):
         # immediately reruns and resumes at the next stage.
         if _lit_just_ran:
             st.session_state._debate_phase = "search"
+            save_checkpoint()
             return
 
         # Phase B: execute real literature search
@@ -1278,6 +1472,7 @@ def run_all_debates(progress_callback=None):
         st.session_state._search_result = _sr
         st.session_state._debate_phase = "search_review"
         st.session_state._debate_running = False
+        save_checkpoint()
         return  # Pause — user confirms in render_search_review_panel
 
     if arch_mode == "expert_pool":
@@ -1352,6 +1547,7 @@ def run_all_debates(progress_callback=None):
             # at the next unfinished department. Each run now lasts only ~one
             # department (minutes), the connection stays healthy, progress is
             # visible after every department, and a crash loses at most one.
+            save_checkpoint()
             return
     
     # P2/P5: cross phase — only when not already past it (summary/done).
@@ -1396,6 +1592,7 @@ def run_all_debates(progress_callback=None):
         st.session_state._debate_phase = "summary"
         # v0.11.4: auto-chunk — summary generation is itself a long LLM chain;
         # give it its own script execution instead of tailgating the debates.
+        save_checkpoint()
         return
 
     # P6: Summary AI — branch on academic vs animation mode
@@ -1435,6 +1632,7 @@ def run_all_debates(progress_callback=None):
     st.session_state.debate_completed = True
     st.session_state.current_end_time = time.time()
     st.session_state._debate_phase = "done"
+    save_checkpoint()
     autosave_result("normal_result", final)
     if progress_callback:
         progress_callback(1.0, "✅ " + ("全部辩论完成！" if is_zh else "All debates complete!"))
@@ -1788,6 +1986,9 @@ def render_input_tab():
             st.session_state._debate_running = True
             st.session_state._debate_fingerprint = None  # v0.10: clear for fresh start
             st.session_state._debate_phase = "departments"
+            st.session_state._restored_from_disk = False
+            _ck_new_run_id()  # v0.11.5: brand-new run = brand-new checkpoint id
+            save_checkpoint()
             st.session_state._tab_index = 1  # switch to debate tab
             st.rerun()
     
@@ -1909,6 +2110,7 @@ def render_search_review_panel():
             st.session_state._papers_summary = build_papers_summary(selected + selected_pre)
             st.session_state._debate_phase = "dept_rest"
             st.session_state._debate_running = True
+            save_checkpoint()  # v0.11.5: persist paper selection before the long chain
             print(f"[diag] confirm clicked: {len(selected)} papers + {len(selected_pre)} preprints, "
                   f"phase=dept_rest, running=True")
             st.rerun()
@@ -1964,8 +2166,8 @@ def render_debate_tab():
     # _debate_running 保持 True，下次运行自动断点续跑。之前用 finally 无条件清除，
     # 导致中断后 resume 机制失效、辩论永久卡死（用户只能退回需求页重来）。
     if st.session_state.get("_debate_running"):
-        st.info("⏳ " + ("辩论执行中，全程约1-2小时。部门将逐个自动完成，页面每完成一个部门会自动刷新一次进度，请勿手动刷新或关闭页面；若意外中断，已完成的部门进度会自动保存，重新进入后可断点续跑。" if is_zh
-                         else "Debate running (~1-2h). Departments complete one by one and the page auto-refreshes after each — do not refresh/close manually; if interrupted, completed progress is saved and will auto-resume."))
+        st.info("⏳ " + ("辩论执行中，全程约1-2小时。部门逐个自动完成，页面每完成一个部门会自动刷新一次进度（属正常现象）。进度已实时保存到云端断点：即使页面被系统刷新或重开，也会自动恢复并从断点继续，无需手动操作。" if is_zh
+                         else "Debate running (~1-2h). Departments complete one by one and the page auto-refreshes after each (normal). Progress is checkpointed to the cloud in real time — even if the page reloads, it auto-recovers and resumes."))
         try:
             run_all_debates()
         except Exception as e:
@@ -1996,6 +2198,61 @@ def render_debate_tab():
 
     if st.session_state.step_mode and st.session_state.step_phase != "idle":
         render_step_mode()
+        return
+
+    # v0.11.5: 从磁盘断点恢复的会话（页面刷新/实例重启后 session 重建）。
+    # API Key 永不落盘，需用户在左侧栏重新输入同一个 Key 后一键续跑。
+    if (st.session_state.get("_restored_from_disk")
+            and not st.session_state.get("debate_completed")
+            and not st.session_state.get("_debate_running")):
+        _phase_now = st.session_state.get("_debate_phase", "?")
+        _done_depts = list((st.session_state.get("dept_results") or {}).keys())
+        _n_papers = len((st.session_state.get("_search_result") or {}).get("papers") or [])
+        _PHASE_ZH = {"departments": "检索策略", "search": "文献检索", "dept_rest": "部门辩论",
+                     "cross": "交叉辩论", "summary": "报告生成"}
+        _PHASE_EN = {"departments": "search strategy", "search": "literature search",
+                     "dept_rest": "department debates", "cross": "cross debates", "summary": "report"}
+        _phase_lbl = (_PHASE_ZH if is_zh else _PHASE_EN).get(_phase_now, _phase_now)
+        st.success("♻️ " + (f"页面刷新/重连后已从云端断点自动恢复：当前阶段「{_phase_lbl}」，"
+                            f"已完成部门 {len(_done_depts)} 个，已确认文献 {_n_papers} 篇。进度没有丢失。"
+                            if is_zh else
+                            f"Recovered from cloud checkpoint after reload: phase «{_phase_lbl}», "
+                            f"{len(_done_depts)} departments done, {_n_papers} papers confirmed. No progress lost."))
+        st.warning("🔑 " + ("API Key 为安全起见不会保存进断点。请在左侧栏重新输入**之前使用的同一个** API Key，然后点击继续。"
+                            "（换用不同的 Key 会按隔离规则清空进度重来）"
+                            if is_zh else
+                            "API keys are never saved to checkpoints. Re-enter the SAME key in the sidebar, then resume. "
+                            "(A different key restarts the run by isolation rules.)"))
+        _ck_c1, _ck_c2, _ck_c3 = st.columns(3)
+        with _ck_c1:
+            if st.button("▶️ " + ("继续（从断点）" if is_zh else "Resume (from checkpoint)"),
+                         type="primary", use_container_width=True, key="_ck_resume_btn"):
+                if not st.session_state.get("api_key"):
+                    st.error("❌ " + ("请先在左侧栏输入 API Key" if is_zh else "Enter your API key in the sidebar first"))
+                else:
+                    st.session_state._debate_running = True
+                    st.session_state._tab_index = 1
+                    st.rerun()
+        with _ck_c2:
+            _dl = _ck_download_payload()
+            if _dl:
+                st.download_button("💾 " + ("下载断点文件" if is_zh else "Download checkpoint"),
+                                   data=_dl, file_name=f"checkpoint_{_ck_get_run_id() or 'run'}.json",
+                                   mime="application/json", use_container_width=True, key="_ck_dl_btn")
+        with _ck_c3:
+            if st.button("🗑️ " + ("放弃，重新开始" if is_zh else "Discard & restart"),
+                         use_container_width=True, key="_ck_discard_btn"):
+                st.session_state._restored_from_disk = False
+                st.session_state.dept_results = {}
+                st.session_state.cross_results = []
+                st.session_state.final_output = {}
+                st.session_state.debate_completed = False
+                st.session_state._debate_phase = "departments"
+                st.session_state._debate_fingerprint = None
+                _ck_new_run_id()
+                save_checkpoint()
+                st.session_state._tab_index = 0
+                st.rerun()
         return
 
     # v0.11.1: 中断恢复入口 — 辩论已开始（有部门结果）但未完成、未在运行，
@@ -4723,6 +4980,13 @@ def main():
         height=0,
     )
 
+    # v0.11.5: rebuild run state from a disk checkpoint when the URL carries a
+    # run id — a page reload / instance restart kills the Streamlit session,
+    # but the run itself must survive. Runs before the welcome gate so a
+    # restored session skips the language screen.
+    maybe_restore_checkpoint()
+    _ck_cleanup()
+
     # Language welcome page (first visit)
     if not st.session_state.get("_lang_selected", False):
         st.markdown("---")
@@ -4744,10 +5008,25 @@ def main():
         st.stop()
 
     render_sidebar()
-    
+
+    # v0.11.5: manual checkpoint restore via uploaded file — bulletproof
+    # fallback for the case where the server disk itself was wiped.
+    _is_zh_main = st.session_state.get("lang", "zh") == "zh"
+    with st.sidebar.expander("♻️ " + ("断点恢复（上传文件）" if _is_zh_main else "Restore checkpoint (upload)"), expanded=False):
+        st.caption("运行进度会自动保存到云端断点；若云端磁盘也被重置，可用此前下载的断点文件在此恢复。" if _is_zh_main
+                   else "Progress auto-saves to a cloud checkpoint; if the server disk was also reset, upload a downloaded checkpoint here.")
+        _ck_render_upload_restore("sidebar")
+
     st.title(t("title"))
     st.caption(t("subtitle"))
-    st.caption("build: 408ecda+chunk1")  # 版本标记，确认部署用
+    st.caption("build: be80c95+ckpt1")  # 版本标记，确认部署用
+    if st.session_state.get("_ck_missing"):
+        st.warning("⚠️ " + ("链接里带有断点 ID，但云端磁盘上未找到对应断点文件（实例可能已被平台重置）。"
+                            "如果你之前下载过断点文件，可在下方上传恢复；否则请忽略此提示重新开始。"
+                            if _is_zh_main else
+                            "The URL carries a run id but no checkpoint file exists on the server (instance was likely reset). "
+                            "Upload a previously downloaded checkpoint below to recover, or ignore and start fresh."))
+        _ck_render_upload_restore("missing")
     print(f"[diag] app start: running={st.session_state.get('_debate_running')} "
           f"phase={st.session_state.get('_debate_phase')} tab={st.session_state.get('_tab_index')} "
           f"widget={st.session_state.get('_main_tab_radio')} completed={st.session_state.get('debate_completed')} "
@@ -4761,6 +5040,8 @@ def main():
         st.session_state.debate_completed = False
         st.session_state.dept_results = {}
         st.session_state.final_output = {}
+        st.session_state._restored_from_disk = False
+        _ck_new_run_id()  # v0.11.5: brand-new run = brand-new checkpoint id
         st.session_state._debate_running = True  # auto-start debate
     
     # Tab index tracked by _tab_index (not widget-bound, safe to set directly)
