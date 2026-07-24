@@ -1555,9 +1555,16 @@ def run_all_debates(progress_callback=None):
     # re-ran unconditionally on every resume-to-summary, wasting an LLM call
     # (now a guaranteed path since auto-chunk routes every run through here).
     if _resume_phase not in ("summary", "done"):
+        # v0.11.5: re-assert globals before spatial/cross calls as well — the
+        # dept loop did this, but the cross phase had no protection while
+        # module globals are shared process-wide across sessions.
+        if _cfg_run.get("departments"):
+            apply_config(_cfg_run)
         # P2: Spatial planning cross-review
         spatial_consensus = dept_results.get("spatial", {}).get("consensus", "")
-        if spatial_consensus:
+        # v0.11.5: skip when already done — per-cross chunking below re-enters
+        # this phase after every cross-debate and would re-run the review.
+        if spatial_consensus and not st.session_state.get("spatial_review_result"):
             with st.spinner("🔍 " + ("空间板块交叉审核..." if is_zh else "Spatial review...")):
                 spatial_review = run_spatial_review(
                     spatial_consensus=spatial_consensus,
@@ -1572,12 +1579,22 @@ def run_all_debates(progress_callback=None):
 
         st.session_state.dept_results = dept_results
         st.session_state._debate_phase = "cross"
+        save_checkpoint()
 
-        # P5: Cross-debate
-        cross_results = []
-        for cd in P5_CROSS_DEBATES:
+        # P5: Cross-debate — v0.11.5: one cross-debate per script run, same
+        # auto-chunk pattern as departments. Previously ALL crosses ran in a
+        # single execution that could stretch past the Cloud websocket window.
+        _P5_RUN = _cfg_run.get("p5_cross_debates") or P5_CROSS_DEBATES
+        cross_results = list(st.session_state.get("cross_results") or [])
+        _done_pairs = {
+            (c.get("side_a"), c.get("side_b"))
+            for c in cross_results if isinstance(c, dict)
+        }
+        for cd in _P5_RUN:
             a_key, b_key = cd.get("side_a"), cd.get("side_b")
             if not a_key or not b_key:
+                continue
+            if (a_key, b_key) in _done_pairs:
                 continue
             if a_key in dept_results and b_key in dept_results:
                 cr = run_cross_debate(
@@ -1588,6 +1605,9 @@ def run_all_debates(progress_callback=None):
                     stats=stats,
                 )
                 cross_results.append(cr)
+                st.session_state.cross_results = cross_results
+                save_checkpoint()
+                return  # yield: next cross-debate runs in a fresh script run
         st.session_state.cross_results = cross_results
         st.session_state._debate_phase = "summary"
         # v0.11.4: auto-chunk — summary generation is itself a long LLM chain;
@@ -1605,7 +1625,7 @@ def run_all_debates(progress_callback=None):
     cross_results = st.session_state.get("cross_results", [])
 
     # v0.10: Skip summary if already completed (resume from rerun)
-    if st.session_state.get("final_output") and _resume_phase == "summary":
+    if st.session_state.get("final_output") and _resume_phase in ("summary", "done"):
         final = st.session_state.final_output
     elif _is_academic:
         final = run_academic_summary(
@@ -1986,6 +2006,11 @@ def render_input_tab():
             st.session_state._debate_running = True
             st.session_state._debate_fingerprint = None  # v0.10: clear for fresh start
             st.session_state._debate_phase = "departments"
+            st.session_state._search_strategy = None  # v0.11.5: fresh search too
+            st.session_state._search_result = None
+            st.session_state._confirmed_papers = None
+            st.session_state._confirmed_preprints = None
+            st.session_state._papers_summary = None
             st.session_state._restored_from_disk = False
             _ck_new_run_id()  # v0.11.5: brand-new run = brand-new checkpoint id
             save_checkpoint()
@@ -5019,7 +5044,7 @@ def main():
 
     st.title(t("title"))
     st.caption(t("subtitle"))
-    st.caption("build: be80c95+ckpt1")  # 版本标记，确认部署用
+    st.caption("build: be80c95+ckpt2")  # 版本标记，确认部署用
     if st.session_state.get("_ck_missing"):
         st.warning("⚠️ " + ("链接里带有断点 ID，但云端磁盘上未找到对应断点文件（实例可能已被平台重置）。"
                             "如果你之前下载过断点文件，可在下方上传恢复；否则请忽略此提示重新开始。"
@@ -5040,6 +5065,21 @@ def main():
         st.session_state.debate_completed = False
         st.session_state.dept_results = {}
         st.session_state.final_output = {}
+        # v0.11.5: mirror the manual start button — a stale phase/fingerprint
+        # here silently broke repeat runs (phase stays "done" -> academic flow,
+        # cross-debates and search all skipped on the second run).
+        st.session_state.cross_results = []
+        st.session_state.proofread_result = None
+        st.session_state.spatial_review_result = None
+        st.session_state.step_phase = "idle"
+        st.session_state.pipeline_mode = None
+        st.session_state._debate_fingerprint = None
+        st.session_state._debate_phase = "departments"
+        st.session_state._search_strategy = None
+        st.session_state._search_result = None
+        st.session_state._confirmed_papers = None
+        st.session_state._confirmed_preprints = None
+        st.session_state._papers_summary = None
         st.session_state._restored_from_disk = False
         _ck_new_run_id()  # v0.11.5: brand-new run = brand-new checkpoint id
         st.session_state._debate_running = True  # auto-start debate
