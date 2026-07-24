@@ -1135,6 +1135,8 @@ _CK_KEYS = [
     # debate progress
     "_debate_phase", "_debate_fingerprint", "dept_results", "cross_results",
     "final_output", "debate_completed", "spatial_review_result", "expert_pool_result",
+    # v0.12: fact-check stage + revision result (report persisted as dict)
+    "fact_check_report", "fact_check_type", "revision_result",
     # academic search state
     "_search_strategy", "_search_result", "_confirmed_papers", "_confirmed_preprints",
     "_papers_summary",
@@ -1198,7 +1200,14 @@ def save_checkpoint():
     state = {}
     for k in _CK_KEYS:
         if k in st.session_state:
-            state[k] = st.session_state[k]
+            v = st.session_state[k]
+            if k == "fact_check_report":
+                # CitationVerificationReport is a dataclass — persist as dict.
+                # Legacy FactChecker reports are not restorable; skip them.
+                if st.session_state.get("fact_check_type") != "citation":
+                    continue
+                v = v.to_dict() if hasattr(v, "to_dict") else v
+            state[k] = v
     payload = {"version": _CK_VERSION, "run_id": rid, "saved_at": time.time(), "state": state}
     try:
         path = os.path.join(_ck_dir(), f"ckpt_{rid}.json")
@@ -1220,6 +1229,52 @@ def load_checkpoint(rid):
         return None
 
 
+
+def _cv_report_from_dict(d):
+    """Rebuild a CitationVerificationReport from its persisted dict form.
+    Returns None (caller drops the key) if the payload is unusable."""
+    try:
+        from requirement.citation_verifier import (
+            AtomicClaim, ClaimVerification, CitationVerificationReport, NLIResult,
+        )
+        cvs = []
+        for cv in (d or {}).get("claim_verifications", []) or []:
+            cl = cv.get("claim") or {}
+            claim = AtomicClaim(
+                text=cl.get("text", ""), source_context=cl.get("source_context", ""),
+                cited_indices=cl.get("cited_indices", []) or [],
+            )
+            nlis = [
+                NLIResult(
+                    claim=n.get("claim", ""), ref_index=n.get("ref_index", 0),
+                    ref_title=n.get("ref_title", ""), ref_doi=n.get("ref_doi", ""),
+                    label=n.get("label", "neutral"), confidence=n.get("confidence", 0.0),
+                    explanation=n.get("explanation", ""), evidence=n.get("evidence", "abstract"),
+                )
+                for n in cv.get("nli_results", []) or []
+            ]
+            cvs.append(ClaimVerification(
+                claim=claim, nli_results=nlis,
+                status=cv.get("status", "unverified"), confidence=cv.get("confidence", 0.0),
+            ))
+        return CitationVerificationReport(
+            claim_verifications=cvs,
+            total_references=d.get("total_references", 0),
+            resolved_references=d.get("resolved_references", 0),
+            total_citations=d.get("total_citations", 0),
+            total_claims=d.get("total_claims", 0),
+            verified=d.get("verified", 0),
+            partially_verified=d.get("partially_verified", 0),
+            contradicted=d.get("contradicted", 0),
+            unverified=d.get("unverified", 0),
+            overall_confidence=d.get("overall_confidence", 0.0),
+            summary=d.get("summary", ""),
+        )
+    except Exception as e:
+        print(f"[ckpt] fact-check report rebuild failed: {e}")
+        return None
+
+
 def apply_checkpoint_state(state):
     for k, v in (state or {}).items():
         st.session_state[k] = v
@@ -1238,6 +1293,13 @@ def apply_checkpoint_state(state):
     # never auto-start the LLM chain off a restored session.
     st.session_state._debate_running = False
     st.session_state._tab_index = 2 if st.session_state.get("debate_completed") else 1
+    # v0.12: the fact-check report was persisted as a dict — rebuild the object
+    if isinstance(st.session_state.get("fact_check_report"), dict):
+        _fc_obj = _cv_report_from_dict(st.session_state["fact_check_report"])
+        if _fc_obj is None:
+            del st.session_state["fact_check_report"]
+        else:
+            st.session_state["fact_check_report"] = _fc_obj
 
 
 def maybe_restore_checkpoint():
@@ -1306,6 +1368,143 @@ def _ck_render_upload_restore(key_suffix):
             st.rerun()
         except Exception as _e:
             st.error(("断点文件无效" if is_zh else "Invalid checkpoint file") + f": {_e}")
+
+
+
+def _simple_llm_call(system_prompt, user_prompt, temperature=0.3, max_tokens=16000):
+    """Minimal chat-completion call using the session's API config."""
+    import requests as _req
+    api_url = st.session_state.get("api_url", "")
+    api_key = st.session_state.get("api_key", "")
+    model = st.session_state.get("model_name", "")
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    resp = _req.post(api_url, headers=headers, json=payload, timeout=300)
+    return resp.json()["choices"][0]["message"]["content"]
+
+
+def _run_fact_check_verify():
+    """v0.12 shared executor: citation-grounded verification of the final
+    report against cached papers. Called by BOTH the automatic pipeline stage
+    (summary -> verify) and the manual Proofread-tab button."""
+    is_zh = st.session_state.get("lang", "zh") == "zh"
+    _fc_final = st.session_state.get("final_output", {}) or {}
+    _fc_report = _fc_final.get("final_report", "") or _fc_final.get("consensus_report", "") or ""
+    _fc_papers = _fc_final.get("papers_data", [])
+    if not _fc_report:
+        raise ValueError("no report to verify" if not is_zh else "没有可校验的报告")
+
+    def _llm_fn(system_prompt, user_prompt):
+        try:
+            return _simple_llm_call(system_prompt, user_prompt, temperature=0.3)
+        except Exception as e:
+            return f"[ERROR] {e}"
+
+    def _search_fn(query, max_results=5):
+        try:
+            from academic.search_engine import AcademicSearchEngine
+            engine = AcademicSearchEngine(quality_levels=["S", "A", "B"], min_results=max_results)
+            result = engine.search(query, max_results_per_source=max(20, max_results * 4))
+            papers = result["papers"] + result.get("preprints", [])[:3]
+            return [{"title": p.title, "doi": p.doi, "abstract": p.abstract} for p in papers[:max_results]]
+        except Exception:
+            return []
+
+    from requirement.citation_verifier import CitationVerifier
+    verifier = CitationVerifier(
+        llm_call_fn=_llm_fn if st.session_state.get("api_key") else None,
+        search_fn=_search_fn,
+        language="zh" if is_zh else "en",
+        max_claims=20,
+        max_contexts=15,
+    )
+    cv_report = verifier.verify(_fc_report, papers_data=_fc_papers if _fc_papers else None)
+    st.session_state.fact_check_report = cv_report
+    st.session_state.fact_check_type = "citation"
+    return cv_report
+
+
+def _parse_revision_json(text):
+    """Extract the leading JSON object from an LLM reply (fence-tolerant)."""
+    import json as _json
+    t = (text or "").strip()
+    if t.startswith("```"):
+        t = re.sub(r"^```[a-zA-Z]*\s*", "", t)
+        t = re.sub(r"```\s*$", "", t)
+    start = t.find("{")
+    end = t.rfind("}")
+    if start < 0 or end <= start:
+        raise ValueError("no JSON object in LLM reply")
+    return _json.loads(t[start:end + 1])
+
+
+def _run_revision_from_fact_check():
+    """v0.12: revise the final report based on citation-verification results.
+    verified/partially kept; unverified softened (unsourced numbers/dates dropped);
+    contradicted reversed or removed. Stores revision_result and mirrors the
+    revised report into final_output['revised_report']."""
+    is_zh = st.session_state.get("lang", "zh") == "zh"
+    rep_obj = st.session_state.get("fact_check_report")
+    final = st.session_state.get("final_output", {}) or {}
+    report_text = final.get("final_report", "") or final.get("consensus_report", "") or ""
+    if not rep_obj or not report_text:
+        raise ValueError("missing verification report or final report")
+    lines = []
+    for i, cv in enumerate(getattr(rep_obj, "claim_verifications", []) or []):
+        ev = ""
+        for n in (cv.nli_results or [])[:2]:
+            ev += f" | [{n.ref_index}] {n.label} {n.confidence:.0%} {(n.explanation or '')[:80]}"
+        lines.append(f"{i+1}. [{cv.status} {cv.confidence:.0%}] {cv.claim.text}{ev}")
+    digest = "\n".join(lines) or "(no claims)"
+    if is_zh:
+        sys_p = (
+            "你是学术报告修订专家。根据事实校验结果修正报告，规则：\n"
+            "1. status=verified 的论断：保留原文\n"
+            "2. status=partially_verified：保留；若含证据未覆盖的具体数字，改为稳妥表述\n"
+            "3. status=unverified：软化——删除无来源支撑的具体数字/比例/时间/专名，"
+            "改为方向性表述（如「部分研究涉及X，具体参数文献中未明确」）；无法软化则删除该句\n"
+            "4. status=contradicted：按 NLI 证据反转表述，或删除\n"
+            "5. 保持 markdown 结构、标题层级、[n] 引用编号不变；仅当某引用对应语句全部被删除时"
+            "才移除该参考文献条目，其余编号不得重排\n"
+            "6. 不得新增任何事实、数字或引用\n"
+            "只输出 JSON（不要 markdown fence）："
+            '{"revised_report": "<修正后完整报告>", "changes": [{"claim": "<原论断>", '
+            '"action": "kept|softened|removed|reversed", "reason": "<一句话>"}]}'
+        )
+        user_p = f"【报告全文】\n{report_text}\n\n【事实校验结果】\n{digest}"
+    else:
+        sys_p = (
+            "You are an academic report revision expert. Revise the report per the fact-check "
+            "results: keep verified claims; keep partially_verified but soften unsupported "
+            "specifics; soften unverified claims by removing unsourced numbers/dates/names "
+            "(or delete the sentence); reverse or remove contradicted claims per NLI evidence. "
+            "Preserve markdown structure and [n] citation numbering; only remove a bibliography "
+            "entry when all its citing sentences were deleted. Never add new facts, numbers or "
+            "citations. Output JSON only (no fences): "
+            '{"revised_report": "...", "changes": [{"claim": "...", "action": '
+            '"kept|softened|removed|reversed", "reason": "..."}]}'
+        )
+        user_p = f"[REPORT]\n{report_text}\n\n[FACT-CHECK RESULTS]\n{digest}"
+    raw = _simple_llm_call(sys_p, user_p, temperature=0.2)
+    data = _parse_revision_json(raw)
+    revised = (data.get("revised_report") or "").strip()
+    if not revised:
+        raise ValueError("empty revised_report in LLM reply")
+    changes = data.get("changes") or []
+    st.session_state.revision_result = {"revised_report": revised, "changes": changes}
+    try:
+        st.session_state.final_output["revised_report"] = revised
+    except Exception:
+        pass
+    return st.session_state.revision_result
 
 
 def run_all_debates(progress_callback=None):
@@ -1554,7 +1753,7 @@ def run_all_debates(progress_callback=None):
     # v0.11.4: spatial review moved inside the same guard — previously it
     # re-ran unconditionally on every resume-to-summary, wasting an LLM call
     # (now a guaranteed path since auto-chunk routes every run through here).
-    if _resume_phase not in ("summary", "done"):
+    if _resume_phase not in ("summary", "verify", "done"):
         # v0.11.5: re-assert globals before spatial/cross calls as well — the
         # dept loop did this, but the cross phase had no protection while
         # module globals are shared process-wide across sessions.
@@ -1625,7 +1824,7 @@ def run_all_debates(progress_callback=None):
     cross_results = st.session_state.get("cross_results", [])
 
     # v0.10: Skip summary if already completed (resume from rerun)
-    if st.session_state.get("final_output") and _resume_phase in ("summary", "done"):
+    if st.session_state.get("final_output") and _resume_phase in ("summary", "verify", "done"):
         final = st.session_state.final_output
     elif _is_academic:
         final = run_academic_summary(
@@ -1649,8 +1848,30 @@ def run_all_debates(progress_callback=None):
         )
         notify_stage_complete("分镜表+视频提示词生成" if is_zh else "Storyboard+Video Prompt")
     st.session_state.final_output = final
-    st.session_state.debate_completed = True
     st.session_state.current_end_time = time.time()
+
+    # v0.12: academic flow — fact-check is a fixed stage after summary.
+    # Auto-chunked like every other atomic stage: phase="verify" + return, then
+    # the rerun re-enters and actually runs the verification below.
+    # NB: debate_completed stays False until verify is done/skipped — flipping it
+    # earlier would make the caller clear _debate_running and kill the relay.
+    if _is_academic and not st.session_state.get("fact_check_report"):
+        if _resume_phase != "verify":
+            st.session_state._debate_phase = "verify"
+            save_checkpoint()
+            return  # yield: verification runs in its own script run
+        try:
+            with st.spinner("🔬 " + ("自动事实校验中（引用锚定 + NLI）..." if is_zh
+                                     else "Auto fact-check (citation-grounded NLI)...")):
+                _run_fact_check_verify()
+            notify_stage_complete("事实校验" if is_zh else "Fact Check")
+        except Exception as _fc_e:
+            print(f"[ckpt] auto fact-check failed: {_fc_e}")
+            st.warning("⚠️ " + ("自动事实校验失败，可在「校对」Tab 手动重试；报告不受影响。"
+                               if is_zh else
+                               "Auto fact-check failed — retry in the Proofread tab; report unaffected."))
+
+    st.session_state.debate_completed = True
     st.session_state._debate_phase = "done"
     save_checkpoint()
     autosave_result("normal_result", final)
@@ -2003,6 +2224,9 @@ def render_input_tab():
             st.session_state.debate_completed = False
             st.session_state.proofread_result = None
             st.session_state.spatial_review_result = None
+            st.session_state.fact_check_report = None  # v0.12: fresh run re-verifies
+            st.session_state.fact_check_type = None
+            st.session_state.revision_result = None
             st.session_state._debate_running = True
             st.session_state._debate_fingerprint = None  # v0.10: clear for fresh start
             st.session_state._debate_phase = "departments"
@@ -2026,6 +2250,9 @@ def render_input_tab():
             st.session_state.debate_completed = False
             st.session_state.proofread_result = None
             st.session_state.spatial_review_result = None
+            st.session_state.fact_check_report = None  # v0.12: fresh run re-verifies
+            st.session_state.fact_check_type = None
+            st.session_state.revision_result = None
             st.session_state.step_dept_index = 0
             st.session_state.step_round = 1
             st.session_state.step_all_arguments = []
@@ -2234,9 +2461,10 @@ def render_debate_tab():
         _done_depts = list((st.session_state.get("dept_results") or {}).keys())
         _n_papers = len((st.session_state.get("_search_result") or {}).get("papers") or [])
         _PHASE_ZH = {"departments": "检索策略", "search": "文献检索", "dept_rest": "部门辩论",
-                     "cross": "交叉辩论", "summary": "报告生成"}
+                     "cross": "交叉辩论", "summary": "报告生成", "verify": "事实校验"}
         _PHASE_EN = {"departments": "search strategy", "search": "literature search",
-                     "dept_rest": "department debates", "cross": "cross debates", "summary": "report"}
+                     "dept_rest": "department debates", "cross": "cross debates", "summary": "report",
+                     "verify": "fact-check"}
         _phase_lbl = (_PHASE_ZH if is_zh else _PHASE_EN).get(_phase_now, _phase_now)
         st.success("♻️ " + (f"页面刷新/重连后已从云端断点自动恢复：当前阶段「{_phase_lbl}」，"
                             f"已完成部门 {len(_done_depts)} 个，已确认文献 {_n_papers} 篇。进度没有丢失。"
@@ -2285,7 +2513,7 @@ def render_debate_tab():
     # run_all_debates 会跳过 dept_results 里已完成的部门继续往后跑。
     if (not st.session_state.get("debate_completed")
             and st.session_state.get("dept_results")
-            and st.session_state.get("_debate_phase") in ("departments", "search", "dept_rest", "cross", "summary")):
+            and st.session_state.get("_debate_phase") in ("departments", "search", "dept_rest", "cross", "summary", "verify")):
         st.warning("⚠️ " + ("上次辩论未跑完（页面刷新或连接中断）。已完成的部门进度已保存，点击下方按钮断点续跑。" if is_zh
                             else "Previous debate run was interrupted (refresh/disconnect). Completed progress is saved — resume below."))
         if st.button("▶️ " + ("继续辩论（断点续跑）" if is_zh else "Resume debate (from checkpoint)"),
@@ -3139,7 +3367,7 @@ def render_proofread_tab():
     
     
     # ===== Fact Check (Citation-Grounded) =====
-    with st.expander("🔬 " + ("事实校验（Phase 7.5）" if is_zh else "Fact Check (Phase 7.5)"), expanded=False):
+    with st.expander("🔬 " + ("事实校验（自动阶段 · 一键全辩后执行）" if is_zh else "Fact Check (auto stage after full debate)"), expanded=False):
         _fc_final = st.session_state.get("final_output", {})
         _fc_report = _fc_final.get("final_report", "") or _fc_final.get("consensus_report", "") or ""
         _fc_papers = _fc_final.get("papers_data", [])
@@ -3163,66 +3391,14 @@ def render_proofread_tab():
                     "No cached papers found, will parse bibliography and fetch abstracts online"
                 )
 
-            if st.button("🚀 " + ("开始事实校验" if is_zh else "Start Fact Check"), key="fact_check_btn"):
-                # Build LLM function from session config
-                api_url = st.session_state.get("api_url", "")
-                api_key = st.session_state.get("api_key", "")
-                model = st.session_state.get("model_name", "")
-
-                def _llm_fn(system_prompt, user_prompt):
-                    import requests as _req
-                    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
-                    payload = {"model": model, "messages": [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}], "temperature": 0.3}
+            _fc_btn_lbl = (("重新校验" if st.session_state.get("fact_check_report") else "开始事实校验") if is_zh
+                           else ("Re-run Fact Check" if st.session_state.get("fact_check_report") else "Start Fact Check"))
+            if st.button("🚀 " + _fc_btn_lbl, key="fact_check_btn"):
+                with st.spinner("🔬 " + ("正在进行引用锚定原子事实校验..." if is_zh else "Running citation-grounded fact verification...")):
                     try:
-                        resp = _req.post(api_url, headers=headers, json=payload, timeout=120)
-                        return resp.json()["choices"][0]["message"]["content"]
-                    except Exception as e:
-                        return f"[ERROR] {e}"
-
-                # Build search fallback function
-                def _search_fn(query, max_results=5):
-                    try:
-                        from academic.search_engine import AcademicSearchEngine
-                        engine = AcademicSearchEngine(quality_levels=["S", "A", "B"], min_results=max_results)
-                        result = engine.search(query, max_results_per_source=max(20, max_results * 4))
-                        papers = result["papers"] + result.get("preprints", [])[:3]
-                        return [{"title": p.title, "doi": p.doi, "abstract": p.abstract} for p in papers[:max_results]]
-                    except Exception:
-                        return []
-
-                try:
-                    from requirement.citation_verifier import CitationVerifier
-                    _use_cv = True
-                except ImportError:
-                    _use_cv = False
-
-                if _use_cv:
-                    verifier = CitationVerifier(
-                        llm_call_fn=_llm_fn if api_key else None,
-                        search_fn=_search_fn,
-                        language="zh" if is_zh else "en",
-                        max_claims=20,
-                        max_contexts=15,
-                    )
-                    with st.spinner("🔬 " + ("正在进行引用锚定原子事实校验..." if is_zh else "Running citation-grounded fact verification...")):
-                        cv_report = verifier.verify(_fc_report, papers_data=_fc_papers if _fc_papers else None)
-                    st.session_state.fact_check_report = cv_report
-                    st.session_state.fact_check_type = "citation"
-                else:
-                    # Fallback to legacy FactChecker
-                    checker = FactChecker(search_fn=_search_fn, llm_call_fn=_llm_fn if api_key else None)
-                    # Extract claims from report
-                    _paragraphs = [p.strip() for p in _fc_report.split("\n\n")
-                                   if p.strip() and not p.strip().startswith("#") and len(p.strip()) >= 40]
-                    _claims = [p for p in _paragraphs
-                               if p.count("\n- ") <= 3 and p.count("\n* ") <= 3][:15]
-                    if _claims:
-                        with st.spinner("🔬 " + ("正在校验..." if is_zh else "Fact-checking...")):
-                            fc_report = checker.check(_claims)
-                        st.session_state.fact_check_report = fc_report
-                        st.session_state.fact_check_type = "legacy"
-                    else:
-                        st.warning("未能提取到可验证的事实性论断" if is_zh else "No verifiable claims extracted")
+                        _run_fact_check_verify()
+                    except Exception as _fc_err:
+                        st.error(("校验失败: " if is_zh else "Fact check failed: ") + str(_fc_err))
 
             # ── Display results ──
             _fc_result = st.session_state.get("fact_check_report")
@@ -3277,6 +3453,35 @@ def render_proofread_tab():
                                 st.write(f"- {doi}")
                         if r.notes:
                             st.write(f"**Notes**: {r.notes}")
+
+            # ── v0.12: Revise report from verification results ──
+            if _fc_result and _fc_type == "citation":
+                st.divider()
+                if st.button("🛠️ " + ("依据校对结果修正内容" if is_zh else "Revise report from fact-check"),
+                             type="primary", key="revise_from_fc_btn"):
+                    with st.spinner("✍️ " + ("正在根据校对结果修正报告..." if is_zh else "Revising report from verification...")):
+                        try:
+                            _run_revision_from_fact_check()
+                            st.rerun()
+                        except Exception as _rv_e:
+                            st.error(("修正失败: " if is_zh else "Revision failed: ") + str(_rv_e))
+                _rev = st.session_state.get("revision_result")
+                if _rev and _rev.get("revised_report"):
+                    _acts = {"kept": "✅", "softened": "📝", "removed": "🗑️", "reversed": "🔄"}
+                    st.success("✅ " + ("已生成修正版报告（原版保留在「最终产出」Tab）" if is_zh
+                                       else "Revised report ready (original kept in Output tab)"))
+                    for _ch in (_rev.get("changes") or []):
+                        st.caption(f"{_acts.get(_ch.get('action'), '•')} [{_ch.get('action')}] "
+                                   f"{(_ch.get('claim') or '')[:60]} — {_ch.get('reason', '')}")
+                    with st.expander("📄 " + ("修正版报告全文" if is_zh else "Revised report (full)"), expanded=True):
+                        st.markdown(_rev["revised_report"])
+                    st.download_button(
+                        "⬇️ " + ("下载修正版报告 (.md)" if is_zh else "Download revised report (.md)"),
+                        data=_rev["revised_report"],
+                        file_name="revised_report.md",
+                        mime="text/markdown",
+                        key="revised_report_dl",
+                    )
     
     final = st.session_state.get("final_output", {})
     
@@ -5052,7 +5257,7 @@ def main():
 
     st.title(t("title"))
     st.caption(t("subtitle"))
-    st.caption("build: be80c95+ckpt4")  # 版本标记，确认部署用
+    st.caption("build: be80c95+ckpt5")  # 版本标记，确认部署用
     if st.session_state.get("_ck_missing"):
         st.warning("⚠️ " + ("链接里带有断点 ID，但云端磁盘上未找到对应断点文件（实例可能已被平台重置）。"
                             "如果你之前下载过断点文件，可在下方上传恢复；否则请忽略此提示重新开始。"
@@ -5079,6 +5284,9 @@ def main():
         st.session_state.cross_results = []
         st.session_state.proofread_result = None
         st.session_state.spatial_review_result = None
+        st.session_state.fact_check_report = None  # v0.12: fresh run re-verifies
+        st.session_state.fact_check_type = None
+        st.session_state.revision_result = None
         st.session_state.step_phase = "idle"
         st.session_state.pipeline_mode = None
         st.session_state._debate_fingerprint = None
