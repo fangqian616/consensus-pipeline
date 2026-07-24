@@ -3249,6 +3249,11 @@ def run_academic_search(
         "环境": "environmental", "规制": "regulation", "政策": "policy",
         "效率": "efficiency", "碳": "carbon", "排放": "emission",
         "电力": "electricity", "可再生": "renewable", "气候": "climate",
+        "需求响应": "demand response", "需求": "demand", "供给": "supply",
+        "价格": "price", "负荷": "load", "天然气": "natural gas",
+        "石油": "oil", "煤炭": "coal", "储能": "energy storage",
+        "因果": "causal", "时间序列": "time series", "冲击": "shock",
+        "研究": "research", "综述": "review", "方法": "method",
         "金融": "finance", "管理": "management", "市场": "market",
         "创新": "innovation", "技术": "technology", "产业": "industry",
         "发展": "development", "可持续": "sustainable", "绿色": "green",
@@ -3431,7 +3436,8 @@ def run_academic_search(
                 print(f"  Filtered {_filtered_zh} Chinese queries from query_rotation")
             if search_query and search_query not in search_queries and not _is_chinese(search_query):
                 search_queries.insert(0, search_query)
-            if en_query and en_query != search_query and en_query not in search_queries:
+            if (en_query and en_query != search_query and en_query not in search_queries
+                    and not _is_chinese(en_query)):
                 search_queries.append(en_query)
         else:
             # Fallback: English queries only
@@ -3453,6 +3459,7 @@ def run_academic_search(
         all_preprints_raw = []
         seen_titles = set()
         total_fetched = 0
+        per_source_total: Dict[str, int] = {}
 
         for q in search_queries:
             try:
@@ -3462,6 +3469,8 @@ def run_academic_search(
                 q_stats = result.get("stats", {})
 
                 total_fetched += q_stats.get("total_fetched", 0)
+                for _sk, _sv in (q_stats.get("per_source") or {}).items():
+                    per_source_total[_sk] = per_source_total.get(_sk, 0) + _sv
                 print(f"  \"{q}\" → raw={q_stats.get('total_fetched', 0)}, "
                       f"filtered={q_stats.get('after_filter', 0)}, "
                       f"preprints={q_stats.get('preprint_count', 0)}")
@@ -3489,6 +3498,8 @@ def run_academic_search(
         preprints = all_preprints_raw
         print(f"Academic search complete: {total_fetched} fetched, "
               f"{len(papers_found)} unique papers, {len(preprints)} preprints")
+        if per_source_total:
+            print(f"Academic search per-source fetched: {per_source_total}")
 
         return {
             "papers": [p.to_dict() for p in papers_found],
@@ -3500,6 +3511,7 @@ def run_academic_search(
                 "total_fetched": total_fetched,
                 "after_filter": len(papers_found),
                 "preprint_count": len(preprints),
+                "per_source": per_source_total,
                 "strategy_source": strategy_source,
             },
             "domain_config": domain_config,
