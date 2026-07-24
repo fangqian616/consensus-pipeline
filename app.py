@@ -1879,15 +1879,24 @@ def render_debate_tab():
     # If rerun happens mid-exec, guard re-enters run_all_debates() which
     # reads dept_results from session_state and skips completed departments.
     # Config fingerprint ensures isolation (different user/API/topic = fresh start).
+    # v0.11.1: 正常结束/异常时才清除 _debate_running；脚本被中断（刷新/断线重连）
+    # 时 Streamlit 抛 BaseException 类控制异常，不进 except、也不走 else——
+    # _debate_running 保持 True，下次运行自动断点续跑。之前用 finally 无条件清除，
+    # 导致中断后 resume 机制失效、辩论永久卡死（用户只能退回需求页重来）。
     if st.session_state.get("_debate_running"):
+        st.info("⏳ " + ("辩论执行中，全程约1-2小时。请勿刷新或关闭页面；若意外中断，已完成的部门进度会自动保存，重新进入后可断点续跑。" if is_zh
+                         else "Debate running (~1-2h). Do not refresh/close; if interrupted, completed department progress is saved and will auto-resume."))
         try:
             run_all_debates()
         except Exception as e:
             st.session_state._debate_error = f"{'辩论执行出错' if is_zh else 'Debate execution error'}: {e}"
-        finally:
+            st.session_state._debate_running = False
+            st.session_state._tab_index = 1
+            st.rerun()
+        else:
             st.session_state._debate_running = False
             st.session_state._tab_index = 1  # ensure results tab after completion
-        st.rerun()
+            st.rerun()
 
     # v0.11: search_review phase — show paper confirmation panel, wait for user
     if (st.session_state.get("_debate_phase") == "search_review"
@@ -1898,6 +1907,20 @@ def render_debate_tab():
     if st.session_state.step_mode and st.session_state.step_phase != "idle":
         render_step_mode()
         return
+
+    # v0.11.1: 中断恢复入口 — 辩论已开始（有部门结果）但未完成、未在运行，
+    # 说明上次执行被中断（刷新/断线/异常）。提供手动断点续跑；
+    # run_all_debates 会跳过 dept_results 里已完成的部门继续往后跑。
+    if (not st.session_state.get("debate_completed")
+            and st.session_state.get("dept_results")
+            and st.session_state.get("_debate_phase") in ("departments", "search", "dept_rest", "cross", "summary")):
+        st.warning("⚠️ " + ("上次辩论未跑完（页面刷新或连接中断）。已完成的部门进度已保存，点击下方按钮断点续跑。" if is_zh
+                            else "Previous debate run was interrupted (refresh/disconnect). Completed progress is saved — resume below."))
+        if st.button("▶️ " + ("继续辩论（断点续跑）" if is_zh else "Resume debate (from checkpoint)"),
+                     type="primary", key="_resume_debate_btn"):
+            st.session_state._debate_running = True
+            st.session_state._tab_index = 1
+            st.rerun()
     
     dept_results = st.session_state.get("dept_results", {})
     
