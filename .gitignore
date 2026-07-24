@@ -46,3 +46,6 @@ test_full_pipeline.py
 
 # 根目录残留的旧版文件
 /report_generator.py
+
+# 断点文件
+.checkpoints/
