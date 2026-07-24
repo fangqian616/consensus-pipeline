@@ -1075,7 +1075,12 @@ def run_department_debate(
             "consensus": str,
         }
     """
-    dept = DEPARTMENTS[department_key]
+    dept = DEPARTMENTS.get(department_key)
+    if dept is None:
+        raise RuntimeError(
+            f"部门 '{department_key}' 不在当前工作组配置中（配置未正确加载，请刷新后重试）/ "
+            f"Department '{department_key}' is missing from the active workgroup config."
+        )
     is_zh = lang == "zh"
     debate_log = []
     all_arguments = []
@@ -2102,8 +2107,13 @@ def run_cross_debate(
 ) -> Dict:
     """运行两个部门间的交叉辩论"""
     is_zh = lang == "zh"
-    dept_a = DEPARTMENTS[cross_config["side_a"]]
-    dept_b = DEPARTMENTS[cross_config["side_b"]]
+    dept_a = DEPARTMENTS.get(cross_config["side_a"])
+    dept_b = DEPARTMENTS.get(cross_config["side_b"])
+    if dept_a is None or dept_b is None:
+        raise RuntimeError(
+            f"交叉辩论部门缺失 side_a={cross_config.get('side_a')} side_b={cross_config.get('side_b')}"
+            f"（配置未正确加载，请刷新后重试）/ Cross-debate departments missing from active config."
+        )
     topic = cross_config["zh_topic"] if is_zh else cross_config["en_topic"]
     
     a_name = dept_a["zh_name"] if is_zh else dept_a["en_name"]
