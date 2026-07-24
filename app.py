@@ -1222,6 +1222,7 @@ def run_all_debates(progress_callback=None):
     )
     if _academic_flow and _resume_phase in ("departments", "search"):
         # Phase A: literature_search department formulates the search strategy
+        _lit_just_ran = False
         if _LIT not in dept_results:
             dept = DEPARTMENTS.get(_LIT, {})
             dept_name = (dept.get("zh_name") if is_zh else dept.get("en_name")) or dept.get("zh_name") or dept.get("en_name") or _LIT
@@ -1243,6 +1244,7 @@ def run_all_debates(progress_callback=None):
             dept_results[_LIT] = result
             st.session_state.dept_results = dept_results
             notify_stage_complete(dept_name)
+            _lit_just_ran = True
 
         # 三重保证：提取JSON → 补考生成 → (搜索阶段 fallback generate_domain_config)
         _lit_consensus = dept_results.get(_LIT, {}).get("consensus", "")
@@ -1251,6 +1253,16 @@ def run_all_debates(progress_callback=None):
             print("[v0.11] No valid JSON strategy in literature consensus, regenerating via dedicated LLM call...")
             _strategy = _regenerate_strategy_json(_lit_consensus, script, api_url, api_key, model)
         st.session_state._search_strategy = _strategy
+
+        # v0.11.4: auto-chunk — the strategy debate above takes minutes; yield
+        # here so the actual search runs in its own script execution. A single
+        # run that blocks for an hour gets its websocket/instance killed on
+        # Streamlit Cloud, wiping the whole session (user lands back on the
+        # start page). Each run now does one atomic stage only; the caller
+        # immediately reruns and resumes at the next stage.
+        if _lit_just_ran:
+            st.session_state._debate_phase = "search"
+            return
 
         # Phase B: execute real literature search
         _search_msg = "🔍 " + ("正在检索真实文献（OpenAlex / Semantic Scholar / arXiv，约1-2分钟）..." if is_zh else "Searching real papers (OpenAlex/S2/arXiv, ~1-2 min)...")
@@ -1270,18 +1282,23 @@ def run_all_debates(progress_callback=None):
 
     if arch_mode == "expert_pool":
         # Expert pool mode: scene analysis first, then streamlined debate
-        expert_result = run_expert_pool_debate(
-            user_script=script,
-            positive_prompt=positive,
-            character_refs=chars,
-            api_url=api_url, api_key=api_key, model=model,
-            rounds=rounds, lang=lang, extra_instructions=extra,
-            carry_forward=st.session_state.carry_forward,
-            progress_callback=None,  # 简化进度展示
-            stats=stats,
-        )
-        dept_results = expert_result["dept_results"]
-        st.session_state.expert_pool_result = expert_result
+        # v0.11.4: skip if already done — auto-chunk reruns this function once
+        # per stage; without the guard the whole expert pool debate would
+        # re-run on the second pass and loop forever.
+        if not dept_results:
+            expert_result = run_expert_pool_debate(
+                user_script=script,
+                positive_prompt=positive,
+                character_refs=chars,
+                api_url=api_url, api_key=api_key, model=model,
+                rounds=rounds, lang=lang, extra_instructions=extra,
+                carry_forward=st.session_state.carry_forward,
+                progress_callback=None,  # 简化进度展示
+                stats=stats,
+            )
+            dept_results = expert_result["dept_results"]
+            st.session_state.dept_results = dept_results
+            st.session_state.expert_pool_result = expert_result
     else:
         # P1-P4: Department debates (Pipeline of Consensus)
         for dept_key in _ORDER_RUN:
@@ -1326,28 +1343,42 @@ def run_all_debates(progress_callback=None):
             dept_results[dept_key] = result
             st.session_state.dept_results = dept_results  # v0.10: Persist immediately for rerun resume
             notify_stage_complete(dept_name)
+            # v0.11.4: auto-chunk — one department per script run, then yield.
+            # The full loop takes 1-2h in a single blocking execution; long
+            # before that, Streamlit Cloud kills the websocket/instance and the
+            # whole session state is lost (user lands back on the start page,
+            # "需求调研"). Returning here keeps _debate_running=True;
+            # render_debate_tab immediately st.rerun()s and this loop resumes
+            # at the next unfinished department. Each run now lasts only ~one
+            # department (minutes), the connection stays healthy, progress is
+            # visible after every department, and a crash loses at most one.
+            return
     
-    # P2: Spatial planning cross-review
-    spatial_consensus = dept_results.get("spatial", {}).get("consensus", "")
-    if spatial_consensus:
-        with st.spinner("🔍 " + ("空间板块交叉审核..." if is_zh else "Spatial review...")):
-            spatial_review = run_spatial_review(
-                spatial_consensus=spatial_consensus,
-                reviewer_departments=["storyboard", "dp", "editing"],
-                api_url=api_url, api_key=api_key, model=model, lang=lang,
-                stats=stats,
-            )
-            # Replace original with revised spatial consensus
-            dept_results["spatial"]["consensus"] = spatial_review["revised_consensus"]
-            st.session_state.spatial_review_result = spatial_review
-            notify_stage_complete("空间交叉审核" if is_zh else "Spatial Review")
-    
-    st.session_state.dept_results = dept_results
-    st.session_state._debate_phase = "cross"
-    
-    # P5: Cross-debate (re-run if not yet reached summary phase; cross-debate is fast and safe to re-run)
-    cross_results = []
+    # P2/P5: cross phase — only when not already past it (summary/done).
+    # v0.11.4: spatial review moved inside the same guard — previously it
+    # re-ran unconditionally on every resume-to-summary, wasting an LLM call
+    # (now a guaranteed path since auto-chunk routes every run through here).
     if _resume_phase not in ("summary", "done"):
+        # P2: Spatial planning cross-review
+        spatial_consensus = dept_results.get("spatial", {}).get("consensus", "")
+        if spatial_consensus:
+            with st.spinner("🔍 " + ("空间板块交叉审核..." if is_zh else "Spatial review...")):
+                spatial_review = run_spatial_review(
+                    spatial_consensus=spatial_consensus,
+                    reviewer_departments=["storyboard", "dp", "editing"],
+                    api_url=api_url, api_key=api_key, model=model, lang=lang,
+                    stats=stats,
+                )
+                # Replace original with revised spatial consensus
+                dept_results["spatial"]["consensus"] = spatial_review["revised_consensus"]
+                st.session_state.spatial_review_result = spatial_review
+                notify_stage_complete("空间交叉审核" if is_zh else "Spatial Review")
+
+        st.session_state.dept_results = dept_results
+        st.session_state._debate_phase = "cross"
+
+        # P5: Cross-debate
+        cross_results = []
         for cd in P5_CROSS_DEBATES:
             a_key, b_key = cd.get("side_a"), cd.get("side_b")
             if not a_key or not b_key:
@@ -1362,12 +1393,19 @@ def run_all_debates(progress_callback=None):
                 )
                 cross_results.append(cr)
         st.session_state.cross_results = cross_results
-    
-    st.session_state._debate_phase = "summary"
-    
+        st.session_state._debate_phase = "summary"
+        # v0.11.4: auto-chunk — summary generation is itself a long LLM chain;
+        # give it its own script execution instead of tailgating the debates.
+        return
+
     # P6: Summary AI — branch on academic vs animation mode
     _cfg = (st.session_state.get("workgroup_config") or get_current_config() or {})
     _is_academic = _detect_pipeline_mode(_cfg) == "academic"
+
+    # v0.11.4: read cross_results from session state — the auto-chunk above
+    # returns right after saving them, so the summary always runs in a later
+    # script execution where the local variable would otherwise be empty.
+    cross_results = st.session_state.get("cross_results", [])
 
     # v0.10: Skip summary if already completed (resume from rerun)
     if st.session_state.get("final_output") and _resume_phase == "summary":
@@ -1926,8 +1964,8 @@ def render_debate_tab():
     # _debate_running 保持 True，下次运行自动断点续跑。之前用 finally 无条件清除，
     # 导致中断后 resume 机制失效、辩论永久卡死（用户只能退回需求页重来）。
     if st.session_state.get("_debate_running"):
-        st.info("⏳ " + ("辩论执行中，全程约1-2小时。请勿刷新或关闭页面；若意外中断，已完成的部门进度会自动保存，重新进入后可断点续跑。" if is_zh
-                         else "Debate running (~1-2h). Do not refresh/close; if interrupted, completed department progress is saved and will auto-resume."))
+        st.info("⏳ " + ("辩论执行中，全程约1-2小时。部门将逐个自动完成，页面每完成一个部门会自动刷新一次进度，请勿手动刷新或关闭页面；若意外中断，已完成的部门进度会自动保存，重新进入后可断点续跑。" if is_zh
+                         else "Debate running (~1-2h). Departments complete one by one and the page auto-refreshes after each — do not refresh/close manually; if interrupted, completed progress is saved and will auto-resume."))
         try:
             run_all_debates()
         except Exception as e:
@@ -1936,7 +1974,17 @@ def render_debate_tab():
             st.session_state._tab_index = 1
             st.rerun()
         else:
-            st.session_state._debate_running = False
+            # v0.11.4: auto-chunk — run_all_debates now returns after each
+            # atomic stage (search strategy / one department / cross / summary)
+            # instead of only at the very end. If the flow isn't complete yet,
+            # keep _debate_running=True and rerun immediately: the next script
+            # run re-enters run_all_debates and resumes at the next stage.
+            # Only clear the flag when the whole flow actually completed.
+            # (The search_review pause clears the flag inside run_all_debates
+            # itself — debate_completed stays False there, and the rerun below
+            # then lands on the confirmation panel as before.)
+            if st.session_state.get("debate_completed"):
+                st.session_state._debate_running = False
             st.session_state._tab_index = 1  # ensure results tab after completion
             st.rerun()
 
@@ -4699,7 +4747,7 @@ def main():
     
     st.title(t("title"))
     st.caption(t("subtitle"))
-    st.caption("build: 95d8cdc+cfgfix1")  # 版本标记，确认部署用
+    st.caption("build: 408ecda+chunk1")  # 版本标记，确认部署用
     print(f"[diag] app start: running={st.session_state.get('_debate_running')} "
           f"phase={st.session_state.get('_debate_phase')} tab={st.session_state.get('_tab_index')} "
           f"widget={st.session_state.get('_main_tab_radio')} completed={st.session_state.get('debate_completed')} "
