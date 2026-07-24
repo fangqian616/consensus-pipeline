@@ -3908,8 +3908,50 @@ Based on the above debate content, write a structured academic review report. Re
             ]
             for _pat in _ref_sec_patterns:
                 report = _pat.sub('', report).rstrip()
-            _ref_header = "\n\n## 参考文献\n\n" if is_zh else "\n\n## References\n\n"
-            report = report + _ref_header + paper_references + "\n"
+            # v0.12.2: Split references into cited / uncited sections.
+            # The code-generated list always contains every retrieved paper, but the
+            # LLM rarely cites all of them in text; an honest split beats implying
+            # all were cited. Numbering is kept as-is so in-text [N] markers stay
+            # valid. Code blocks are excluded when scanning (array indices like
+            # f_stat[0] are not citations).
+            _body_wo_code = _re3.sub(r'```.*?```', '', report, flags=_re3.DOTALL)
+            _body_wo_code = _re3.sub(r'`[^`\n]*`', '', _body_wo_code)
+            _cited_nums = set()
+            for _cm in _re3.finditer(r'\[([0-9][0-9,\s\-\u2013]*)\]', _body_wo_code):
+                for _part in _cm.group(1).split(','):
+                    _part = _part.strip()
+                    if not _part:
+                        continue
+                    _rm = _re3.match(r'^(\d+)\s*[-\u2013]\s*(\d+)$', _part)
+                    if _rm:
+                        _lo, _hi = int(_rm.group(1)), int(_rm.group(2))
+                        if _lo >= 1 and _hi - _lo <= 50:
+                            _cited_nums.update(range(_lo, _hi + 1))
+                    elif _part.isdigit() and int(_part) >= 1:
+                        _cited_nums.add(int(_part))
+            _ref_lines_all = [l for l in paper_references.split('\n') if l.strip()]
+            _cited_lines, _uncited_lines = [], []
+            for _line in _ref_lines_all:
+                _lm = _re3.match(r'\s*\[(\d+)\]', _line)
+                if _lm and int(_lm.group(1)) in _cited_nums:
+                    _cited_lines.append(_line)
+                else:
+                    _uncited_lines.append(_line)
+            if not _cited_lines:
+                # LLM cited nothing: keep the flat list under the standard header
+                _ref_header = "\n\n## 参考文献\n\n" if is_zh else "\n\n## References\n\n"
+                report = report + _ref_header + paper_references + "\n"
+            else:
+                if is_zh:
+                    _ref_header = "\n\n## 参考文献\n\n"
+                    _uncited_header = "\n### 其他检索到的相关文献（正文未引用）\n\n"
+                else:
+                    _ref_header = "\n\n## References\n\n"
+                    _uncited_header = "\n### Additional retrieved references (not cited in text)\n\n"
+                report = report + _ref_header + "\n".join(_cited_lines) + "\n"
+                if _uncited_lines:
+                    report = report + _uncited_header + "\n".join(_uncited_lines) + "\n"
+                print(f"Reference split: {len(_cited_lines)} cited in text, {len(_uncited_lines)} retrieved but uncited")
 
     if not report:
         # Fallback: just concatenate consensus
