@@ -1826,6 +1826,7 @@ def run_all_debates(progress_callback=None):
     # v0.10: Skip summary if already completed (resume from rerun)
     if st.session_state.get("final_output") and _resume_phase in ("summary", "verify", "done"):
         final = st.session_state.final_output
+        _summary_fresh = False
     elif _is_academic:
         final = run_academic_summary(
             user_topic=script or st.session_state.get("config_user_input", ""),
@@ -1836,7 +1837,7 @@ def run_all_debates(progress_callback=None):
             confirmed_papers=st.session_state.get("_confirmed_papers"),
             confirmed_preprints=st.session_state.get("_confirmed_preprints"),
         )
-        notify_stage_complete("学术综述报告生成" if is_zh else "Academic Report")
+        _summary_fresh = True
     else:
         final = run_summary(
             all_consensus={k: v["consensus"] for k, v in dept_results.items()},
@@ -1846,7 +1847,54 @@ def run_all_debates(progress_callback=None):
             api_url=api_url, api_key=api_key, model=model, lang=lang,
             stats=stats,
         )
-        notify_stage_complete("分镜表+视频提示词生成" if is_zh else "Storyboard+Video Prompt")
+        _summary_fresh = True
+
+    # v0.12.1: LLM 调用失败时 run_*_summary 带回的是 call_api 的错误串
+    # ("ERROR: ...")，绝不能当作最终报告入库——否则用户看到的「最终报告」
+    # 就是那串错误文本（07-24 实测踩坑：ConnectionResetError 直接成了报告）。
+    # 先原位重试一次（连接重置多为瞬断）；仍失败则抛异常：调用点捕获后显示
+    # 错误横幅并清除运行标记，断点停在 phase=summary、final_output 不写入，
+    # 用户点「继续辩论（断点续跑）」即只重跑报告生成这一步。
+    def _summary_report_bad(_f):
+        _t = (((_f or {}).get("final_report") or "") or ((_f or {}).get("consensus_report") or "")).strip()
+        return (not _t) or _t.startswith("ERROR:")
+    if _summary_fresh and _summary_report_bad(final):
+        print(f"[summary] report generation failed, retry once: {str((final or {}).get('final_report'))[:200]}")
+        time.sleep(8)
+        if _is_academic:
+            final = run_academic_summary(
+                user_topic=script or st.session_state.get("config_user_input", ""),
+                all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+                cross_results=cross_results,
+                api_url=api_url, api_key=api_key, model=model, lang=lang,
+                stats=stats,
+                confirmed_papers=st.session_state.get("_confirmed_papers"),
+                confirmed_preprints=st.session_state.get("_confirmed_preprints"),
+            )
+        else:
+            final = run_summary(
+                all_consensus={k: v["consensus"] for k, v in dept_results.items()},
+                cross_results=cross_results,
+                user_script=script, positive_prompt=positive,
+                negative_prompt=negative, character_refs=chars,
+                api_url=api_url, api_key=api_key, model=model, lang=lang,
+                stats=stats,
+            )
+    if _summary_fresh and _summary_report_bad(final):
+        _why = ((((final or {}).get("final_report") or "") or ((final or {}).get("consensus_report") or "")).strip() or "empty")[:200]
+        raise RuntimeError(
+            ("报告生成失败：LLM 调用连续未成功（网络瞬断或 API 服务异常）。"
+             "全部辩论进度已保存在断点，不会丢失。请稍后点击「继续辩论（断点续跑）」，"
+             "只会重跑报告生成这一步。原因：" if is_zh else
+             "Report generation failed: LLM call unsuccessful after one retry "
+             "(network reset or API-side issue). All debate progress is safe in "
+             "the checkpoint - resume to re-run only the report stage. Cause: ")
+            + _why)
+    if _summary_fresh:
+        if _is_academic:
+            notify_stage_complete("学术综述报告生成" if is_zh else "Academic Report")
+        else:
+            notify_stage_complete("分镜表+视频提示词生成" if is_zh else "Storyboard+Video Prompt")
     st.session_state.final_output = final
     st.session_state.current_end_time = time.time()
 
@@ -2071,6 +2119,12 @@ def step_run_summary():
             lang=st.session_state.lang,
             stats=st.session_state.current_stats,
         )
+    _rt = ((final or {}).get("final_report") or (final or {}).get("consensus_report") or "").strip()
+    if not _rt or _rt.startswith("ERROR:"):
+        # v0.12.1: never persist an LLM error string as the report
+        st.error("❌ " + ("报告生成失败（LLM 调用未成功，可能是网络瞬断）。请重试本步骤。" if st.session_state.lang == "zh"
+                          else "Report generation failed (LLM call unsuccessful, possibly transient network). Please retry this step."))
+        return
     st.session_state.final_output = final
     st.session_state.debate_completed = True
     st.session_state.current_end_time = time.time()
@@ -2865,6 +2919,30 @@ def _render_academic_output(final, is_zh):
     
     # Get the final report text — prioritize the academic summary output
     report_text = final.get("final_report", "") or final.get("consensus_report", "") or ""
+
+    # v0.12.1: 报告槽位里存的是 LLM 错误串（旧版无守卫时入库的）——提供一键
+    # 重新生成：清空报告/校验状态并把阶段倒回 summary；断点里的部门与交叉
+    # 成果全部保留，run_all_debates 只会重跑报告生成 + 事实校验。
+    if report_text.strip().startswith("ERROR:"):
+        st.error("❌ " + ("上次生成报告时 LLM 调用失败，错误信息被误存成了报告内容。"
+                          "部门辩论与交叉辩论成果都还在断点里。点击下方按钮只重新生成报告（含事实校验），不会重跑辩论。"
+                          if is_zh else
+                          "The last report generation failed at the LLM call and the error text was stored as the report. "
+                          "All debate results are still in the checkpoint - regenerate only the report (+ fact-check) below."))
+        if st.button("♻️ " + ("重新生成报告（保留全部辩论成果）" if is_zh else "Regenerate report (keep all debate results)"),
+                     type="primary", use_container_width=True, key="regen_report_btn"):
+            st.session_state.final_output = {}
+            st.session_state.fact_check_report = None
+            st.session_state.fact_check_type = None
+            st.session_state.revision_result = None
+            st.session_state.debate_completed = False
+            st.session_state._debate_phase = "summary"
+            st.session_state._debate_running = True
+            save_checkpoint()
+            st.session_state._tab_index = 1
+            st.rerun()
+        return
+
     if not report_text and dept_results:
         # Fallback: assemble from department consensus
         parts = []
