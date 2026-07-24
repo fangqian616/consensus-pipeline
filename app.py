@@ -117,7 +117,7 @@ def browser_notify(title: str, message: str):
     }})();
     </script>
     """
-    st_components.html(notify_js, height=0)
+    st.html(notify_js)
     
     # Notification sound
     audio_html = f"""
@@ -125,7 +125,7 @@ def browser_notify(title: str, message: str):
     <source src="{_NOTIFICATION_AUDIO_B64}" type="audio/wav">
     </audio>
     """
-    st_components.html(audio_html, height=0)
+    st.html(audio_html)
 
 
 # ============ Disk Persistence ============
@@ -4991,7 +4991,7 @@ def main():
     # ---- Keepalive: prevent Streamlit Cloud idle sleep (15min timeout) ----
     # Sends a HEAD request every 10 minutes to keep container awake.
     # Invisible to user, does not trigger reruns or state changes.
-    st_components.html(
+    st.html(
         """
         <script>
         (function(){
@@ -5001,8 +5001,7 @@ def main():
             }, interval);
         })();
         </script>
-        """,
-        height=0,
+        """
     )
 
     # v0.11.5: rebuild run state from a disk checkpoint when the URL carries a
@@ -5020,10 +5019,11 @@ def main():
             st.markdown("<h2 style=\"text-align: center;\">🌐 Choose Language / 选择语言</h2>", unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
             _welcome_lang = st.radio(
-                "",
+                "语言 / Language",
                 options=["zh", "en"],
                 format_func=lambda x: "🇨🇳 中文" if x == "zh" else "🇬🇧 English",
                 horizontal=True,
+                label_visibility="collapsed",
                 key="_welcome_lang_radio"
             )
             if st.button("▶️ 进入 / Enter", type="primary", use_container_width=True, key="_welcome_enter"):
@@ -5052,7 +5052,7 @@ def main():
 
     st.title(t("title"))
     st.caption(t("subtitle"))
-    st.caption("build: be80c95+ckpt3")  # 版本标记，确认部署用
+    st.caption("build: be80c95+ckpt4")  # 版本标记，确认部署用
     if st.session_state.get("_ck_missing"):
         st.warning("⚠️ " + ("链接里带有断点 ID，但云端磁盘上未找到对应断点文件（实例可能已被平台重置）。"
                             "如果你之前下载过断点文件，可在下方上传恢复；否则请忽略此提示重新开始。"
@@ -5132,7 +5132,7 @@ def main():
         st.session_state._tab_index = st.session_state._main_tab_radio
 
     _active_tab = st.radio(
-        "",
+        "主选项卡 / Main tabs",
         options=range(len(_tab_labels)),
         format_func=lambda i: _tab_labels[i],
         horizontal=True,
