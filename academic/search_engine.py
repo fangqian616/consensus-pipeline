@@ -67,6 +67,63 @@ def classify_journal(journal_name: str, use_easyscholar: bool = True) -> Dict[st
     return {"level": "C", "if_2026": None, "jcr": "Unknown", "note": "Not found in registry", "source": "fallback"}
 
 
+def openalex_batch_abstracts(dois: List[str], mailto: str = "xiaxia@coze.email") -> Dict[str, str]:
+    """Batch-fetch abstracts from OpenAlex by DOI (one request per 25 DOIs).
+
+    Returns {doi: abstract_text}. Best-effort: network/rate-limit failures
+    yield whatever could be fetched (possibly empty). DOIs may be bare
+    ("10.x/yy") or full URLs; returned keys are bare DOIs as sent in `dois`.
+    """
+    import urllib.request
+    import urllib.parse
+    import time as _time
+
+    out: Dict[str, str] = {}
+    clean: List[str] = []
+    for d in dois:
+        if not d or not isinstance(d, str):
+            continue
+        d = d.strip().replace("https://doi.org/", "").replace("http://doi.org/", "")
+        if d:
+            clean.append(d)
+
+    for i in range(0, len(clean), 25):
+        chunk = clean[i:i + 25]
+        filt = "|".join(chunk)
+        url = (
+            "https://api.openalex.org/works?filter=doi:"
+            + urllib.parse.quote(filt, safe="|/")
+            + f"&per_page=25&mailto={mailto}&select=doi,abstract_inverted_index"
+        )
+        for attempt in range(2):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
+                with urllib.request.urlopen(req, timeout=20) as resp:
+                    data = json.loads(resp.read())
+                for w in data.get("results", []):
+                    doi = (w.get("doi") or "").replace("https://doi.org/", "")
+                    aii = w.get("abstract_inverted_index")
+                    if doi and aii and isinstance(aii, dict):
+                        wp = [(pos, word) for word, positions in aii.items() for pos in positions]
+                        wp.sort()
+                        text = " ".join(word for _, word in wp)
+                        if text:
+                            out[doi] = text
+                break
+            except Exception as e:
+                if attempt == 0:
+                    _time.sleep(2)
+                    continue
+                print(f"  [enrich] OpenAlex batch failed: {e}")
+        if i + 25 < len(clean):
+            _time.sleep(1)  # polite pacing between batches
+
+    # Also index lowercased keys for case-insensitive lookup
+    for k, v in list(out.items()):
+        out.setdefault(k.lower(), v)
+    return out
+
+
 @dataclass
 class PaperCandidate:
     """Paper candidate"""
@@ -609,6 +666,25 @@ class AcademicSearchEngine:
         except Exception as e:
             print(f"Crossref search error: {e}")
             return []
+
+    def enrich_abstracts(self, papers: List[PaperCandidate]) -> int:
+        """Backfill missing abstracts via OpenAlex batch DOI lookup.
+
+        Crossref rarely provides abstracts, which starves downstream debate
+        grounding and citation verification. One batched request per 25 DOIs;
+        best-effort — failures leave abstracts empty. Returns count filled.
+        """
+        need = [p for p in papers if (not p.abstract or not p.abstract.strip()) and p.doi]
+        if not need:
+            return 0
+        got = openalex_batch_abstracts([p.doi for p in need])
+        filled = 0
+        for p in need:
+            text = got.get(p.doi) or got.get(p.doi.lower())
+            if text:
+                p.abstract = safe_truncate(text, 500)
+                filled += 1
+        return filled
 
     def _deduplicate(self, papers: List[PaperCandidate]) -> List[PaperCandidate]:
         """Deduplication: exact DOI match + title similarity dedup"""

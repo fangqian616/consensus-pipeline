@@ -788,7 +788,12 @@ def init_state():
                     cfg = load_profile(last_used)
                 else:
                     cfg = load_preset(last_used)
-                apply_config(cfg)
+                # v0.11.3: do NOT apply_config() here. Module globals are shared
+                # across ALL Streamlit sessions on this process — writing them
+                # from an auto-load clobbers the config of any other live
+                # session mid-run (observed: dept loop ran animation depts in an
+                # academic session). Session state only; run_all_debates
+                # re-asserts globals from workgroup_config right before use.
                 st.session_state.workgroup_config = cfg
                 st.session_state.workgroup_name = last_used
             except Exception as e:
@@ -1178,20 +1183,33 @@ def run_all_debates(progress_callback=None):
         st.session_state._debate_phase = "departments"
     st.session_state._debate_fingerprint = _fp
 
+    # v0.11.3: Re-assert this session's config into process-wide globals.
+    # Streamlit shares module globals (DEPARTMENTS/DEPT_ORDER) across sessions;
+    # another session's config load can swap them mid-run, making this loop run
+    # the wrong departments (observed: animation depts inside an academic run).
+    _cfg_run = st.session_state.get("workgroup_config") or {}
+    if _cfg_run.get("departments"):
+        apply_config(_cfg_run)
+    else:
+        _cfg_run = get_current_config() or {}
+    _ORDER_RUN = list(_cfg_run.get("dept_order") or DEPT_ORDER)
+    _DEPTS_RUN = _cfg_run.get("departments") or DEPARTMENTS
+
     # Read from session_state (survives Streamlit rerun)
     dept_results = st.session_state.get("dept_results", {})
     _resume_phase = st.session_state.get("_debate_phase", "departments")
     print(f"[diag] run_all_debates: resume_phase={_resume_phase} fp_match={_saved_fp == _fp} "
-          f"depts_done={list(dept_results.keys())} step_mode={st.session_state.get('step_mode')}")
-    total_steps = len(DEPT_ORDER) * rounds * 3
+          f"depts_done={list(dept_results.keys())} step_mode={st.session_state.get('step_mode')} "
+          f"order={_ORDER_RUN}")
+    total_steps = len(_ORDER_RUN) * rounds * 3
     if progress_callback:
         progress_callback(0.0, t("debate_progress"))
     else:
         progress = st.progress(0, text=t("debate_progress"))
     # Calculate step offset from already-completed departments
     step = sum(
-        len(DEPARTMENTS.get(d, {}).get("debaters", [])) * rounds
-        for d in DEPT_ORDER if d in dept_results
+        len(_DEPTS_RUN.get(d, {}).get("debaters", [])) * rounds
+        for d in _ORDER_RUN if d in dept_results
     )
     
     # === v0.11: Academic flow — literature dept first, then real search, then pause for user review ===
@@ -1266,17 +1284,21 @@ def run_all_debates(progress_callback=None):
         st.session_state.expert_pool_result = expert_result
     else:
         # P1-P4: Department debates (Pipeline of Consensus)
-        for dept_key in DEPT_ORDER:
+        for dept_key in _ORDER_RUN:
             # v0.10: Skip already-completed departments (resume after rerun)
             if dept_key in dept_results:
                 continue
-            dept = DEPARTMENTS.get(dept_key, {})
+            # v0.11.3: re-assert globals before each department — a long debate
+            # leaves a wide window for another session to swap shared globals
+            if _cfg_run.get("departments"):
+                apply_config(_cfg_run)
+            dept = _DEPTS_RUN.get(dept_key, {})
             dept_name = (dept.get("zh_name") if is_zh else dept.get("en_name")) or dept.get("zh_name") or dept.get("en_name") or "?"
             dept_input = build_dept_input(dept_key)
-        
+
             def on_progress(dk, rn, total_r, debater):
                 nonlocal step
-                d = DEPARTMENTS.get(dk, {})
+                d = _DEPTS_RUN.get(dk, {})
                 dn = (d.get("zh_name") if is_zh else d.get("en_name")) or d.get("zh_name") or d.get("en_name") or "?"
                 if debater == "consensus":
                     # Consensus generation phase
@@ -4677,7 +4699,7 @@ def main():
     
     st.title(t("title"))
     st.caption(t("subtitle"))
-    st.caption("build: f13f23b+crossref1")  # 版本标记，确认部署用
+    st.caption("build: 95d8cdc+cfgfix1")  # 版本标记，确认部署用
     print(f"[diag] app start: running={st.session_state.get('_debate_running')} "
           f"phase={st.session_state.get('_debate_phase')} tab={st.session_state.get('_tab_index')} "
           f"widget={st.session_state.get('_main_tab_radio')} completed={st.session_state.get('debate_completed')} "
