@@ -3496,6 +3496,16 @@ def run_academic_search(
 
         papers_found = all_papers_raw
         preprints = all_preprints_raw
+
+        # Backfill missing abstracts (Crossref rarely provides them) so that
+        # debate grounding and citation verification have text to work with.
+        try:
+            _enriched = se.enrich_abstracts(papers_found + preprints)
+            if _enriched:
+                print(f"  [enrich] backfilled {_enriched} abstracts via OpenAlex batch")
+        except Exception as _enr_err:
+            print(f"  [enrich] skipped: {_enr_err}")
+
         print(f"Academic search complete: {total_fetched} fetched, "
               f"{len(papers_found)} unique papers, {len(preprints)} preprints")
         if per_source_total:

@@ -128,6 +128,7 @@ class NLIResult:
     label: str = "neutral"        # entail / contradict / neutral
     confidence: float = 0.0
     explanation: str = ""
+    evidence: str = "abstract"    # abstract / title (title = weaker evidence)
 
 
 @dataclass
@@ -359,6 +360,23 @@ class ReferenceResolver:
             Number of references successfully resolved with abstracts.
         """
         resolved = 0
+
+        # Step 1: batch fill via OpenAlex (a single request covers up to 25 DOIs;
+        # far cheaper than per-ref lookups and has the best abstract coverage)
+        need = [r for r in references if not r.abstract and r.doi]
+        if need:
+            try:
+                from academic.search_engine import openalex_batch_abstracts
+                got = openalex_batch_abstracts([r.doi for r in need])
+                for r in need:
+                    text = got.get(r.doi) or got.get(r.doi.lower())
+                    if text:
+                        r.abstract = text
+            except Exception:
+                pass  # best-effort; per-ref fallbacks below still apply
+
+        # Step 2: per-ref fallback (Crossref by DOI, then title search, capped)
+        _title_attempts = 0
         for ref in references:
             if ref.abstract:
                 resolved += 1
@@ -372,8 +390,9 @@ class ReferenceResolver:
                     resolved += 1
                     continue
 
-            # Fallback: academic search by title
-            if ref.title and self.search_fn:
+            # Fallback: academic search by title (bounded — slow per call)
+            if ref.title and self.search_fn and _title_attempts < 5:
+                _title_attempts += 1
                 abstract = self._search_by_title(ref.title)
                 if abstract:
                     ref.abstract = abstract
@@ -579,6 +598,34 @@ Output JSON:
         self.llm_call_fn = llm_call_fn
         self.language = language
 
+    TITLE_PROMPT_ZH = """你是一个学术事实校验助手。该文献无法获取摘要，只有标题与出处信息。请判断仅凭标题是否能直接支持给定论断。
+
+论断：{claim}
+
+文献标题：{title}
+期刊：{journal}（{year}）
+
+判断标准：
+- entail: 论断正是该文献标题直接表明的主题/结论（如论断是"存在一项关于X的元分析"而标题即"X: A Meta-Analysis"）
+- contradict: 标题与论断明显矛盾
+- neutral: 仅凭标题无法判断（多数情况应选此项，宁缺勿滥）
+
+输出JSON：{{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "explanation": "一句话说明（注明仅标题证据）"}}"""
+
+    TITLE_PROMPT_EN = """You are an academic fact-checking assistant. No abstract is available for this paper — only its title and venue. Judge whether the title alone directly supports the claim.
+
+Claim: {claim}
+
+Paper title: {title}
+Journal: {journal} ({year})
+
+Criteria:
+- entail: the claim restates exactly what the title declares (e.g. claim "a meta-analysis on X exists" with title "X: A Meta-Analysis")
+- contradict: the title clearly contradicts the claim
+- neutral: cannot be determined from the title alone (choose this in most cases; when in doubt, be conservative)
+
+Output JSON: {{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "explanation": "one-sentence explanation (note title-only evidence)"}}"""
+
     def verify_claim(
         self,
         claim: AtomicClaim,
@@ -589,15 +636,62 @@ Output JSON:
 
         for ref_idx in claim.cited_indices:
             ref = references.get(ref_idx)
-            if not ref or not ref.abstract:
+            if not ref:
                 continue
 
-            nli = self._check_nli(claim.text, ref)
+            if ref.abstract:
+                nli = self._check_nli(claim.text, ref)
+            else:
+                # No abstract retrievable — fall back to conservative title-level
+                # check instead of skipping the reference entirely.
+                nli = self._check_nli_title(claim.text, ref)
             nli.ref_index = ref_idx
             result.nli_results.append(nli)
 
         # Aggregate NLI results
         result.status, result.confidence = self._aggregate(result.nli_results)
+        return result
+
+    def _check_nli_title(self, claim_text: str, ref: Reference) -> NLIResult:
+        """Conservative title-only NLI for references without abstracts."""
+        result = NLIResult(
+            claim=claim_text,
+            ref_index=ref.index,
+            ref_title=ref.title,
+            ref_doi=ref.doi,
+            evidence="title",
+        )
+
+        if not self.llm_call_fn:
+            result.label = "neutral"
+            result.explanation = "No LLM available for NLI verification"
+            return result
+
+        prompt_template = self.TITLE_PROMPT_ZH if self.language == "zh" else self.TITLE_PROMPT_EN
+        user_msg = prompt_template.format(
+            claim=claim_text,
+            title=ref.title,
+            journal=ref.raw_text.split(".")[-1].strip() if ref.raw_text else "",
+            year=ref.year or "?",
+        )
+
+        try:
+            response = self.llm_call_fn(
+                "You are an academic NLI system. Output only valid JSON.",
+                user_msg,
+            )
+            parsed = AtomicFactDecomposer._parse_json_response(response)
+
+            label = parsed.get("label", "neutral").lower().strip()
+            if label not in ("entail", "contradict", "neutral"):
+                label = "neutral"
+
+            result.label = label
+            result.confidence = float(parsed.get("confidence", 0.5))
+            result.explanation = parsed.get("explanation", "")
+        except Exception as e:
+            result.explanation = f"Title-level check failed: {e}"
+
         return result
 
     def _check_nli(self, claim_text: str, ref: Reference) -> NLIResult:
@@ -642,22 +736,29 @@ Output JSON:
 
     @staticmethod
     def _aggregate(nli_results: List[NLIResult]) -> Tuple[str, float]:
-        """Aggregate NLI results into a final status and confidence."""
+        """Aggregate NLI results into a final status and confidence.
+
+        Title-only entailment is weaker evidence than abstract entailment:
+        it can lift a claim to partially_verified but never to fully verified.
+        """
         if not nli_results:
             return "unverified", 0.0
 
-        entails = sum(1 for r in nli_results if r.label == "entail")
+        entails_abs = sum(1 for r in nli_results if r.label == "entail" and r.evidence != "title")
+        entails_title = sum(1 for r in nli_results if r.label == "entail" and r.evidence == "title")
         contradicts = sum(1 for r in nli_results if r.label == "contradict")
         total = len(nli_results)
 
         avg_conf = sum(r.confidence for r in nli_results) / total
 
-        if entails > 0 and contradicts == 0:
-            return "verified", min(0.95, avg_conf + 0.1 * entails)
-        elif entails > 0 and contradicts > 0:
+        if entails_abs > 0 and contradicts == 0:
+            return "verified", min(0.95, avg_conf + 0.1 * (entails_abs + entails_title))
+        elif entails_abs > 0 and contradicts > 0:
             return "partially_verified", 0.5
-        elif contradicts > 0 and entails == 0:
+        elif contradicts > 0 and entails_abs == 0:
             return "contradicted", max(0.1, avg_conf - 0.1 * contradicts)
+        elif entails_title > 0:
+            return "partially_verified", min(0.5, avg_conf)
         else:
             return "unverified", 0.0  # Neutral = no evidence found
 
@@ -746,7 +847,9 @@ class CitationVerifier:
                 )
                 references.append(ref)
             report.total_references = len(references)
-            report.resolved_references = sum(1 for r in references if r.abstract)
+            # Backfill missing abstracts (Crossref-sourced papers usually lack
+            # them) instead of silently verifying against nothing.
+            report.resolved_references = self.resolver.resolve(references)
         else:
             # Parse references from bibliography
             references = self.parser.extract_references(report_text)
