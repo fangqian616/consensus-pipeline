@@ -2409,6 +2409,14 @@ def render_search_review_panel():
     with btn_confirm:
         if st.button("✅ " + ("确认，开始部门辩论" if is_zh else "Confirm & start department debates"),
                      type="primary", use_container_width=True):
+            # v0.12.3: after a disk restore the API key is gone (never persisted);
+            # confirming with an empty key sent dept_rest straight into 401s and
+            # looked like a reset. Require the key up front instead.
+            if not st.session_state.get("api_key"):
+                st.warning("⚠️ " + ("检测到会话已从断点恢复，API Key 不会保存到断点。请先在左侧栏重新输入 API Key，再点确认。"
+                                    if is_zh else
+                                    "Session was restored from a checkpoint and your API key was not persisted. Re-enter it in the sidebar, then confirm."))
+                st.stop()
             selected = [p for i, p in enumerate(papers) if st.session_state.get(f"_sr_paper_{i}", True)]
             selected_pre = [p for j, p in enumerate(preprints[:15]) if st.session_state.get(f"_sr_pre_{j}", False)]
             st.session_state._confirmed_papers = selected
@@ -2416,6 +2424,7 @@ def render_search_review_panel():
             st.session_state._papers_summary = build_papers_summary(selected + selected_pre)
             st.session_state._debate_phase = "dept_rest"
             st.session_state._debate_running = True
+            st.session_state._tab_index = 1  # v0.12.3: belt-and-braces — stay on the debate tab
             save_checkpoint()  # v0.11.5: persist paper selection before the long chain
             print(f"[diag] confirm clicked: {len(selected)} papers + {len(selected_pre)} preprints, "
                   f"phase=dept_rest, running=True")
@@ -5397,6 +5406,16 @@ def main():
         if st.session_state._tab_index != 1:
             print(f"[diag] force tab1: running={_debating} phase={_phase_now} "
                   f"old_tab={st.session_state._tab_index} widget={st.session_state.get('_main_tab_radio')}")
+        st.session_state._tab_index = 1
+
+    # v0.12.3: restored-from-disk sessions always land on the debate tab.
+    # _tab_index/req_phase are not checkpointed, so a rebuilt session used to
+    # fall onto tab 0 showing the requirement wizard's first phase — the resume
+    # UI on tab 1 stayed hidden and users thought progress was lost.
+    if (st.session_state.get("_restored_from_disk")
+            and not st.session_state.get("debate_completed")
+            and st.session_state._tab_index != 1):
+        print(f"[diag] restored-from-disk: force tab1 (phase={st.session_state.get('_debate_phase')})")
         st.session_state._tab_index = 1
     
     _tab_labels = [

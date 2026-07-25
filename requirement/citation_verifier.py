@@ -427,15 +427,36 @@ class ReferenceResolver:
             return ""
 
     def _search_by_title(self, title: str) -> str:
-        """Search for paper by title and return first result's abstract."""
+        """Search by title; accept an abstract ONLY from a near-exact title match.
+
+        v0.12.3: the relevance-ranked top-1 is often a *different* paper (older /
+        low-cited targets lose ranking), and its abstract was grafted onto this
+        reference — misaligned abstracts corrupted every NLI verdict (22% incident).
+        Now: scan top-5, require normalized title similarity >= 0.80, else return ""
+        (reference falls back to title-level NLI, capped at partially — honest).
+        """
         if not self.search_fn:
             return ""
         try:
-            results = self.search_fn(title, max_results=1)
-            if results:
-                return results[0].get('abstract', '')
+            results = self.search_fn(title, max_results=5)
         except Exception:
-            pass
+            return ""
+        if not results:
+            return ""
+        import difflib
+        def _norm(s):
+            return re.sub(r'[^a-z0-9 ]', '', (s or '').lower()).strip()
+        want = _norm(title)
+        best_abs, best_ratio = "", 0.0
+        for r in results:
+            if not r.get('abstract'):
+                continue
+            ratio = difflib.SequenceMatcher(None, want, _norm(r.get('title', ''))).ratio()
+            if ratio > best_ratio:
+                best_ratio, best_abs = ratio, r['abstract']
+        if best_abs and best_ratio >= 0.80:
+            return best_abs
+        print(f"  [verify] title-search abstract REJECTED (best match {best_ratio:.2f}): {title[:60]}")
         return ""
 
 
