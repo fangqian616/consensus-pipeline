@@ -361,6 +361,27 @@ def _extract_abstract_from_text(text: str) -> str:
     return ""
 
 
+def _looks_like_citation_info(text: str, title: str) -> bool:
+    """True when a fetched 'abstract' is really just bibliographic citation
+    info (authors + title + journal + volume/pages), not paper content.
+
+    v0.12.6: OpenAlex carries such stubs as the abstract for old records
+    (e.g. JSTOR-era papers). Accepting one poisons NLI evidence AND blocks
+    the DOI-exact PDF fallbacks that could have found the real abstract.
+    """
+    t = re.sub(r"\s+", " ", (text or "")).strip()
+    if not t or len(t) > 500:
+        return False  # stubs are short; real abstracts run long
+    def _norm(x):
+        return re.sub(r"[^a-z0-9 ]", "", (x or "").lower())
+    nt, ntitle = _norm(t), _norm(title)
+    if not ntitle or ntitle[:50] not in nt:
+        return False  # a stub echoes the paper's own title verbatim
+    markers = ("pp ", "vol ", "no ", "isbn", "issn", "doi", "http",
+               "journal", "proceedings", "university press")
+    return any(m in nt for m in markers)
+
+
 def _fetch_pdf_abstract(pdf_url: str, max_bytes: int = 6_000_000) -> str:
     """Download an open-access PDF and extract its abstract (best-effort).
 
@@ -418,7 +439,9 @@ class ReferenceResolver:
                 got = openalex_batch_abstracts([r.doi for r in need])
                 for r in need:
                     text = got.get(r.doi) or got.get(r.doi.lower())
-                    if text:
+                    # v0.12.6: reject citation-info stubs so the DOI-exact
+                    # fallbacks below still get a chance at the real abstract.
+                    if text and not _looks_like_citation_info(text, r.title):
                         r.abstract = text
             except Exception:
                 pass  # best-effort; per-ref fallbacks below still apply
@@ -433,7 +456,7 @@ class ReferenceResolver:
             # Try CrossRef first (if DOI available)
             if ref.doi:
                 abstract = self._fetch_crossref(ref.doi)
-                if abstract:
+                if abstract and not _looks_like_citation_info(abstract, ref.title):
                     ref.abstract = abstract
                     resolved += 1
                     continue
@@ -443,7 +466,7 @@ class ReferenceResolver:
             # papers that OpenAlex/Crossref carry no abstract for.
             if ref.doi:
                 abstract = self._fetch_s2(ref.doi)
-                if abstract:
+                if abstract and not _looks_like_citation_info(abstract, ref.title):
                     ref.abstract = abstract
                     resolved += 1
                     continue
@@ -514,6 +537,8 @@ class ReferenceResolver:
         for r in results:
             if not r.get('abstract'):
                 continue
+            if _looks_like_citation_info(r['abstract'], r.get('title', '')):
+                continue  # v0.12.6: skip citation-info stubs
             ratio = difflib.SequenceMatcher(None, want, _norm(r.get('title', ''))).ratio()
             if ratio > best_ratio:
                 best_ratio, best_abs = ratio, r['abstract']
