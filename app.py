@@ -1460,18 +1460,108 @@ def _run_fact_check_verify():
     return cv_report
 
 
+def _salvage_truncated_json(s: str) -> str:
+    """Repair a truncated JSON object (LLM reply cut by the token budget):
+    drop the incomplete trailing token, then close any open brackets. v0.12.6."""
+    in_str = False
+    esc = False
+    last_good = -1
+    for i, ch in enumerate(s):
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+                last_good = i
+        else:
+            if ch == '"':
+                in_str = True
+            elif ch in "{[,":
+                last_good = i
+            elif ch in "}]":
+                last_good = i
+    if last_good < 0:
+        return s
+    cut = s[:last_good + 1]
+    # Drop trailing fragments that cannot parse: dangling commas, a dangling
+    # colon, or a complete string that is a KEY with no value (a value string
+    # is preceded by ":"; a bare key is preceded by "," or "{").
+    while True:
+        cut = cut.rstrip()
+        if cut.endswith(","):
+            cut = cut[:-1]
+            continue
+        if cut.endswith(":"):
+            cut = cut[:-1]
+            continue
+        if cut.endswith('"'):
+            # locate this completed string's opening quote (escape-aware)
+            j = len(cut) - 2
+            while j >= 0:
+                if cut[j] == '"':
+                    bs = 0
+                    k = j - 1
+                    while k >= 0 and cut[k] == "\\":
+                        bs += 1
+                        k -= 1
+                    if bs % 2 == 0:
+                        break
+                j -= 1
+            prev = cut[:max(j, 0)].rstrip()
+            if prev.endswith(":"):
+                break  # trailing string is a complete "key": "value" — keep
+            cut = prev  # trailing string is a bare key with no value — drop
+            continue
+        break
+    cut = cut.rstrip().rstrip(",")
+    # Close whatever is still open
+    stack = []
+    in_str = False
+    esc = False
+    for ch in cut:
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+        else:
+            if ch == '"':
+                in_str = True
+            elif ch in "{[":
+                stack.append(ch)
+            elif ch in "}]":
+                if stack:
+                    stack.pop()
+    return cut + "".join("}" if o == "{" else "]" for o in reversed(stack))
+
+
 def _parse_revision_json(text):
-    """Extract the leading JSON object from an LLM reply (fence-tolerant)."""
+    """Extract the JSON object from an LLM reply — fence-tolerant, tolerant of
+    literal control characters, and able to salvage a truncated tail (v0.12.6).
+    Raises ValueError when nothing recoverable is left."""
     import json as _json
     t = (text or "").strip()
     if t.startswith("```"):
         t = re.sub(r"^```[a-zA-Z]*\s*", "", t)
         t = re.sub(r"```\s*$", "", t)
     start = t.find("{")
-    end = t.rfind("}")
-    if start < 0 or end <= start:
+    if start < 0:
         raise ValueError("no JSON object in LLM reply")
-    return _json.loads(t[start:end + 1])
+    end = t.rfind("}")
+    cand = t[start:end + 1] if end > start else t[start:]
+    try:
+        return _json.loads(cand)
+    except Exception:
+        pass
+    try:
+        return _json.loads(cand, strict=False)  # literal \n / tab in strings
+    except Exception:
+        pass
+    return _json.loads(_salvage_truncated_json(cand), strict=False)
 
 
 def _run_revision_from_fact_check():
@@ -1503,7 +1593,7 @@ def _run_revision_from_fact_check():
             "5. 保持 markdown 结构、标题层级、[n] 引用编号不变；仅当某引用对应语句全部被删除时"
             "才移除该参考文献条目，其余编号不得重排\n"
             "6. 不得新增任何事实、数字或引用\n"
-            "只输出 JSON（不要 markdown fence）："
+            "只输出紧凑的单行 JSON（不要 markdown fence、不要缩进美化；字符串内的换行必须写成 \\n 转义符）："
             '{"revised_report": "<修正后完整报告>", "changes": [{"claim": "<原论断>", '
             '"action": "kept|softened|removed|reversed", "reason": "<一句话>"}]}'
         )
@@ -1516,17 +1606,42 @@ def _run_revision_from_fact_check():
             "(or delete the sentence); reverse or remove contradicted claims per NLI evidence. "
             "Preserve markdown structure and [n] citation numbering; only remove a bibliography "
             "entry when all its citing sentences were deleted. Never add new facts, numbers or "
-            "citations. Output JSON only (no fences): "
+            "citations. Output one compact single-line JSON object only (no fences, "
+            "no pretty-printing; escape newlines inside strings as \\n): "
             '{"revised_report": "...", "changes": [{"claim": "...", "action": '
             '"kept|softened|removed|reversed", "reason": "..."}]}'
         )
         user_p = f"[REPORT]\n{report_text}\n\n[FACT-CHECK RESULTS]\n{digest}"
-    raw = _simple_llm_call(sys_p, user_p, temperature=0.2)
-    data = _parse_revision_json(raw)
+    # v0.12.6: the full-report JSON is large — bigger token budget, and one
+    # retry with a repair nudge when the first reply is truncated / not valid
+    # JSON (was: single attempt; a raw json.loads error surfaced as
+    # "修正失败: Unterminated string...").
+    _retry_hint = (
+        "\n\n重要：上一次回复不是完整合法的 JSON（很可能被输出长度截断）。这次务必输出一个紧凑、完整、闭合的 JSON 对象。"
+        if is_zh else
+        "\n\nIMPORTANT: the previous reply was not complete valid JSON (likely truncated by length). "
+        "Return one compact, complete, closed JSON object."
+    )
+    data, _last_err = None, None
+    for _attempt in range(2):
+        try:
+            raw = _simple_llm_call(
+                sys_p + (_retry_hint if _attempt else ""),
+                user_p, temperature=0.2, max_tokens=32000)
+            data = _parse_revision_json(raw)
+            if (data.get("revised_report") or "").strip():
+                break
+            data, _last_err = None, ValueError("empty revised_report in LLM reply")
+        except Exception as _e:
+            data, _last_err = None, _e
+    if data is None:
+        raise (_last_err or ValueError("revision JSON parse failed"))
     revised = (data.get("revised_report") or "").strip()
     if not revised:
         raise ValueError("empty revised_report in LLM reply")
     changes = data.get("changes") or []
+    if not isinstance(changes, list):
+        changes = []
     st.session_state.revision_result = {"revised_report": revised, "changes": changes}
     try:
         st.session_state.final_output["revised_report"] = revised
