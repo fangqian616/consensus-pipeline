@@ -953,6 +953,16 @@ def render_sidebar():
             if _es_key:
                 st.session_state.easyscholar_key = _es_key
                 os.environ["EASYSCHOLAR_SECRET_KEY"] = _es_key
+
+            _s2_key = st.text_input(
+                "Semantic Scholar API Key" + ("（可选，提升外文摘要获取率）" if is_zh else " (optional, better abstract coverage)"),
+                value=st.session_state.get("s2_api_key", ""),
+                type="password",
+                help="https://www.semanticscholar.org/product/api#api-key （免费申请）" if is_zh else "Free key: https://www.semanticscholar.org/product/api#api-key",
+            )
+            if _s2_key:
+                st.session_state.s2_api_key = _s2_key
+                os.environ["S2_API_KEY"] = _s2_key
             
             st.markdown("---")
             
