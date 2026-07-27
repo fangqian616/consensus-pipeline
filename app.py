@@ -1403,10 +1403,11 @@ def _run_fact_check_verify():
         raise ValueError("no report to verify" if not is_zh else "没有可校验的报告")
 
     def _llm_fn(system_prompt, user_prompt):
-        try:
-            return _simple_llm_call(system_prompt, user_prompt, temperature=0.3)
-        except Exception as e:
-            return f"[ERROR] {e}"
+        # v0.12.4: raise, don't return an "[ERROR]" string — the string was
+        # silently parsed as {} (decompose dropped the context -> 0 claims ->
+        # silent 0% report). Raising routes to per-call fallbacks (whole-context
+        # claim / NLI fail explanation) and the all-failed detector below.
+        return _simple_llm_call(system_prompt, user_prompt, temperature=0.3)
 
     def _search_fn(query, max_results=5):
         try:
@@ -1418,15 +1419,41 @@ def _run_fact_check_verify():
         except Exception:
             return []
 
+    # v0.12.4: hard gate — restored sessions never persist the API key (by
+    # design). Running verification without an LLM silently produced an
+    # all-neutral 0% report once (the "0% incident"); fail loudly instead.
+    if not st.session_state.get("api_key"):
+        raise ValueError(
+            "API Key 为空：断点恢复不会保存 Key。请先在左侧栏重新输入 API Key，再点「重新校验」。"
+            if is_zh else
+            "API key missing: restored sessions never persist the key. "
+            "Re-enter it in the sidebar, then re-run verification."
+        )
+
     from requirement.citation_verifier import CitationVerifier
     verifier = CitationVerifier(
-        llm_call_fn=_llm_fn if st.session_state.get("api_key") else None,
+        llm_call_fn=_llm_fn,
         search_fn=_search_fn,
         language="zh" if is_zh else "en",
         max_claims=20,
         max_contexts=15,
     )
     cv_report = verifier.verify(_fc_report, papers_data=_fc_papers if _fc_papers else None)
+
+    # v0.12.4: if EVERY NLI call failed (dead API / bad key), the resulting
+    # all-neutral 0% report is not a result — discard it and say why.
+    _nli_all = [n for _cv in cv_report.claim_verifications for n in (_cv.nli_results or [])]
+    _nli_bad = [n for n in _nli_all if (n.explanation or "").startswith(
+        ("No LLM available", "NLI check failed", "Title-level check failed"))]
+    if _nli_all and len(_nli_bad) == len(_nli_all):
+        raise RuntimeError(
+            ("所有 NLI 校验调用均失败（API 连接或 Key 异常），本次结果未保存。请检查左侧栏 API 配置后重新校验。首例: "
+             if is_zh else
+             "Every NLI call failed (API/key issue) — result discarded, not saved. "
+             "Check sidebar API config and retry. First: ")
+            + (_nli_bad[0].explanation or "")[:120]
+        )
+
     st.session_state.fact_check_report = cv_report
     st.session_state.fact_check_type = "citation"
     return cv_report
