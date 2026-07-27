@@ -1269,6 +1269,7 @@ def _cv_report_from_dict(d):
             unverified=d.get("unverified", 0),
             overall_confidence=d.get("overall_confidence", 0.0),
             summary=d.get("summary", ""),
+            abstract_audit=d.get("abstract_audit", []) or [],
         )
     except Exception as e:
         print(f"[ckpt] fact-check report rebuild failed: {e}")
@@ -3529,6 +3530,30 @@ def render_proofread_tab():
                 c2.metric("⚠️ Partial", _fc_result.partially_verified)
                 c3.metric("❌ Contradicted", _fc_result.contradicted)
                 c4.metric("❓ Unverified", _fc_result.unverified)
+
+                # v0.12.5: abstract audit transparency + title-level honesty note
+                _fc_audit = getattr(_fc_result, "abstract_audit", None) or []
+                if _fc_audit:
+                    with st.expander((f"🧹 摘要完整性审查：{len(_fc_audit)} 条错位缓存摘要已处理" if is_zh
+                                      else f"🧹 Abstract audit: {len(_fc_audit)} mismatched cached abstract(s)"),
+                                     expanded=True):
+                        for _a in _fc_audit:
+                            if _a.get("action") == "replaced":
+                                st.caption(f"♻️ [{_a.get('index')}] {(_a.get('title') or '')[:60]} — " +
+                                           ("错位摘要已清除，已换用真实摘要重新校验" if is_zh else
+                                            "mismatched abstract replaced with the real one"))
+                            else:
+                                st.caption(f"🧹 [{_a.get('index')}] {(_a.get('title') or '')[:60]} — " +
+                                           ("错位摘要已清除；该文献无公开摘要，退回标题级证据" if is_zh else
+                                            "mismatched abstract cleared; no public abstract, title-level evidence"))
+                _fc_title_only = [cv for cv in (_fc_result.claim_verifications or [])
+                                  if cv.status == "unverified" and cv.nli_results
+                                  and all(getattr(n, "evidence", "abstract") == "title" for n in cv.nli_results)]
+                if _fc_title_only:
+                    st.info((f"ℹ️ {len(_fc_title_only)} 条未证实论断仅有标题级证据（文献无公开摘要）——"
+                             "这不代表内容有误，只是公开元数据不足以证实，可结合原文人工判断。" if is_zh else
+                             f"ℹ️ {len(_fc_title_only)} unverified claim(s) rest on title-level evidence only "
+                             "(no public abstract) — not necessarily wrong, just not confirmable from metadata."))
 
                 # Per-claim results
                 for i, cv in enumerate(_fc_result.claim_verifications):
