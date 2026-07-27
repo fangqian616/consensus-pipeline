@@ -154,6 +154,8 @@ class CitationVerificationReport:
     unverified: int = 0
     overall_confidence: float = 0.0
     summary: str = ""
+    # v0.12.5: audit trail for cached-abstract integrity checks
+    abstract_audit: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         import dataclasses
@@ -339,6 +341,51 @@ class CitationParser:
         return ref_text[:100]
 
 
+# ── Open-access PDF abstract extraction (v0.12.5) ───────────────────────────
+
+def _extract_abstract_from_text(text: str) -> str:
+    """Cut the abstract section out of first/second-page PDF text."""
+    m = re.search(r'(?i)\babstract\b[\s.:—–-]*', text)
+    if not m:
+        return ""
+    rest = text[m.end():]
+    end = re.search(
+        r'(?i)\n\s*(?:jel[- ]?(?:code|classification)|keywords|key words|'
+        r'\d{0,2}\.?\s*introduction\b|i\.\s*introduction)',
+        rest,
+    )
+    abstract = rest[:end.start()] if end else rest[:2500]
+    abstract = re.sub(r'\s+', ' ', abstract).strip()
+    if 150 <= len(abstract) <= 3000:
+        return abstract
+    return ""
+
+
+def _fetch_pdf_abstract(pdf_url: str, max_bytes: int = 6_000_000) -> str:
+    """Download an open-access PDF and extract its abstract (best-effort).
+
+    Returns "" on any failure — non-PDF response, parse error, no abstract
+    marker — so callers simply fall through to the next source.
+    """
+    try:
+        import io
+        import urllib.request
+        req = urllib.request.Request(
+            pdf_url, headers={'User-Agent': 'Mozilla/5.0 (academic abstract fetch)'})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = resp.read(max_bytes)
+        if data[:5] != b'%PDF-':
+            return ""
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(data))
+        text = ""
+        for page in reader.pages[:4]:
+            text += (page.extract_text() or "") + "\n"
+        return _extract_abstract_from_text(text)
+    except Exception:
+        return ""
+
+
 # ── Reference Resolver ───────────────────────────────────────────────────────
 
 class ReferenceResolver:
@@ -360,6 +407,7 @@ class ReferenceResolver:
             Number of references successfully resolved with abstracts.
         """
         resolved = 0
+        self._pdf_attempts = 0  # v0.12.5: bound expensive PDF fetches per resolve()
 
         # Step 1: batch fill via OpenAlex (a single request covers up to 25 DOIs;
         # far cheaper than per-ref lookups and has the best abstract coverage)
@@ -385,6 +433,21 @@ class ReferenceResolver:
             # Try CrossRef first (if DOI available)
             if ref.doi:
                 abstract = self._fetch_crossref(ref.doi)
+                if abstract:
+                    ref.abstract = abstract
+                    resolved += 1
+                    continue
+
+            # v0.12.5: DOI-exact fallbacks — Semantic Scholar (abstract or its
+            # open-access PDF), then Unpaywall OA PDF. These cover old Elsevier
+            # papers that OpenAlex/Crossref carry no abstract for.
+            if ref.doi:
+                abstract = self._fetch_s2(ref.doi)
+                if abstract:
+                    ref.abstract = abstract
+                    resolved += 1
+                    continue
+                abstract = self._fetch_unpaywall_pdf(ref.doi)
                 if abstract:
                     ref.abstract = abstract
                     resolved += 1
@@ -457,6 +520,59 @@ class ReferenceResolver:
         if best_abs and best_ratio >= 0.80:
             return best_abs
         print(f"  [verify] title-search abstract REJECTED (best match {best_ratio:.2f}): {title[:60]}")
+        return ""
+
+    def _fetch_s2(self, doi: str) -> str:
+        """Semantic Scholar by DOI: direct abstract, else its open-access PDF.
+
+        v0.12.5: covers old papers OpenAlex/Crossref have no abstract for.
+        Best-effort (S2 rate-limits requests without an API key).
+        """
+        try:
+            import urllib.request
+            url = (f"https://api.semanticscholar.org/graph/v1/paper/DOI:{doi}"
+                   f"?fields=title,abstract,openAccessPdf")
+            req = urllib.request.Request(url, headers={'User-Agent': 'ConsensusPipeline/1.0'})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode())
+            abstract = (data.get('abstract') or '').strip()
+            if abstract:
+                return abstract
+            pdf_url = (data.get('openAccessPdf') or {}).get('url') or ''
+            if pdf_url and self._pdf_attempts < 6:
+                self._pdf_attempts += 1
+                return _fetch_pdf_abstract(pdf_url)
+        except Exception:
+            pass
+        return ""
+
+    def _fetch_unpaywall_pdf(self, doi: str) -> str:
+        """Unpaywall by DOI: find an OA PDF location and extract its abstract."""
+        try:
+            import urllib.request
+            url = f"https://api.unpaywall.org/v2/{doi}?email=fangqian616@users.noreply.github.com"
+            req = urllib.request.Request(url, headers={'User-Agent': 'ConsensusPipeline/1.0'})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode())
+            if not data.get('is_oa'):
+                return ""
+            urls = []
+            best = data.get('best_oa_location') or {}
+            if best.get('url_for_pdf'):
+                urls.append(best['url_for_pdf'])
+            for loc in data.get('oa_locations') or []:
+                u = loc.get('url_for_pdf')
+                if u and u not in urls:
+                    urls.append(u)
+            for u in urls[:2]:
+                if self._pdf_attempts >= 6:
+                    break
+                self._pdf_attempts += 1
+                abstract = _fetch_pdf_abstract(u)
+                if abstract:
+                    return abstract
+        except Exception:
+            pass
         return ""
 
 
@@ -816,6 +932,65 @@ class CitationVerifier:
         self.decomposer = AtomicFactDecomposer(llm_call_fn=llm_call_fn, language=language)
         self.nli = NLIVerifier(llm_call_fn=llm_call_fn, language=language)
 
+    def _audit_abstracts(self, references: List[Reference]) -> List[Dict[str, Any]]:
+        """v0.12.5: check each cached abstract actually belongs to its paper.
+
+        Pre-v0.12.3 title search grafted top-1 abstracts onto the wrong papers,
+        and those poisoned abstracts persist in the checkpoint cache — every NLI
+        verdict against them is garbage (the recurring low-score incidents).
+        One batched LLM call flags mismatches; flagged abstracts are cleared so
+        the reference falls back to DOI-exact re-resolution or honest
+        title-level evidence. Audit failure is non-fatal (skip silently).
+        """
+        llm_fn = self.decomposer.llm_call_fn
+        if not llm_fn:
+            return []
+        candidates = [r for r in references if (r.abstract or "").strip()]
+        if not candidates:
+            return []
+        entries = "\n".join(
+            f"{i}. TITLE: {(r.title or '')[:150]}\n   ABSTRACT: {(r.abstract or '')[:500]}"
+            for i, r in enumerate(candidates, 1)
+        )
+        if self.language == "zh":
+            prompt = (
+                "你是学术文献元数据校验员。下面每项给出一篇论文的标题和一段据称属于它的摘要。"
+                "判断每段摘要是否真的属于该标题对应的论文（同一研究主题即可，不要求逐字对应；"
+                "如果摘要只是引用/出版信息而非论文内容，也判 no）。\n\n"
+                "输出JSON：{\"items\": {\"1\": \"yes\", \"2\": \"no\", ...}}\n\n"
+                f"论文列表：\n{entries}"
+            )
+        else:
+            prompt = (
+                "You are auditing academic paper metadata. For each item, decide whether the "
+                "ABSTRACT genuinely belongs to the paper with the given TITLE (same research "
+                "topic is enough; answer \"no\" if it is another paper's abstract or mere "
+                "citation/publisher metadata).\n\n"
+                "Output JSON: {\"items\": {\"1\": \"yes\", \"2\": \"no\", ...}}\n\n"
+                f"Items:\n{entries}"
+            )
+        try:
+            parsed = AtomicFactDecomposer._parse_json_response(
+                llm_fn("You are an academic metadata auditor. Output only valid JSON.", prompt))
+            items = parsed.get("items", {})
+            if not isinstance(items, dict):
+                return []
+            audit = []
+            for i, r in enumerate(candidates, 1):
+                verdict = str(items.get(str(i), "yes")).strip().lower()
+                if verdict.startswith("n"):
+                    audit.append({
+                        "index": r.index, "title": r.title, "doi": r.doi,
+                        "action": "cleared",
+                        "reason": "abstract does not match title",
+                    })
+                    print(f"  [verify] abstract MISMATCH cleared for [{r.index}]: {(r.title or '')[:60]}")
+                    r.abstract = ""
+            return audit
+        except Exception as e:
+            print(f"  [verify] abstract audit skipped: {e}")
+            return []
+
     @staticmethod
     def _match_papers_to_text(text: str, ref_dict: Dict[int, Reference]) -> List[int]:
         """Find most relevant paper indices for a text by keyword overlap."""
@@ -871,6 +1046,21 @@ class CitationVerifier:
             # Backfill missing abstracts (Crossref-sourced papers usually lack
             # them) instead of silently verifying against nothing.
             report.resolved_references = self.resolver.resolve(references)
+            # v0.12.5: cached abstracts may belong to the WRONG paper (grafted
+            # by pre-v0.12.3 title search and then persisted in checkpoints) —
+            # audit them, quarantine mismatches, re-resolve via DOI-exact
+            # sources, and write the cleaned abstracts back into the caller's
+            # cache so the fix persists across re-runs.
+            report.abstract_audit = self._audit_abstracts(references)
+            if report.abstract_audit:
+                self.resolver.resolve(references)
+                for _a in report.abstract_audit:
+                    _r = next((r for r in references if r.index == _a["index"]), None)
+                    if _r is not None and _r.abstract:
+                        _a["action"] = "replaced"
+                report.resolved_references = sum(1 for r in references if r.abstract)
+            for _r, _p in zip(references, papers_data):
+                _p["abstract"] = _r.abstract
         else:
             # Parse references from bibliography
             references = self.parser.extract_references(report_text)
@@ -960,5 +1150,8 @@ class CitationVerifier:
             f"{report.contradicted} contradicted, {report.unverified} unverified. "
             f"Overall confidence: {report.overall_confidence:.0%}"
         )
+        if report.abstract_audit:
+            report.summary += (f" Abstract audit: {len(report.abstract_audit)} mismatched "
+                               f"cached abstract(s) quarantined.")
 
         return report
