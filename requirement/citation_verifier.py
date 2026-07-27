@@ -382,11 +382,45 @@ def _looks_like_citation_info(text: str, title: str) -> bool:
     return any(m in nt for m in markers)
 
 
-def _fetch_pdf_abstract(pdf_url: str, max_bytes: int = 6_000_000) -> str:
+def _extract_pdf_link_from_landing(data: bytes, page_url: str) -> str:
+    """Dig a direct PDF URL out of an HTML repository landing page.
+
+    v0.12.7: Unpaywall/S2 OA locations are often landing pages (DSpace
+    /handle/, institutional repositories) rather than direct PDFs.
+    Priority: <meta name="citation_pdf_url"> (Google Scholar standard) ->
+    DSpace bitstream link -> any .pdf href. Returns "" when nothing found.
+    """
+    try:
+        import html as _html
+        import urllib.parse
+        page = data.decode('utf-8', errors='replace')
+    except Exception:
+        return ""
+    link = ""
+    m = re.search(r"(?is)<meta[^>]+name=['\"]citation_pdf_url['\"][^>]*content=['\"]([^'\"]+)['\"]", page) or \
+        re.search(r"(?is)<meta[^>]+content=['\"]([^'\"]+)['\"][^>]*name=['\"]citation_pdf_url['\"]", page)
+    if m:
+        link = m.group(1)
+    if not link:
+        m = re.search(r"(?is)href=['\"]([^'\"]*bitstream[^'\"]*)['\"]", page)
+        if m:
+            link = m.group(1)
+    if not link:
+        m = re.search(r"(?is)href=['\"]([^'\"]+\.pdf(?:\?[^'\"]*)?)['\"]", page)
+        if m:
+            link = m.group(1)
+    if not link:
+        return ""
+    return urllib.parse.urljoin(page_url, _html.unescape(link))
+
+
+def _fetch_pdf_abstract(pdf_url: str, max_bytes: int = 6_000_000, _depth: int = 0) -> str:
     """Download an open-access PDF and extract its abstract (best-effort).
 
     Returns "" on any failure — non-PDF response, parse error, no abstract
     marker — so callers simply fall through to the next source.
+    v0.12.7: a non-PDF response is treated as a repository landing page and
+    dug once for its real PDF link (one level deep, no recursion loop).
     """
     try:
         import io
@@ -396,6 +430,10 @@ def _fetch_pdf_abstract(pdf_url: str, max_bytes: int = 6_000_000) -> str:
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = resp.read(max_bytes)
         if data[:5] != b'%PDF-':
+            if _depth == 0:
+                link = _extract_pdf_link_from_landing(data, pdf_url)
+                if link and link != pdf_url:
+                    return _fetch_pdf_abstract(link, max_bytes, _depth=1)
             return ""
         from pypdf import PdfReader
         reader = PdfReader(io.BytesIO(data))
@@ -461,10 +499,16 @@ class ReferenceResolver:
                     resolved += 1
                     continue
 
-            # v0.12.5: DOI-exact fallbacks — Semantic Scholar (abstract or its
-            # open-access PDF), then Unpaywall OA PDF. These cover old Elsevier
-            # papers that OpenAlex/Crossref carry no abstract for.
+            # v0.12.5/0.12.7: DOI-exact fallbacks — OpenAIRE (aggregated
+            # repository/publisher abstracts), Semantic Scholar (abstract or
+            # its open-access PDF), then Unpaywall OA PDF. These cover old
+            # Elsevier/JSTOR papers OpenAlex/Crossref carry no abstract for.
             if ref.doi:
+                abstract = self._fetch_openaire(ref.doi)
+                if abstract and not _looks_like_citation_info(abstract, ref.title):
+                    ref.abstract = abstract
+                    resolved += 1
+                    continue
                 abstract = self._fetch_s2(ref.doi)
                 if abstract and not _looks_like_citation_info(abstract, ref.title):
                     ref.abstract = abstract
@@ -494,7 +538,7 @@ class ReferenceResolver:
 
             url = f"https://api.crossref.org/works/{doi}"
             req = urllib.request.Request(url, headers={
-                'User-Agent': 'ConsensusPipeline/1.0 (mailto:research@example.com)',
+                'User-Agent': 'ConsensusPipeline/1.0 (mailto:fang616@users.noreply.github.com)',
                 'Accept': 'application/json',
             })
             with urllib.request.urlopen(req, timeout=15) as resp:
@@ -511,6 +555,34 @@ class ReferenceResolver:
             return ""
         except Exception:
             return ""
+
+    def _fetch_openaire(self, doi: str) -> str:
+        """OpenAIRE Search API by DOI: abstract aggregated from repositories
+        and publishers. v0.12.7: covers Elsevier / old-JSTOR papers that
+        OpenAlex, Crossref and S2 all carry no abstract for — free, keyless,
+        and reachable from datacenter IPs where S2 rate-limits us."""
+        try:
+            import html as _html
+            import urllib.parse
+            import urllib.request
+            q = urllib.parse.quote(doi, safe="()/:.")
+            url = f"https://api.openaire.eu/search/publications?doi={q}"
+            req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/1.0"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                body = resp.read(2_000_000).decode("utf-8", errors="replace")
+            best = ""
+            for d in re.findall(r"(?is)<(?:\w+:)?description[^>]*>(.*?)</(?:\w+:)?description>", body):
+                d = re.sub(r"<[^>]+>", " ", d)
+                d = _html.unescape(d)
+                d = re.sub(r"\s+", " ", d).strip()
+                d = re.sub(r"^abstract\b[:\s.\-–—]*", "", d, flags=re.I).strip()
+                if len(d) > len(best):
+                    best = d
+            if 150 <= len(best):
+                return best[:3000]
+        except Exception:
+            pass
+        return ""
 
     def _search_by_title(self, title: str) -> str:
         """Search by title; accept an abstract ONLY from a near-exact title match.
@@ -554,10 +626,15 @@ class ReferenceResolver:
         Best-effort (S2 rate-limits requests without an API key).
         """
         try:
+            import os
             import urllib.request
             url = (f"https://api.semanticscholar.org/graph/v1/paper/DOI:{doi}"
                    f"?fields=title,abstract,openAccessPdf")
-            req = urllib.request.Request(url, headers={'User-Agent': 'ConsensusPipeline/1.0'})
+            headers = {'User-Agent': 'ConsensusPipeline/1.0'}
+            _s2k = os.environ.get('S2_API_KEY', '')  # v0.12.7: optional key
+            if _s2k:
+                headers['x-api-key'] = _s2k
+            req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=15) as resp:
                 data = json.loads(resp.read().decode())
             abstract = (data.get('abstract') or '').strip()
@@ -589,7 +666,14 @@ class ReferenceResolver:
                 u = loc.get('url_for_pdf')
                 if u and u not in urls:
                     urls.append(u)
-            for u in urls[:2]:
+            # v0.12.7: OA locations without a direct PDF often point at a
+            # repository landing page — _fetch_pdf_abstract now digs those
+            # for the real PDF link, so offer them as fallback candidates.
+            for loc in [best] + list(data.get('oa_locations') or []):
+                u = loc.get('url')
+                if u and u not in urls:
+                    urls.append(u)
+            for u in urls[:3]:
                 if self._pdf_attempts >= 6:
                     break
                 self._pdf_attempts += 1
@@ -1068,6 +1152,13 @@ class CitationVerifier:
                 )
                 references.append(ref)
             report.total_references = len(references)
+            # v0.12.7: a cached "abstract" that is really citation info (own
+            # title echoed + vol/pp markers, short) can slip past the LLM
+            # audit since it mentions the right title — scrub it here so
+            # resolve() below re-fetches the real abstract.
+            for r in references:
+                if r.abstract and _looks_like_citation_info(r.abstract, r.title):
+                    r.abstract = ""
             # Backfill missing abstracts (Crossref-sourced papers usually lack
             # them) instead of silently verifying against nothing.
             report.resolved_references = self.resolver.resolve(references)
