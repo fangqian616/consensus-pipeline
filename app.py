@@ -3651,18 +3651,33 @@ def render_proofread_tab():
             # aggregates computed by pre-tier-scoring code (stored 38%/0
             # tiers contradicting the live-derived ℹ️ 5+5 lines). Idempotent:
             # fresh reports are rewritten with identical values.
+            # v0.12.11: no more silent fallback — if the re-derive import/call
+            # fails (stale deployed verifier module), SAY SO on the page, and
+            # stamp the verifier build into the success line so every pasted
+            # report self-identifies which code produced vs rendered it.
+            _fc_vtag = ""
             if (_fc_result is not None and _fc_type == "citation"
                     and hasattr(_fc_result, "claim_verifications")):
                 try:
-                    from requirement.citation_verifier import rederive_report_aggregates as _fc_rederive
+                    from requirement.citation_verifier import (
+                        rederive_report_aggregates as _fc_rederive,
+                        VERIFIER_BUILD as _fc_vbuild,
+                    )
                     _fc_result = _fc_rederive(_fc_result)
                     st.session_state["fact_check_report"] = _fc_result
-                except Exception:
-                    pass
+                    _fc_vtag = (f" | 🔖 verifier: {(getattr(_fc_result, 'verifier_build', '') or 'legacy')}"
+                                f"→{_fc_vbuild}")
+                except Exception as _fc_rerr:
+                    st.warning(
+                        ("⚠️ 聚合重推导失败（{}: {}）——上方置信度为存档旧值，可能低于真实分。"
+                         "请 Redeploy 后重新打开本报告。" if is_zh else
+                         "⚠️ Aggregate re-derivation failed ({}: {}) — the confidence above "
+                         "is a stale stored value. Redeploy, then reopen this report."
+                        ).format(type(_fc_rerr).__name__, _fc_rerr))
 
             if _fc_result and _fc_type == "citation":
                 # CitationVerifier report
-                st.success(f"Verification complete | Overall confidence: {_fc_result.overall_confidence:.0%}")
+                st.success(f"Verification complete | Overall confidence: {_fc_result.overall_confidence:.0%}{_fc_vtag}")
                 st.write(_fc_result.summary)
 
                 # Stats row
@@ -5553,7 +5568,7 @@ def main():
 
     st.title(t("title"))
     st.caption(t("subtitle"))
-    st.caption("build: v0.12.10")  # 版本标记，确认部署用
+    st.caption("build: v0.12.11")  # 版本标记，确认部署用
     if st.session_state.get("_ck_missing"):
         st.warning("⚠️ " + ("链接里带有断点 ID，但云端磁盘上未找到对应断点文件（实例可能已被平台重置）。"
                             "如果你之前下载过断点文件，可在下方上传恢复；否则请忽略此提示重新开始。"
