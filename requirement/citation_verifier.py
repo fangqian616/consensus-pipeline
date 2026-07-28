@@ -152,6 +152,10 @@ class CitationVerificationReport:
     partially_verified: int = 0
     contradicted: int = 0
     unverified: int = 0
+    # v0.12.8: unverified claims backed ONLY by title-level evidence (no
+    # public abstract exists) — reported but excluded from the confidence
+    # score denominator ("insufficient evidence", not "failed").
+    insufficient_evidence: int = 0
     overall_confidence: float = 0.0
     summary: str = ""
     # v0.12.5: audit trail for cached-abstract integrity checks
@@ -481,10 +485,14 @@ class ReferenceResolver:
                     # fallbacks below still get a chance at the real abstract.
                     if text and not _looks_like_citation_info(text, r.title):
                         r.abstract = text
-            except Exception:
-                pass  # best-effort; per-ref fallbacks below still apply
+            except Exception as _oa_err:
+                # v0.12.8: log why the batch failed (shared-IP 429s etc.) so
+                # cloud deployments are diagnosable from the Manage-App logs.
+                print(f"  [verify] openalex batch FAIL: {type(_oa_err).__name__}: {str(_oa_err)[:150]}")
 
         # Step 2: per-ref fallback (Crossref by DOI, then title search, capped)
+        # v0.12.8: every resolution logs its source, every failure logs a
+        # TITLE-ONLY line — cloud runs (Manage-App terminal) stay diagnosable.
         _title_attempts = 0
         for ref in references:
             if ref.abstract:
@@ -497,6 +505,7 @@ class ReferenceResolver:
                 if abstract and not _looks_like_citation_info(abstract, ref.title):
                     ref.abstract = abstract
                     resolved += 1
+                    print(f"  [verify] resolved [{ref.index}] {ref.doi} via crossref ({len(abstract)} ch)")
                     continue
 
             # v0.12.5/0.12.7: DOI-exact fallbacks — OpenAIRE (aggregated
@@ -508,16 +517,19 @@ class ReferenceResolver:
                 if abstract and not _looks_like_citation_info(abstract, ref.title):
                     ref.abstract = abstract
                     resolved += 1
+                    print(f"  [verify] resolved [{ref.index}] {ref.doi} via openaire ({len(abstract)} ch)")
                     continue
                 abstract = self._fetch_s2(ref.doi)
                 if abstract and not _looks_like_citation_info(abstract, ref.title):
                     ref.abstract = abstract
                     resolved += 1
+                    print(f"  [verify] resolved [{ref.index}] {ref.doi} via s2 ({len(abstract)} ch)")
                     continue
                 abstract = self._fetch_unpaywall_pdf(ref.doi)
                 if abstract:
                     ref.abstract = abstract
                     resolved += 1
+                    print(f"  [verify] resolved [{ref.index}] {ref.doi} via unpaywall-pdf ({len(abstract)} ch)")
                     continue
 
             # Fallback: academic search by title (bounded — slow per call)
@@ -527,6 +539,11 @@ class ReferenceResolver:
                 if abstract:
                     ref.abstract = abstract
                     resolved += 1
+                    print(f"  [verify] resolved [{ref.index}] via title-search ({len(abstract)} ch)")
+
+            if not ref.abstract:
+                print(f"  [verify] TITLE-ONLY [{ref.index}] doi={ref.doi or 'N/A'} "
+                      f"title={(ref.title or '')[:50]}")
 
         return resolved
 
@@ -553,7 +570,8 @@ class ReferenceResolver:
 
             # Some entries have no abstract but have title
             return ""
-        except Exception:
+        except Exception as _cr_err:
+            print(f"  [verify] crossref FAIL {doi}: {type(_cr_err).__name__}: {str(_cr_err)[:150]}")
             return ""
 
     def _fetch_openaire(self, doi: str) -> str:
@@ -580,8 +598,9 @@ class ReferenceResolver:
                     best = d
             if 150 <= len(best):
                 return best[:3000]
-        except Exception:
-            pass
+            print(f"  [verify] openaire EMPTY {doi} (no usable abstract in response)")
+        except Exception as _oa2_err:
+            print(f"  [verify] openaire FAIL {doi}: {type(_oa2_err).__name__}: {str(_oa2_err)[:150]}")
         return ""
 
     def _search_by_title(self, title: str) -> str:
@@ -644,8 +663,8 @@ class ReferenceResolver:
             if pdf_url and self._pdf_attempts < 6:
                 self._pdf_attempts += 1
                 return _fetch_pdf_abstract(pdf_url)
-        except Exception:
-            pass
+        except Exception as _s2_err:
+            print(f"  [verify] s2 FAIL {doi}: {type(_s2_err).__name__}: {str(_s2_err)[:150]}")
         return ""
 
     def _fetch_unpaywall_pdf(self, doi: str) -> str:
@@ -680,8 +699,8 @@ class ReferenceResolver:
                 abstract = _fetch_pdf_abstract(u)
                 if abstract:
                     return abstract
-        except Exception:
-            pass
+        except Exception as _up_err:
+            print(f"  [verify] unpaywall FAIL {doi}: {type(_up_err).__name__}: {str(_up_err)[:150]}")
         return ""
 
 
@@ -698,7 +717,7 @@ class AtomicFactDecomposer:
 3. 去除主观评价和流程描述
 4. 每个论断必须是自包含的（不依赖上下文也能理解）
 5. 最多输出5个论断
-6. 严格排除：代码/API描述（函数、参数、变量、数据结构操作）、论文元数据（作者、标题、期刊名、DOI、发表年份）、教程/操作步骤
+6. 严格排除：代码/API描述（函数、参数、变量、数据结构操作）、论文元数据（作者、标题、期刊名、DOI、发表年份）、教程/操作步骤、纯历史事件或常识背景陈述（如"20世纪70年代发生了石油危机"这类不含方法、机制、数据、研究发现的时间/事实陈述——但涉及研究方法、模型、机制的论断必须保留）
 
 输出JSON格式：
 {"claims": ["论断1", "论断2", ...]}
@@ -713,6 +732,7 @@ Rules:
 3. Remove subjective evaluations and process descriptions
 4. Each claim must be self-contained (understandable without context)
 5. Output at most 5 claims
+6. Strictly exclude: pure historical/common-knowledge statements (time/event facts without methods, mechanisms, data, or research findings — e.g. "an oil crisis occurred in the 1970s"). KEEP claims about research methods, models, or mechanisms.
 
 Output JSON format:
 {"claims": ["claim1", "claim2", ...]}
@@ -1009,6 +1029,18 @@ Output JSON: {{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "exp
             return "unverified", 0.0  # Neutral = no evidence found
 
 
+def _is_title_only_unverified(cv: "ClaimVerification") -> bool:
+    """v0.12.8: True when a claim ended unverified with ONLY title-level
+    evidence (no public abstract for every cited reference). Such claims are
+    "insufficient evidence" — not wrong, just not confirmable — so the
+    confidence score excludes them from its denominator."""
+    return (
+        cv.status == "unverified"
+        and bool(cv.nli_results)
+        and all(getattr(n, "evidence", "abstract") == "title" for n in cv.nli_results)
+    )
+
+
 # ── Main Pipeline ────────────────────────────────────────────────────────────
 
 class CitationVerifier:
@@ -1247,16 +1279,23 @@ class CitationVerifier:
         report.partially_verified = sum(1 for cv in report.claim_verifications if cv.status == "partially_verified")
         report.contradicted = sum(1 for cv in report.claim_verifications if cv.status == "contradicted")
         report.unverified = sum(1 for cv in report.claim_verifications if cv.status == "unverified")
+        # v0.12.8: title-only unverified claims are insufficient evidence —
+        # they still count in `unverified` and appear per-claim, but are
+        # excluded from the confidence denominator.
+        report.insufficient_evidence = sum(
+            1 for cv in report.claim_verifications if _is_title_only_unverified(cv))
 
-        if report.claim_verifications:
-            total_claims = len(report.claim_verifications)
+        scored = [cv for cv in report.claim_verifications if not _is_title_only_unverified(cv)]
+        if scored:
             weighted = sum(
                 1.0 if cv.status == "verified"
                 else 0.5 if cv.status == "partially_verified"
                 else 0.0
-                for cv in report.claim_verifications
+                for cv in scored
             )
-            report.overall_confidence = weighted / total_claims
+            report.overall_confidence = weighted / len(scored)
+        else:
+            report.overall_confidence = 0.0
 
         src = "cached papers" if papers_data else "bibliography"
         report.summary = (
@@ -1264,8 +1303,14 @@ class CitationVerifier:
             f"({report.resolved_references}/{report.total_references} references from {src}): "
             f"{report.verified} verified, {report.partially_verified} partially verified, "
             f"{report.contradicted} contradicted, {report.unverified} unverified. "
-            f"Overall confidence: {report.overall_confidence:.0%}"
         )
+        # v0.12.8
+        if report.insufficient_evidence:
+            report.summary += (
+                f"{report.insufficient_evidence} claim(s) had title-level evidence only "
+                f"(no public abstract) — counted as insufficient evidence, excluded from scoring. "
+            )
+        report.summary += f"Overall confidence: {report.overall_confidence:.0%}"
         if report.abstract_audit:
             report.summary += (f" Abstract audit: {len(report.abstract_audit)} mismatched "
                                f"cached abstract(s) quarantined.")

@@ -1277,6 +1277,7 @@ def _cv_report_from_dict(d):
             partially_verified=d.get("partially_verified", 0),
             contradicted=d.get("contradicted", 0),
             unverified=d.get("unverified", 0),
+            insufficient_evidence=d.get("insufficient_evidence", 0),
             overall_confidence=d.get("overall_confidence", 0.0),
             summary=d.get("summary", ""),
             abstract_audit=d.get("abstract_audit", []) or [],
@@ -3650,11 +3651,13 @@ def render_proofread_tab():
                 st.write(_fc_result.summary)
 
                 # Stats row
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2, c3, c4, c5 = st.columns(5)
                 c1.metric("✅ Verified", _fc_result.verified)
                 c2.metric("⚠️ Partial", _fc_result.partially_verified)
                 c3.metric("❌ Contradicted", _fc_result.contradicted)
                 c4.metric("❓ Unverified", _fc_result.unverified)
+                c5.metric(("📭 证据不足" if is_zh else "📭 Insufficient"),
+                          getattr(_fc_result, "insufficient_evidence", 0))
 
                 # v0.12.5: abstract audit transparency + title-level honesty note
                 _fc_audit = getattr(_fc_result, "abstract_audit", None) or []
@@ -3675,10 +3678,11 @@ def render_proofread_tab():
                                   if cv.status == "unverified" and cv.nli_results
                                   and all(getattr(n, "evidence", "abstract") == "title" for n in cv.nli_results)]
                 if _fc_title_only:
-                    st.info((f"ℹ️ {len(_fc_title_only)} 条未证实论断仅有标题级证据（文献无公开摘要）——"
+                    st.info((f"ℹ️ {len(_fc_title_only)} 条论断仅有标题级证据（文献无公开摘要）——已归类为「证据不足」，不计入上方置信度。"
                              "这不代表内容有误，只是公开元数据不足以证实，可结合原文人工判断。" if is_zh else
-                             f"ℹ️ {len(_fc_title_only)} unverified claim(s) rest on title-level evidence only "
-                             "(no public abstract) — not necessarily wrong, just not confirmable from metadata."))
+                             f"ℹ️ {len(_fc_title_only)} claim(s) rest on title-level evidence only (no public abstract) — "
+                             "counted as INSUFFICIENT EVIDENCE and excluded from the confidence score above. "
+                             "Not necessarily wrong, just not confirmable from metadata."))
 
                 # Per-claim results
                 for i, cv in enumerate(_fc_result.claim_verifications):
