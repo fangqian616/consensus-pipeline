@@ -1059,6 +1059,66 @@ def _is_neutral_only_unverified(cv: "ClaimVerification") -> bool:
     )
 
 
+def rederive_report_aggregates(report: "CitationVerificationReport", src: str = "") -> "CitationVerificationReport":
+    """v0.12.10: recompute status counts, evidence tiers, overall confidence
+    and the summary line from claim-level data — the single source of truth.
+
+    verify() calls this once; the Streamlit UI calls it again at render time,
+    because checkpoint-restored reports may carry STALE aggregates computed
+    by pre-tier-scoring code versions (the "stored 38%/0 tiers vs live
+    ℹ️ 5+5/75%" self-contradicting display). Idempotent: a fresh report is
+    rewritten with identical values.
+
+    src: "cached papers" / "bibliography" for the summary line; when empty,
+    inferred from the existing summary (UI render path)."""
+    cvs = report.claim_verifications or []
+    if not cvs:
+        return report
+    report.total_claims = len(cvs)
+    report.verified = sum(1 for cv in cvs if cv.status == "verified")
+    report.partially_verified = sum(1 for cv in cvs if cv.status == "partially_verified")
+    report.contradicted = sum(1 for cv in cvs if cv.status == "contradicted")
+    report.unverified = sum(1 for cv in cvs if cv.status == "unverified")
+    report.insufficient_evidence = sum(1 for cv in cvs if _is_title_only_unverified(cv))
+    report.needs_fulltext = sum(1 for cv in cvs if _is_neutral_only_unverified(cv))
+    scored = [cv for cv in cvs
+              if not _is_title_only_unverified(cv)
+              and not _is_neutral_only_unverified(cv)]
+    if scored:
+        weighted = sum(
+            1.0 if cv.status == "verified"
+            else 0.5 if cv.status == "partially_verified"
+            else 0.0
+            for cv in scored
+        )
+        report.overall_confidence = weighted / len(scored)
+    else:
+        report.overall_confidence = 0.0
+    if not src:
+        src = "cached papers" if "cached papers" in (report.summary or "") else "bibliography"
+    report.summary = (
+        f"Verified {report.total_claims} claims from {report.total_citations} citation contexts "
+        f"({report.resolved_references}/{report.total_references} references from {src}): "
+        f"{report.verified} verified, {report.partially_verified} partially verified, "
+        f"{report.contradicted} contradicted, {report.unverified} unverified. "
+    )
+    if report.insufficient_evidence:
+        report.summary += (
+            f"{report.insufficient_evidence} claim(s) had title-level evidence only "
+            f"(no public abstract) — counted as insufficient evidence, excluded from scoring. "
+        )
+    if report.needs_fulltext:
+        report.summary += (
+            f"{report.needs_fulltext} claim(s) could not be confirmed at abstract level "
+            f"— counted as needs-fulltext, excluded from scoring. "
+        )
+    report.summary += f"Overall confidence: {report.overall_confidence:.0%}"
+    if report.abstract_audit:
+        report.summary += (f" Abstract audit: {len(report.abstract_audit)} mismatched "
+                           f"cached abstract(s) quarantined.")
+    return report
+
+
 # ── Main Pipeline ────────────────────────────────────────────────────────────
 
 class CitationVerifier:
@@ -1293,56 +1353,10 @@ class CitationVerifier:
             report.claim_verifications.append(cv)
 
         # ── Aggregate ──
-        report.verified = sum(1 for cv in report.claim_verifications if cv.status == "verified")
-        report.partially_verified = sum(1 for cv in report.claim_verifications if cv.status == "partially_verified")
-        report.contradicted = sum(1 for cv in report.claim_verifications if cv.status == "contradicted")
-        report.unverified = sum(1 for cv in report.claim_verifications if cv.status == "unverified")
-        # v0.12.8: title-only unverified claims are insufficient evidence —
-        # they still count in `unverified` and appear per-claim, but are
-        # excluded from the confidence denominator.
-        report.insufficient_evidence = sum(
-            1 for cv in report.claim_verifications if _is_title_only_unverified(cv))
-        # v0.12.9: abstract-backed but non-entailing unverified claims form
-        # the "needs fulltext" tier — also excluded from the denominator.
-        report.needs_fulltext = sum(
-            1 for cv in report.claim_verifications if _is_neutral_only_unverified(cv))
-
-        scored = [cv for cv in report.claim_verifications
-                  if not _is_title_only_unverified(cv)
-                  and not _is_neutral_only_unverified(cv)]
-        if scored:
-            weighted = sum(
-                1.0 if cv.status == "verified"
-                else 0.5 if cv.status == "partially_verified"
-                else 0.0
-                for cv in scored
-            )
-            report.overall_confidence = weighted / len(scored)
-        else:
-            report.overall_confidence = 0.0
-
-        src = "cached papers" if papers_data else "bibliography"
-        report.summary = (
-            f"Verified {report.total_claims} claims from {report.total_citations} citation contexts "
-            f"({report.resolved_references}/{report.total_references} references from {src}): "
-            f"{report.verified} verified, {report.partially_verified} partially verified, "
-            f"{report.contradicted} contradicted, {report.unverified} unverified. "
-        )
-        # v0.12.8
-        if report.insufficient_evidence:
-            report.summary += (
-                f"{report.insufficient_evidence} claim(s) had title-level evidence only "
-                f"(no public abstract) — counted as insufficient evidence, excluded from scoring. "
-            )
-        # v0.12.9
-        if report.needs_fulltext:
-            report.summary += (
-                f"{report.needs_fulltext} claim(s) could not be confirmed at abstract level "
-                f"— counted as needs-fulltext, excluded from scoring. "
-            )
-        report.summary += f"Overall confidence: {report.overall_confidence:.0%}"
-        if report.abstract_audit:
-            report.summary += (f" Abstract audit: {len(report.abstract_audit)} mismatched "
-                               f"cached abstract(s) quarantined.")
+        # v0.12.10: single aggregation path — the UI calls the same helper at
+        # render time so checkpoint-restored reports whose stored aggregates
+        # predate tier scoring display consistently with claim-level data.
+        rederive_report_aggregates(
+            report, src="cached papers" if papers_data else "bibliography")
 
         return report
