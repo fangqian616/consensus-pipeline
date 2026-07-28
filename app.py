@@ -1278,6 +1278,7 @@ def _cv_report_from_dict(d):
             contradicted=d.get("contradicted", 0),
             unverified=d.get("unverified", 0),
             insufficient_evidence=d.get("insufficient_evidence", 0),
+            needs_fulltext=d.get("needs_fulltext", 0),
             overall_confidence=d.get("overall_confidence", 0.0),
             summary=d.get("summary", ""),
             abstract_audit=d.get("abstract_audit", []) or [],
@@ -3651,13 +3652,15 @@ def render_proofread_tab():
                 st.write(_fc_result.summary)
 
                 # Stats row
-                c1, c2, c3, c4, c5 = st.columns(5)
+                c1, c2, c3, c4, c5, c6 = st.columns(6)
                 c1.metric("✅ Verified", _fc_result.verified)
                 c2.metric("⚠️ Partial", _fc_result.partially_verified)
                 c3.metric("❌ Contradicted", _fc_result.contradicted)
                 c4.metric("❓ Unverified", _fc_result.unverified)
                 c5.metric(("📭 证据不足" if is_zh else "📭 Insufficient"),
                           getattr(_fc_result, "insufficient_evidence", 0))
+                c6.metric(("📖 需查全文" if is_zh else "📖 Needs fulltext"),
+                          getattr(_fc_result, "needs_fulltext", 0))
 
                 # v0.12.5: abstract audit transparency + title-level honesty note
                 _fc_audit = getattr(_fc_result, "abstract_audit", None) or []
@@ -3683,6 +3686,17 @@ def render_proofread_tab():
                              f"ℹ️ {len(_fc_title_only)} claim(s) rest on title-level evidence only (no public abstract) — "
                              "counted as INSUFFICIENT EVIDENCE and excluded from the confidence score above. "
                              "Not necessarily wrong, just not confirmable from metadata."))
+                # v0.12.9: unverified claims that had real abstracts (but the
+                # abstracts didn't cover the specifics) — needs-fulltext tier
+                _fc_needs_ft = [cv for cv in (_fc_result.claim_verifications or [])
+                                if cv.status == "unverified" and cv.nli_results
+                                and any(getattr(n, "evidence", "abstract") != "title" for n in cv.nli_results)]
+                if _fc_needs_ft:
+                    st.info((f"ℹ️ {len(_fc_needs_ft)} 条论断摘要层级不足以验证（摘要未涵盖论断的具体细节）——已归类为「需查全文」，不计入上方置信度。"
+                             "这不代表内容有误，相关论述可能在论文正文中，需查原文确认。" if is_zh else
+                             f"ℹ️ {len(_fc_needs_ft)} claim(s) could not be confirmed at abstract level — "
+                             "counted as NEEDS FULLTEXT and excluded from the confidence score above. "
+                             "Not necessarily wrong; the full text may cover them."))
 
                 # Per-claim results
                 for i, cv in enumerate(_fc_result.claim_verifications):
@@ -5525,7 +5539,7 @@ def main():
 
     st.title(t("title"))
     st.caption(t("subtitle"))
-    st.caption("build: be80c95+ckpt5")  # 版本标记，确认部署用
+    st.caption("build: v0.12.9")  # 版本标记，确认部署用
     if st.session_state.get("_ck_missing"):
         st.warning("⚠️ " + ("链接里带有断点 ID，但云端磁盘上未找到对应断点文件（实例可能已被平台重置）。"
                             "如果你之前下载过断点文件，可在下方上传恢复；否则请忽略此提示重新开始。"
@@ -5579,7 +5593,7 @@ def main():
     _phase_now = st.session_state.get("_debate_phase", "departments")
     _debate_in_progress = (
         _debating
-        or (_phase_now in ("dept_rest", "cross", "summary")
+        or (_phase_now in ("search_review", "dept_rest", "cross", "summary")
             and bool(st.session_state.get("dept_results"))
             and not st.session_state.get("debate_completed"))
     )
@@ -5605,10 +5619,15 @@ def main():
         t("tab_output_combined"),
         t("tab_tools"),
     ]
-    # If our desired tab differs from radio's current value, force radio reinit
+    # If our desired tab differs from radio's current value, sync the widget
+    # state in place. v0.12.9: the old pop+reinit-via-index approach left the
+    # frontend holding a STALE tab selection; the user's next click anywhere
+    # submitted that stale value, fired on_change, yanked _tab_index back to
+    # the old tab and swallowed the click itself (confirming journals
+    # "jumped back" to the setup tab and did nothing on the first click).
     _desired_tab = st.session_state._tab_index
     if st.session_state.get("_main_tab_radio") != _desired_tab:
-        st.session_state.pop("_main_tab_radio", None)
+        st.session_state["_main_tab_radio"] = _desired_tab
 
     def _on_tab_change():
         """Sync radio click back to _tab_index"""
