@@ -16,6 +16,11 @@ import re
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 
+# v0.12.11: build fingerprint — stamped into every report verify() produces and
+# shown by the UI next to the confidence score, so a stale deployed verifier
+# (app.py newer than this file) is identifiable from a single screenshot.
+VERIFIER_BUILD = "v0.12.11"
+
 
 # ── Content Filters ─────────────────────────────────────────────────────────
 
@@ -164,6 +169,9 @@ class CitationVerificationReport:
     summary: str = ""
     # v0.12.5: audit trail for cached-abstract integrity checks
     abstract_audit: List[Dict[str, Any]] = field(default_factory=list)
+    # v0.12.11: which verifier build PRODUCED this report ("" = pre-fingerprint
+    # code / restored legacy checkpoint). Survives to_dict()/from_dict().
+    verifier_build: str = ""
 
     def to_dict(self) -> dict:
         import dataclasses
@@ -1245,6 +1253,7 @@ class CitationVerifier:
             CitationVerificationReport with per-claim verification results
         """
         report = CitationVerificationReport()
+        report.verifier_build = VERIFIER_BUILD  # v0.12.11: producer fingerprint
 
         # ── Build reference list ──
         if papers_data:
