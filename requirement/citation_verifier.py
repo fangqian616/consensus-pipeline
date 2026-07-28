@@ -156,6 +156,10 @@ class CitationVerificationReport:
     # public abstract exists) — reported but excluded from the confidence
     # score denominator ("insufficient evidence", not "failed").
     insufficient_evidence: int = 0
+    # v0.12.9: unverified claims that DID have abstract evidence but the
+    # abstracts didn't cover the claim specifics — "needs fulltext" tier,
+    # also excluded from the confidence denominator.
+    needs_fulltext: int = 0
     overall_confidence: float = 0.0
     summary: str = ""
     # v0.12.5: audit trail for cached-abstract integrity checks
@@ -1041,6 +1045,20 @@ def _is_title_only_unverified(cv: "ClaimVerification") -> bool:
     )
 
 
+def _is_neutral_only_unverified(cv: "ClaimVerification") -> bool:
+    """v0.12.9: True when a claim ended unverified but at least one cited
+    reference DID supply a real abstract — the evidence layer worked, the
+    abstracts just don't cover the claim's specifics. Such claims need
+    full-text verification: they form their own tier (excluded from the
+    confidence denominator, reported separately). Distinct from
+    _is_title_only_unverified, where there was nothing to check against."""
+    return (
+        cv.status == "unverified"
+        and bool(cv.nli_results)
+        and any(getattr(n, "evidence", "abstract") != "title" for n in cv.nli_results)
+    )
+
+
 # ── Main Pipeline ────────────────────────────────────────────────────────────
 
 class CitationVerifier:
@@ -1284,8 +1302,14 @@ class CitationVerifier:
         # excluded from the confidence denominator.
         report.insufficient_evidence = sum(
             1 for cv in report.claim_verifications if _is_title_only_unverified(cv))
+        # v0.12.9: abstract-backed but non-entailing unverified claims form
+        # the "needs fulltext" tier — also excluded from the denominator.
+        report.needs_fulltext = sum(
+            1 for cv in report.claim_verifications if _is_neutral_only_unverified(cv))
 
-        scored = [cv for cv in report.claim_verifications if not _is_title_only_unverified(cv)]
+        scored = [cv for cv in report.claim_verifications
+                  if not _is_title_only_unverified(cv)
+                  and not _is_neutral_only_unverified(cv)]
         if scored:
             weighted = sum(
                 1.0 if cv.status == "verified"
@@ -1309,6 +1333,12 @@ class CitationVerifier:
             report.summary += (
                 f"{report.insufficient_evidence} claim(s) had title-level evidence only "
                 f"(no public abstract) — counted as insufficient evidence, excluded from scoring. "
+            )
+        # v0.12.9
+        if report.needs_fulltext:
+            report.summary += (
+                f"{report.needs_fulltext} claim(s) could not be confirmed at abstract level "
+                f"— counted as needs-fulltext, excluded from scoring. "
             )
         report.summary += f"Overall confidence: {report.overall_confidence:.0%}"
         if report.abstract_audit:
