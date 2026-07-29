@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 # v0.12.11: build fingerprint — stamped into every report verify() produces and
 # shown by the UI next to the confidence score, so a stale deployed verifier
 # (app.py newer than this file) is identifiable from a single screenshot.
-VERIFIER_BUILD = "v0.12.14"
+VERIFIER_BUILD = "v0.12.16"
 
 
 # ── Content Filters ─────────────────────────────────────────────────────────
@@ -1114,23 +1114,26 @@ def rederive_report_aggregates(report: "CitationVerificationReport", src: str = 
         report.overall_confidence = 0.0
     if not src:
         src = "cached papers" if "cached papers" in (report.summary or "") else "bibliography"
+    # v0.12.16: mutually-exclusive tiers — the unverified total is no longer
+    # restated per tier (user feedback: "8 unverified" + "8 needs-fulltext"
+    # counted the SAME claims twice). Each claim's count appears exactly once.
+    _other_unv = report.unverified - report.needs_fulltext - report.insufficient_evidence
     report.summary = (
         f"Verified {report.total_claims} claims from {report.total_citations} citation contexts "
         f"({report.resolved_references}/{report.total_references} references from {src}): "
         f"{report.verified} verified, {report.partially_verified} partially verified, "
-        f"{report.contradicted} contradicted, {report.unverified} unverified. "
+        f"{report.contradicted} contradicted"
     )
-    if report.insufficient_evidence:
-        report.summary += (
-            f"{report.insufficient_evidence} claim(s) had title-level evidence only "
-            f"(no public abstract) — counted as insufficient evidence, excluded from scoring. "
-        )
+    _tiers = []
     if report.needs_fulltext:
-        report.summary += (
-            f"{report.needs_fulltext} claim(s) could not be confirmed at abstract level "
-            f"— counted as needs-fulltext, excluded from scoring. "
-        )
-    report.summary += f"Overall confidence: {report.overall_confidence:.0%}"
+        _tiers.append(f"{report.needs_fulltext} needs-fulltext")
+    if report.insufficient_evidence:
+        _tiers.append(f"{report.insufficient_evidence} title-only")
+    if _tiers:
+        report.summary += "; " + ", ".join(_tiers) + " excluded from scoring"
+    if _other_unv > 0:
+        report.summary += f"; {_other_unv} other unverified (counted in scoring)"
+    report.summary += f". Overall confidence: {report.overall_confidence:.0%}"
     if report.abstract_audit:
         report.summary += (f" Abstract audit: {len(report.abstract_audit)} mismatched "
                            f"cached abstract(s) quarantined.")
