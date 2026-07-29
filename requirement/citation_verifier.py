@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 # v0.12.11: build fingerprint — stamped into every report verify() produces and
 # shown by the UI next to the confidence score, so a stale deployed verifier
 # (app.py newer than this file) is identifiable from a single screenshot.
-VERIFIER_BUILD = "v0.12.12"
+VERIFIER_BUILD = "v0.12.13"
 
 
 # ── Content Filters ─────────────────────────────────────────────────────────
@@ -847,12 +847,14 @@ class NLIVerifier:
 论断：{claim}
 
 文献标题：{title}
+文献作者：{authors}
 文献摘要：{abstract}
 
 判断标准：
 - entail: 摘要内容明确支持该论断（同一事实/结论）
 - contradict: 摘要内容明确反驳该论断
 - neutral: 摘要与该论断无关，或无法从摘要判断
+- 若论断涉及研究者归属（如"X与Y的研究表明…"），以文献作者字段核对（姓名拼写变体视为同一人）
 
 输出JSON：
 {{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "explanation": "一句话说明"}}"""
@@ -862,12 +864,14 @@ class NLIVerifier:
 Claim: {claim}
 
 Paper title: {title}
+Authors: {authors}
 Abstract: {abstract}
 
 Criteria:
 - entail: The abstract clearly supports this claim (same fact/conclusion)
 - contradict: The abstract clearly refutes this claim
 - neutral: The abstract is unrelated to this claim, or cannot be determined from the abstract
+- If the claim attributes the study to specific researchers (e.g. "X and Y showed..."), verify attribution against the Authors field (spelling variants count as the same person)
 
 Output JSON:
 {{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "explanation": "one-sentence explanation"}}"""
@@ -881,12 +885,14 @@ Output JSON:
 论断：{claim}
 
 文献标题：{title}
+文献作者：{authors}
 期刊：{journal}（{year}）
 
 判断标准：
 - entail: 论断正是该文献标题直接表明的主题/结论（如论断是"存在一项关于X的元分析"而标题即"X: A Meta-Analysis"）
 - contradict: 标题与论断明显矛盾
 - neutral: 仅凭标题无法判断（多数情况应选此项，宁缺勿滥）
+- 若论断涉及研究者归属（如"X与Y的研究"），以文献作者字段核对（姓名拼写变体视为同一人）
 
 输出JSON：{{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "explanation": "一句话说明（注明仅标题证据）"}}"""
 
@@ -895,12 +901,14 @@ Output JSON:
 Claim: {claim}
 
 Paper title: {title}
+Authors: {authors}
 Journal: {journal} ({year})
 
 Criteria:
 - entail: the claim restates exactly what the title declares (e.g. claim "a meta-analysis on X exists" with title "X: A Meta-Analysis")
 - contradict: the title clearly contradicts the claim
 - neutral: cannot be determined from the title alone (choose this in most cases; when in doubt, be conservative)
+- If the claim attributes the study to specific researchers, verify attribution against the Authors field (spelling variants count as the same person)
 
 Output JSON: {{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "explanation": "one-sentence explanation (note title-only evidence)"}}"""
 
@@ -949,6 +957,7 @@ Output JSON: {{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "exp
         user_msg = prompt_template.format(
             claim=claim_text,
             title=ref.title,
+            authors=ref.authors or ("（未获取）" if self.language == "zh" else "N/A"),
             journal=ref.raw_text.split(".")[-1].strip() if ref.raw_text else "",
             year=ref.year or "?",
         )
@@ -990,6 +999,7 @@ Output JSON: {{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "exp
         user_msg = prompt_template.format(
             claim=claim_text,
             title=ref.title,
+            authors=ref.authors or ("（未获取）" if self.language == "zh" else "N/A"),
             abstract=ref.abstract[:800],  # Truncate long abstracts
         )
 
