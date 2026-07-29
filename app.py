@@ -19,6 +19,23 @@ from datetime import datetime
 
 from requirement.fact_checker import FactChecker
 
+# v0.12.12: Streamlit Cloud reruns do NOT restart the Python process --
+# after a git push the files on disk are new, but `import
+# requirement.citation_verifier` keeps returning the stale sys.modules
+# copy from process start (root cause of the 38/12/20/25% stale-score
+# incidents: the old verify() kept producing legacy aggregates while the
+# new UI could not import the re-derive helper). Detect the stale module
+# by capability and reload it in-place; if the disk file itself is old
+# too, CV_MODULE_STALE stays True and a banner tells the user to Redeploy.
+import importlib as _importlib
+try:
+    import requirement.citation_verifier as _cv_mod
+    if not hasattr(_cv_mod, "rederive_report_aggregates"):
+        _importlib.reload(_cv_mod)
+    CV_MODULE_STALE = not hasattr(_cv_mod, "rederive_report_aggregates")
+except Exception:
+    CV_MODULE_STALE = False
+
 from debate_engine import (
     DEPARTMENTS, P2_CROSS_DEBATES, P5_CROSS_DEBATES, CROSS_DEBATES,
     STRUCTURED_TEMPLATES, PROOFREAD_DEPARTMENTS, DEPT_ORDER,
@@ -3659,10 +3676,22 @@ def render_proofread_tab():
             if (_fc_result is not None and _fc_type == "citation"
                     and hasattr(_fc_result, "claim_verifications")):
                 try:
-                    from requirement.citation_verifier import (
-                        rederive_report_aggregates as _fc_rederive,
-                        VERIFIER_BUILD as _fc_vbuild,
-                    )
+                    try:
+                        from requirement.citation_verifier import (
+                            rederive_report_aggregates as _fc_rederive,
+                            VERIFIER_BUILD as _fc_vbuild,
+                        )
+                    except ImportError:
+                        # v0.12.12: stale sys.modules copy in a long-lived
+                        # cloud process -- reload the module from disk and
+                        # retry once before declaring failure.
+                        import importlib as _il
+                        import requirement.citation_verifier as _cvm
+                        _il.reload(_cvm)
+                        from requirement.citation_verifier import (
+                            rederive_report_aggregates as _fc_rederive,
+                            VERIFIER_BUILD as _fc_vbuild,
+                        )
                     _fc_result = _fc_rederive(_fc_result)
                     st.session_state["fact_check_report"] = _fc_result
                     _fc_vtag = (f" | 🔖 verifier: {(getattr(_fc_result, 'verifier_build', '') or 'legacy')}"
@@ -5568,7 +5597,11 @@ def main():
 
     st.title(t("title"))
     st.caption(t("subtitle"))
-    st.caption("build: v0.12.11")  # 版本标记，确认部署用
+    st.caption("build: v0.12.12")  # 版本标记，确认部署用
+    if CV_MODULE_STALE:
+        st.warning("⚠️ " + ("校验器模块为旧版（自动重载后仍缺新函数）——请 Manage app → Redeploy 拉取最新代码，否则校验分数为旧版口径。"
+                            if _is_zh_main else
+                            "Verifier module is outdated (still missing new functions after auto-reload) — Manage app → Redeploy, or scores follow the legacy formula."))
     if st.session_state.get("_ck_missing"):
         st.warning("⚠️ " + ("链接里带有断点 ID，但云端磁盘上未找到对应断点文件（实例可能已被平台重置）。"
                             "如果你之前下载过断点文件，可在下方上传恢复；否则请忽略此提示重新开始。"
