@@ -1164,7 +1164,7 @@ _CK_KEYS = [
     "_debate_phase", "_debate_fingerprint", "dept_results", "cross_results",
     "final_output", "debate_completed", "spatial_review_result", "expert_pool_result",
     # v0.12: fact-check stage + revision result (report persisted as dict)
-    "fact_check_report", "fact_check_type", "revision_result",
+    "fact_check_report", "fact_check_type", "revision_result", "fact_check_source",
     # academic search state
     "_search_strategy", "_search_result", "_confirmed_papers", "_confirmed_preprints",
     "_papers_summary",
@@ -1422,13 +1422,16 @@ def _simple_llm_call(system_prompt, user_prompt, temperature=0.3, max_tokens=160
     return resp.json()["choices"][0]["message"]["content"]
 
 
-def _run_fact_check_verify():
+def _run_fact_check_verify(report_text_override=None):
     """v0.12 shared executor: citation-grounded verification of the final
     report against cached papers. Called by BOTH the automatic pipeline stage
-    (summary -> verify) and the manual Proofread-tab button."""
+    (summary -> verify) and the manual Proofread-tab button.
+    v0.12.15: report_text_override lets the UI re-verify the REVISED report;
+    fact_check_source records which text the displayed score belongs to."""
     is_zh = st.session_state.get("lang", "zh") == "zh"
     _fc_final = st.session_state.get("final_output", {}) or {}
-    _fc_report = _fc_final.get("final_report", "") or _fc_final.get("consensus_report", "") or ""
+    _fc_report = (report_text_override or "").strip() or \
+        (_fc_final.get("final_report", "") or _fc_final.get("consensus_report", "") or "")
     _fc_papers = _fc_final.get("papers_data", [])
     if not _fc_report:
         raise ValueError("no report to verify" if not is_zh else "没有可校验的报告")
@@ -1487,6 +1490,7 @@ def _run_fact_check_verify():
 
     st.session_state.fact_check_report = cv_report
     st.session_state.fact_check_type = "citation"
+    st.session_state.fact_check_source = "revised" if (report_text_override or "").strip() else "original"
     return cv_report
 
 
@@ -3707,6 +3711,10 @@ def render_proofread_tab():
 
             if _fc_result and _fc_type == "citation":
                 # CitationVerifier report
+                if st.session_state.get("fact_check_source") == "revised":
+                    st.caption("📄 本次校验对象：修正版报告（可点「开始事实校验」上方的重新校验回到原版）"
+                               if is_zh else
+                               "📄 Verified text: the REVISED report (use the main Re-run button for the original)")
                 st.success(f"Verification complete | Overall confidence: {_fc_result.overall_confidence:.0%}{_fc_vtag}")
                 st.write(_fc_result.summary)
 
@@ -3823,6 +3831,15 @@ def render_proofread_tab():
                         mime="text/markdown",
                         key="revised_report_dl",
                     )
+                    # v0.12.15: closed loop — revise, then re-verify the revision
+                    if st.button("🔍 " + ("对修正版报告重新校对" if is_zh else "Re-verify the revised report"),
+                                 key="reverify_revised_btn"):
+                        with st.spinner("🔬 " + ("正在校验修正版报告..." if is_zh else "Verifying the revised report...")):
+                            try:
+                                _run_fact_check_verify(report_text_override=_rev["revised_report"])
+                                st.rerun()
+                            except Exception as _fc2_err:
+                                st.error(("校验失败: " if is_zh else "Verification failed: ") + str(_fc2_err))
     
     final = st.session_state.get("final_output", {})
     
@@ -5598,7 +5615,7 @@ def main():
 
     st.title(t("title"))
     st.caption(t("subtitle"))
-    st.caption("build: v0.12.14")  # 版本标记，确认部署用
+    st.caption("build: v0.12.15")  # 版本标记，确认部署用
     if CV_MODULE_STALE:
         st.warning("⚠️ " + ("校验器模块为旧版（自动重载后仍缺新函数）——请 Manage app → Redeploy 拉取最新代码，否则校验分数为旧版口径。"
                             if _is_zh_main else
