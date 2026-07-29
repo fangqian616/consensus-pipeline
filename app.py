@@ -5597,7 +5597,7 @@ def main():
 
     st.title(t("title"))
     st.caption(t("subtitle"))
-    st.caption("build: v0.12.12")  # 版本标记，确认部署用
+    st.caption("build: v0.12.13")  # 版本标记，确认部署用
     if CV_MODULE_STALE:
         st.warning("⚠️ " + ("校验器模块为旧版（自动重载后仍缺新函数）——请 Manage app → Redeploy 拉取最新代码，否则校验分数为旧版口径。"
                             if _is_zh_main else
