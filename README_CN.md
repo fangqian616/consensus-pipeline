@@ -7,14 +7,14 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit" alt="Streamlit">
-  <img src="https://img.shields.io/badge/Latest-v0.7.8-brightgreen" alt="Version">
+  <img src="https://img.shields.io/badge/Latest-v0.12.18-brightgreen" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
 > **多 Agent 辩论驱动的学术研究框架。**
-> 不是单个 AI 替你写文献综述——是一支 AI 团队访谈你、辩论每条主张、达成共识，并给每条结论标注置信度。
+> 不是单个 AI 替你写文献综述——是一支 AI 团队访谈你、辩论每条主张、达成共识、给每条结论标注置信度，并逐条校验引用与原文摘要的一致性。
 
-📖 [English](README.md) · 📦 [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases)
+📖 [English](README.md) · 🌐 [在线试用](https://consensus-pipeline.streamlit.app) · 📦 [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases)
 
 ---
 
@@ -73,14 +73,14 @@ Consensus Pipeline 输入一个研究主题，通过多 Agent 辩论产出结构
 
 **与 Elicit/Consensus.app 的关键区别：** 那些工具是提取和总结，这个工具是**辩论**。每条结论在进入报告之前，必须经受多个 AI 智能体的对抗性质疑。
 
-### 实际可用功能（v0.7.8）：
+### 实际可用功能（v0.12.18）：
 - ✅ 多源论文检索（OpenAlex + Semantic Scholar + arXiv）
 - ✅ 三层 QC 过滤：硬过滤 → LLM 分类 → 重要性标注（219 → 77 篇，排除率 ~65%）
 - ✅ 10-11 个辩论部门，每部门 2-4 位辩手从不同视角辩论
 - ✅ 多轮辩论（每部门 2-3 轮）
 - ✅ 跨部门交叉验证（部门之间互相检查结论）
 - ✅ 逐条结论置信度标注（如"42/77 篇支撑，高置信度"）
-- ✅ 引用校验（自动验证所有 `[N]` 引用）
+- ✅ NLI 引用校验——逐条论断判定（✅/⚠️/❌），不可判条目（📖需查全文/📭仅标题）显式排除、不计入置信度
 - ✅ 自动生成可运行的研究方法代码
 - ✅ PDF/DOCX 导出
 - ✅ 双语输出（`--lang en` 或 `--lang zh`）
@@ -139,6 +139,12 @@ Consensus Pipeline 输入一个研究主题，通过多 Agent 辩论产出结构
 ┌─────────────────────────┐
 │ Phase 6: 报告生成       │  ← 带置信度标注的文献综述
 │                          │     引用校验、代码生成、PDF/DOCX 导出
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Phase 7: 引用校验       │  ← NLI 校验器逐条核对论断与原文摘要
+│                          │     不可判条目显式排除，而非静默计入
 └─────────────────────────┘
 ```
 
@@ -167,6 +173,22 @@ Consensus Pipeline 输入一个研究主题，通过多 Agent 辩论产出结构
 
 不再有无支撑的断言。
 
+### 引用校验报告（NLI）
+
+报告生成后，独立校验器把**每条论断与检索到的原文摘要逐条比对**（自然语言推理）——没有任何论断免检出厂。
+
+每条论断获得显式判定：
+- ✅ **已验证**——摘要直接支撑该论断
+- ⚠️ **部分验证**——仅部分内容被支撑
+- ❌ **矛盾**——摘要与该论断相悖
+- ❓ **未验证**——证据不足（计入置信度分母）
+
+仅凭摘要**无法判定**的论断会被**诚实分桶，而非静默计入**：
+- 📖 **需查全文**——摘要未覆盖该论断（不计入评分）
+- 📭 **仅标题**——无摘要可用（不计入评分）
+
+因此总体置信度只反映校验器真正可判的论断。校验时注入作者元数据，先确认*就是这篇论文*再判内容——抓住那些看起来像样的张冠李戴。
+
 ### QC 审校部门（三层过滤）
 
 最大的质量关口。三层过滤确保零污染：
@@ -185,6 +207,8 @@ Consensus Pipeline 输入一个研究主题，通过多 Agent 辩论产出结构
 ## 📖 使用教程
 
 两种运行方式：**Streamlit 网页界面**（交互式、可视化）或**命令行直接启动**（无头、可脚本化）。两者产出相同——根据你的工作流选择。
+
+> 🌐 **不想安装？** 直接打开在线版 [consensus-pipeline.streamlit.app](https://consensus-pipeline.streamlit.app)——自备 API Key 即可使用。
 
 ---
 
@@ -388,25 +412,28 @@ consensus-pipeline/
 ├── run_pipeline.py              # CLI 无头运行器
 ├── quality_controller.py        # QC 审校部门（三层过滤）
 ├── domain_config_generator.py   # 动态领域配置
-├── report_generator.py          # 带置信度的报告生成
 ├── docx_exporter.py             # Word 导出
 ├── pdf_exporter.py              # PDF 导出
 ├── academic/                    # 学术研究模块
-│   ├── search_engine.py         # 多源检索
+│   ├── search_engine.py         # 多源论文检索
 │   ├── journal_classifier.py   # 期刊质量筛
 │   ├── journal_registry.py     # 209 期刊本地注册表
-│   ├── fact_checker.py         # 自动化事实核查
-│   └── __init__.py
-├── requirement/                 # 需求研究模块
+│   ├── cross_validator.py       # 交叉验证与主题聚类
+│   ├── report_generator.py      # 带置信度的报告生成
+│   ├── report_visualizer.py     # 报告图表
+│   └── visualizer.py            # 学术图表（趋势、分布）
+├── requirement/                 # 需求与校验模块
 │   ├── interviewer.py           # AI 访谈智能体
 │   ├── structurer.py            # 范围与约束提取
-│   ├── generator.py             # 需求文档生成
-│   ├── validator.py             # 完整性检查
-│   └── __init__.py
+│   ├── discussion_group.py      # 多角度需求讨论
+│   ├── config_recommender.py    # 部门配置推荐
+│   ├── citation_verifier.py     # NLI 引用校验
+│   └── fact_checker.py          # 关键结论事实核查
 ├── templates/                   # 辩论提示词模板
 ├── presets/                     # 内置预设
+├── docs/                        # 快速上手与预设指南
 ├── examples/                    # 截图与示例输出
-└── fonts/                       # 中文字体（霞鹜文楷）
+└── user_profiles/               # 访谈档案
 ```
 
 ---
@@ -415,6 +442,8 @@ consensus-pipeline/
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| **v0.12.18** | 2026-07-30 | NLI 逐条引用校验报告（✅/⚠️/❌ 判定，📖/📭 不可判条目显式排除不计分）、作者元数据注入、Streamlit Cloud 在线版上线 |
+| v0.8 ~ v0.12.17 | 2026-07-22~29 | 校验体系多轮迭代加固（版本探针、断点恢复、互斥分层等），详见 commit 历史 |
 | **v0.7.8** | 2026-07-21 | 修复中英文语言输出对称性（9 处英文 + 13 处中文强制指令）、最终报告语言泄漏修复、双语全链路测试通过 |
 | **v0.7.7** | 2026-07-20 | 回退 daemon 线程方案为同步执行，修复辩论中断 bug |
 | **v0.7.5** | 2026-07-17 | UI 9→4 Tab 重组、easyScholar 降级、README 全面重写、语言选择前置 |
@@ -431,7 +460,7 @@ consensus-pipeline/
 | 优先级 | 功能 | 状态 |
 |--------|------|------|
 | P0 | 修复英文模式 UI 标签中英混合 | 进行中 |
-| P1 | 语义引用校验（embedding） | 规划中 |
+| P1 | 语义引用校验 | ✅ 已上线（NLI 方案，v0.12） |
 | P1 | 子主题 query 拆分 | 规划中 |
 | P1 | 发表偏倚检测（漏斗图） | 规划中 |
 | P2 | 跨语言检索（知网 + 双语对齐） | 规划中 |
@@ -484,4 +513,6 @@ MIT License
 > 这是一个学生项目，正在积极开发和测试中。欢迎反馈、Bug 报告和"你试过 XX 吗？"的建议。
 
 ---
+
+如果这个项目对你有帮助，欢迎点个 ⭐——这能让更多人看到它。
 
