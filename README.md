@@ -7,14 +7,14 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit" alt="Streamlit">
-  <img src="https://img.shields.io/badge/Latest-v0.7.8-brightgreen" alt="Version">
+  <img src="https://img.shields.io/badge/Latest-v0.12.18-brightgreen" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
 > **Multi-agent debate framework for academic research.**
-> Instead of one AI writing a literature review for you — an AI team interviews you, debates each claim, and reaches consensus with per-claim confidence scores.
+> Instead of one AI writing a literature review for you — an AI team interviews you, debates each claim, reaches consensus with per-claim confidence scores, and verifies every citation against the source abstracts.
 
-📖 [中文文档](README_CN.md) · 📦 [GitHub Releases](https://github.com/fang616/consensus-pipeline/releases)
+📖 [中文文档](README_CN.md) · 🌐 [Try Online](https://consensus-pipeline.streamlit.app) · 📦 [GitHub Releases](https://github.com/fang616/consensus-pipeline/releases)
 
 ---
 
@@ -73,14 +73,14 @@ Consensus Pipeline takes a research topic and produces a structured literature r
 
 **Key difference from tools like Elicit/Consensus:** Those tools extract and summarize. This tool *debates*. Each finding has to survive adversarial challenge from multiple AI agents before it makes it into the report.
 
-### What actually works (v0.7.8):
+### What actually works (v0.12.18):
 - ✅ Multi-source paper search (OpenAlex + Semantic Scholar + arXiv)
 - ✅ 3-layer QC: hard filter → LLM classify → importance tagging (219 → 77 papers, ~65% exclusion)
 - ✅ 10-11 debate departments, each with 2-4 debaters arguing from different perspectives
 - ✅ Multi-round debate (2-3 rounds per department)
 - ✅ Cross-department validation (one department checks another's work)
 - ✅ Per-claim confidence annotation (e.g., "42/77 papers, high confidence")
-- ✅ Citation validation (auto-verify all `[N]` references)
+- ✅ NLI citation verification — per-claim verdicts (✅/⚠️/❌), with unverifiable claims (📖 needs-fulltext / 📭 title-only) explicitly excluded from the confidence score, not silently counted
 - ✅ Auto-generated runnable code for research methods
 - ✅ PDF/DOCX export
 - ✅ Bilingual output (`--lang en` or `--lang zh`)
@@ -140,6 +140,12 @@ Research Topic
 ┌─────────────────────────┐
 │ Phase 6: Report         │  ← Literature review with confidence annotations
 │ Generation              │     Citation validation, code generation, PDF/DOCX export
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Phase 7: Citation       │  ← NLI verifier checks every claim against
+│ Verification            │     source abstracts (see below)
 └─────────────────────────┘
 ```
 
@@ -168,6 +174,22 @@ Every conclusion in the report carries a confidence tag:
 
 No more unsupported claims.
 
+### Citation Verification Report (NLI)
+
+After the report is generated, a dedicated verifier checks **every claim against the retrieved abstracts** using natural language inference — no claim ships unexamined.
+
+Each claim gets an explicit verdict:
+- ✅ **Verified** — the abstract directly supports the claim
+- ⚠️ **Partially verified** — only part of the claim is supported
+- ❌ **Contradicted** — the abstract says otherwise
+- ❓ **Unverified** — evidence is insufficient (counted in the score)
+
+Claims that *cannot* be judged from abstracts alone are **honestly separated, not silently counted**:
+- 📖 **Needs full-text** — the abstract doesn't cover this claim (excluded from scoring)
+- 📭 **Title-only** — no abstract available (excluded from scoring)
+
+The overall confidence score therefore reflects only claims the verifier could actually judge. Author metadata is injected during verification, so the checker first confirms *"this is the right paper"* before judging the content — catching mismatched citations that merely look plausible.
+
 ### QC Department (3-Layer Filter)
 
 The biggest quality gate. Three layers ensure zero pollution:
@@ -186,6 +208,8 @@ No hardcoded keywords. The LLM generates everything based on your topic — excl
 ## 📖 Usage Tutorial
 
 Two ways to run Consensus Pipeline: **Streamlit Web UI** (interactive, visual) or **Direct CLI** (headless, scriptable). Both produce the same output — pick based on your workflow.
+
+> 🌐 **No install?** Try the live demo at [consensus-pipeline.streamlit.app](https://consensus-pipeline.streamlit.app) — bring your own API key.
 
 ---
 
@@ -389,25 +413,28 @@ consensus-pipeline/
 ├── run_pipeline.py              # CLI runner for headless execution
 ├── quality_controller.py        # QC department (3-layer filter)
 ├── domain_config_generator.py   # Dynamic domain config
-├── report_generator.py          # Report generation with confidence
 ├── docx_exporter.py             # Word export
 ├── pdf_exporter.py              # PDF export
 ├── academic/                    # Academic research module
-│   ├── search_engine.py         # Multi-source search
+│   ├── search_engine.py         # Multi-source paper search
 │   ├── journal_classifier.py    # Journal quality sieve
 │   ├── journal_registry.py      # 209-journal local registry
-│   ├── fact_checker.py          # Automated fact verification
-│   └── __init__.py
-├── requirement/                 # Requirement research module
+│   ├── cross_validator.py       # Cross-validation & topic clustering
+│   ├── report_generator.py      # Report generation with confidence
+│   ├── report_visualizer.py     # Report charts
+│   └── visualizer.py            # Academic charts (trends, distributions)
+├── requirement/                 # Requirement & verification module
 │   ├── interviewer.py           # AI interview agent
 │   ├── structurer.py            # Scope & constraint extraction
-│   ├── generator.py             # Requirement document generation
-│   ├── validator.py             # Completeness check
-│   └── __init__.py
+│   ├── discussion_group.py      # Multi-angle requirement discussion
+│   ├── config_recommender.py    # Department config recommendation
+│   ├── citation_verifier.py     # NLI citation verification
+│   └── fact_checker.py          # Key-conclusion fact checking
 ├── templates/                   # Debate prompt templates
 ├── presets/                     # Built-in presets
+├── docs/                        # Quickstart & preset guides
 ├── examples/                    # Screenshots & example outputs
-└── fonts/                       # Chinese fonts (LXGW WenKai)
+└── user_profiles/               # Interview profiles
 ```
 
 ---
@@ -417,7 +444,7 @@ consensus-pipeline/
 | Priority | Feature | Status |
 |----------|---------|--------|
 | P0 | Fix UI labels bilingual in EN mode | In progress |
-| P1 | Semantic citation verification (embedding-based) | Planned |
+| P1 | Semantic citation verification | ✅ Shipped in v0.12 (NLI-based) |
 | P1 | Sub-topic query splitting | Planned |
 | P1 | Publication bias detection (funnel plot) | Planned |
 | P2 | Cross-language retrieval (CNKI + bilingual alignment) | Planned |
@@ -471,5 +498,6 @@ MIT License
 
 ---
 
----
+If Consensus Pipeline helps your research, a ⭐ on GitHub means a lot — it helps others find the project.
+
 
