@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 # v0.12.11: build fingerprint — stamped into every report verify() produces and
 # shown by the UI next to the confidence score, so a stale deployed verifier
 # (app.py newer than this file) is identifiable from a single screenshot.
-VERIFIER_BUILD = "v0.12.16"
+VERIFIER_BUILD = "v0.12.18"
 
 
 # ── Content Filters ─────────────────────────────────────────────────────────

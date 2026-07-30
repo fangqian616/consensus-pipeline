@@ -49,3 +49,9 @@ test_full_pipeline.py
 
 # 断点文件
 .checkpoints/
+
+# local scratch tests
+test_fixes*.py
+test_full_search.py
+test_search.py
+test_v011.py

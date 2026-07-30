@@ -209,7 +209,7 @@ pip install pandas numpy matplotlib seaborn requests pyyaml jupyter
 The repository contains the minimal pipeline code from Section 6.1.
 
 ```bash
-git clone https://github.com/your-org/quickstart.git
+git clone <starter-repository-url>
 cd quickstart
 ```
 
