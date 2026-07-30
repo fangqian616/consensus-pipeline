@@ -5622,7 +5622,7 @@ def main():
 
     st.title(t("title"))
     st.caption(t("subtitle"))
-    st.caption("build: v0.12.16")  # 版本标记，确认部署用
+    st.caption("build: v0.12.17")  # 版本标记，确认部署用
     if CV_MODULE_STALE:
         st.warning("⚠️ " + ("校验器模块为旧版（自动重载后仍缺新函数）——请 Manage app → Redeploy 拉取最新代码，否则校验分数为旧版口径。"
                             if _is_zh_main else
@@ -5775,6 +5775,17 @@ def main():
         st.session_state._auto_jump_to_debate = False
         is_zh = st.session_state.get("lang", "zh") == "zh"
         st.toast(t("toast_config_confirmed"))
+
+    # v0.12.17: page footer — GitHub star call-to-action
+    _ft_zh = st.session_state.get("lang", "zh") == "zh"
+    st.divider()
+    st.markdown(
+        ("⭐ 觉得这个工具有用？[去 GitHub 仓库点个 Star 支持一下](https://github.com/fang616/consensus-pipeline)　"
+         "[![GitHub stars](https://img.shields.io/github/stars/fang616/consensus-pipeline?style=social)]"
+         "(https://github.com/fang616/consensus-pipeline)" if _ft_zh else
+         "⭐ Found this tool helpful? [Star the repo on GitHub](https://github.com/fang616/consensus-pipeline)　"
+         "[![GitHub stars](https://img.shields.io/github/stars/fang616/consensus-pipeline?style=social)]"
+         "(https://github.com/fang616/consensus-pipeline)"))
 
 
 if __name__ == "__main__":
