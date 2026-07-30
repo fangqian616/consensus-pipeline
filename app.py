@@ -28,7 +28,7 @@ from requirement.fact_checker import FactChecker
 # by version mismatch and reload it in-place (capability probes miss minor bumps: v0.12.12 already has the probe function yet still predates v0.12.13+); if the disk file itself is old
 # too, CV_MODULE_STALE stays True and a banner tells the user to Redeploy.
 import importlib as _importlib
-_CV_EXPECTED_BUILD = "v0.12.16"  # bump together with VERIFIER_BUILD / marker
+_CV_EXPECTED_BUILD = "v0.12.18"  # bump together with VERIFIER_BUILD / marker
 try:
     import requirement.citation_verifier as _cv_mod
     if getattr(_cv_mod, "VERIFIER_BUILD", "") != _CV_EXPECTED_BUILD:
@@ -5622,7 +5622,7 @@ def main():
 
     st.title(t("title"))
     st.caption(t("subtitle"))
-    st.caption("build: v0.12.17")  # 版本标记，确认部署用
+    st.caption("build: v0.12.18")  # 版本标记，确认部署用
     if CV_MODULE_STALE:
         st.warning("⚠️ " + ("校验器模块为旧版（自动重载后仍缺新函数）——请 Manage app → Redeploy 拉取最新代码，否则校验分数为旧版口径。"
                             if _is_zh_main else
