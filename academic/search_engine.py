@@ -1,0 +1,1003 @@
+"""
+Academic Search Engine — Consensus Pipeline v4.4
+
+Tri-source parallel retrieval (arXiv/Semantic Scholar/OpenAlex) + journal quality filtering
+v4.4: Increased output to 20+ papers, arXiv preprint special handling, guaranteed quantity fallback mechanism
+"""
+import json
+import os
+from typing import List, Dict, Any, Optional
+from dataclasses import dataclass, field
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+
+
+# ============ Safe Truncation Utilities ============
+
+def safe_truncate(text: str, max_chars: int = 200) -> str:
+    """Safe truncation at character boundary to avoid multi-byte encoding issues."""
+    if not text:
+        return ""
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars]
+
+
+# ── 期刊分级快照缓存(累积式, API 写回) ──────────────────────────────────
+_JOURNAL_SNAPSHOT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "journal_grades_snapshot.json")
+_snapshot_cache = None
+
+
+def _load_journal_snapshot():
+    global _snapshot_cache
+    if _snapshot_cache is None:
+        try:
+            with open(_JOURNAL_SNAPSHOT_PATH, "r", encoding="utf-8") as f:
+                _snapshot_cache = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            _snapshot_cache = {"snapshot_date": "2026.8.15", "journals": {}}
+    return _snapshot_cache
+
+
+def _snapshot_get(journal_name):
+    snap = _load_journal_snapshot()
+    entry = snap.get("journals", {}).get(journal_name)
+    return entry.get("level") if isinstance(entry, dict) else None
+
+
+def _snapshot_set(journal_name, detail):
+    snap = _load_journal_snapshot()
+    snap.setdefault("journals", {})[journal_name] = detail
+    tmp = _JOURNAL_SNAPSHOT_PATH + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(snap, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, _JOURNAL_SNAPSHOT_PATH)
+    except OSError:
+        pass
+
+
+def classify_dynamic(paper: "PaperCandidate") -> str:
+    """
+    混合动态分级:
+    1. 论文级被引百分位(OpenAlex cited_by_percentile_year) → S/A/B/C
+    2. 期刊分级快照命中 → S/A/B/C
+    3. easyScholar API(中科院分区 + JCR + CSSCI) → S/A/B/C + 写回快照
+    4. 都没有(预印本 / 真无数据) → U (graded=False)
+
+    阈值(百分位): >=90→S, >=70→A, >=50→B, else→C
+    """
+    pct = paper.cited_by_percentile_year
+    # OpenAlex 返回对象 {"min": X, "max": Y}, 取 min(保守, 宁缺毋滥)
+    if isinstance(pct, dict):
+        pct = pct.get("min") if pct.get("min") is not None else pct.get("max")
+    if pct is not None:
+        try:
+            pct = float(pct)
+        except (TypeError, ValueError):
+            pct = None
+    if pct is not None:
+        if pct >= 90:
+            return "S"
+        if pct >= 70:
+            return "A"
+        if pct >= 50:
+            return "B"
+        return "C"
+
+    if paper.journal:
+        # 2. 快照命中(离线、快)
+        cached = _snapshot_get(paper.journal)
+        if cached in ("S", "A", "B", "C"):
+            return cached
+
+        # 3. easyScholar API(有 key), 绕过静态表
+        try:
+            from .journal_classifier import query_easyscholar, _level_from_easyscholar
+            rank = query_easyscholar(paper.journal)
+            if rank:
+                level = _level_from_easyscholar(rank)
+                if level in ("S", "A", "B", "C"):
+                    official = (rank.get("officialRank") or {}).get("all") or {}
+                    _snapshot_set(paper.journal, {
+                        "level": level,
+                        "jcr": official.get("sci") or "",
+                        "cas": official.get("sciUp") or "",
+                        "if": official.get("sciif") or "",
+                        "source": "easyscholar",
+                    })
+                    return level
+        except Exception:
+            pass
+
+    return "U"
+
+
+def openalex_batch_abstracts(dois: List[str], mailto: str = "fangqian616@users.noreply.github.com") -> Dict[str, str]:
+    """Batch-fetch abstracts from OpenAlex by DOI (one request per 25 DOIs).
+
+    Returns {doi: abstract_text}. Best-effort: network/rate-limit failures
+    yield whatever could be fetched (possibly empty). DOIs may be bare
+    ("10.x/yy") or full URLs; returned keys are bare DOIs as sent in `dois`.
+    """
+    import urllib.request
+    import urllib.parse
+    import time as _time
+
+    out: Dict[str, str] = {}
+    clean: List[str] = []
+    for d in dois:
+        if not d or not isinstance(d, str):
+            continue
+        d = d.strip().replace("https://doi.org/", "").replace("http://doi.org/", "")
+        if d:
+            clean.append(d)
+
+    for i in range(0, len(clean), 25):
+        chunk = clean[i:i + 25]
+        filt = "|".join(chunk)
+        url = (
+            "https://api.openalex.org/works?filter=doi:"
+            + urllib.parse.quote(filt, safe="|/")
+            + f"&per_page=25&mailto={mailto}&select=doi,abstract_inverted_index"
+        )
+        for attempt in range(2):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
+                with urllib.request.urlopen(req, timeout=20) as resp:
+                    data = json.loads(resp.read())
+                for w in data.get("results", []):
+                    doi = (w.get("doi") or "").replace("https://doi.org/", "")
+                    aii = w.get("abstract_inverted_index")
+                    if doi and aii and isinstance(aii, dict):
+                        wp = [(pos, word) for word, positions in aii.items() for pos in positions]
+                        wp.sort()
+                        text = " ".join(word for _, word in wp)
+                        if text:
+                            out[doi] = text
+                break
+            except Exception as e:
+                if attempt == 0:
+                    _time.sleep(2)
+                    continue
+                print(f"  [enrich] OpenAlex batch failed: {e}")
+        if i + 25 < len(clean):
+            _time.sleep(1)  # polite pacing between batches
+
+    # Also index lowercased keys for case-insensitive lookup
+    for k, v in list(out.items()):
+        out.setdefault(k.lower(), v)
+    return out
+
+
+@dataclass
+class PaperCandidate:
+    """Paper candidate"""
+    title: str = ""
+    doi: str = ""
+    authors: List[str] = field(default_factory=list)
+    journal: str = ""
+    year: int = 0
+    abstract: str = ""
+    citation_count: int = 0
+    source: str = ""  # arxiv / semantic_scholar / openalex
+    quality_level: str = "C"  # S/A/B/C/D
+    quality_detail: Dict[str, Any] = field(default_factory=dict)
+    author_h_index: int = 0  # Used by third filter stage
+    is_preprint: bool = False  # v4.4: Mark preprints
+    layer: str = ""  # v0.7.0: QC annotation layer (core/method/background)
+    cited_by_percentile_year: Optional[float] = None  # OpenAlex 同年同领域被引百分位(0~100)
+    venue_type: str = ""  # journal / conference / repository / None
+    graded: bool = False  # True=有真实等级(S/A/B/C); False=U(未定级)
+
+    def to_dict(self) -> dict:
+        import dataclasses
+        return dataclasses.asdict(self)
+
+
+class AcademicSearchEngine:
+    """
+    Academic search engine
+
+    Supports:
+    1. Tri-source parallel retrieval (arXiv/Semantic Scholar/OpenAlex)
+    2. Journal quality filtering (four filter stages + guaranteed quantity fallback)
+    3. Deduplication and merging
+    4. arXiv preprint special handling (downgraded, not discarded)
+    """
+
+    def __init__(
+        self,
+        quality_levels: List[str] = None,
+        min_citations: int = 5,
+        min_yearly_citations: float = 2.0,
+        recent_year_buffer: int = 3,
+        min_results: int = 20,  # v4.4: Guarantee minimum output papers
+        include_preprints: bool = True,  # v4.4: Whether to include preprints
+        domain_config: Optional[Dict[str, Any]] = None,  # v0.7.0: Dynamic domain configuration
+    ):
+        """
+        Args:
+            quality_levels: Journal levels to keep, default ["S", "A", "B"]
+            min_citations: Minimum total citations
+            min_yearly_citations: Minimum yearly citations
+            recent_year_buffer: Relax citation requirements for recent N years
+            min_results: Guarantee minimum output papers (auto-relax filters if insufficient)
+            include_preprints: Whether to keep preprints in final results (downgraded appendix)
+            domain_config: v0.7.0 dynamic domain config (generated by domain_config_generator)
+        """
+        self.quality_levels = quality_levels or ["S", "A", "B"]
+        self.min_citations = min_citations
+        self.min_yearly_citations = min_yearly_citations
+        self.recent_year_buffer = recent_year_buffer
+        self.min_results = min_results
+        self.include_preprints = include_preprints
+        self.domain_config = domain_config
+        # v0.11.2: Drop exclusion signals that conflict with the search queries
+        # themselves. E.g. excluding "machine learning" while the query rotation
+        # contains "machine learning" unconditionally zeroes every fetched paper.
+        if self.domain_config:
+            _qr = [q for q in (self.domain_config.get("query_rotation") or []) if isinstance(q, str)]
+            _es = self.domain_config.get("exclusion_signals") or []
+            if _qr and _es:
+                _qtext = " ".join(_qr).lower()
+                _kept, _dropped = [], []
+                for _s in _es:
+                    if not isinstance(_s, str) or not _s.strip():
+                        continue
+                    _sl = _s.strip().lower()
+                    if _sl in _qtext or any(_q.lower() in _sl for _q in _qr):
+                        _dropped.append(_s)
+                    else:
+                        _kept.append(_s)
+                if _dropped:
+                    print(f"  [domain_config] Dropped {len(_dropped)} exclusion signals "
+                          f"conflicting with search queries: {_dropped}")
+                self.domain_config = {**self.domain_config, "exclusion_signals": _kept}
+
+    def search(
+        self,
+        query: str,
+        max_results_per_source: int = 50,  # v4.4: Default raised from 20 to 50
+        sources: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Tri-source parallel retrieval + quality filtering.
+
+        v4.4: Return structure includes main list + preprint appendix + statistics
+
+        Args:
+            query: Search keywords
+            max_results_per_source: Max results per source (default 50)
+            sources: Search source list, default all
+
+        Returns:
+            {
+                "papers": List[PaperCandidate],  # Journal papers (SAB level)
+                "preprints": List[PaperCandidate],  # Preprints (arXiv)
+                "stats": {
+                    "total_fetched": int,  # Raw fetched count
+                    "after_dedup": int,    # After deduplication
+                    "after_filter": int,   # After filtering
+                    "preprint_count": int, # Preprint count
+                }
+            }
+        """
+        sources = sources or ["arxiv", "semantic_scholar", "openalex", "crossref"]
+
+        # Parallel retrieval
+        all_results = []
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {}
+            for source in sources:
+                future = executor.submit(
+                    self._search_single_source, source, query, max_results_per_source
+                )
+                futures[future] = source
+
+            for future in as_completed(futures):
+                source = futures[future]
+                try:
+                    results = future.result()
+                    all_results.extend(results)
+                except Exception as e:
+                    print(f"Search source {source} failed: {e}")
+
+        total_fetched = len(all_results)
+
+        # Per-source fetch stats: makes it visible which source is down
+        # (e.g. OpenAlex/S2 throttled on shared cloud IPs -> journals silently 0)
+        _per_source: Dict[str, int] = {}
+        for _p in all_results:
+            _per_source[_p.source] = _per_source.get(_p.source, 0) + 1
+        if _per_source:
+            print(f"    [sources] fetched per source: {_per_source}")
+
+        if total_fetched == 0:
+            print(f"  ⚠️ WARNING: All search sources returned 0 papers for query '{query}'. "
+                  f"Sources tried: {sources}. Check API availability and rate limits.")
+
+        # Deduplication
+        deduped = self._deduplicate(all_results)
+        after_dedup = len(deduped)
+
+        # 动态分级: 拆成 graded(S/A/B/C, 有百分位) / ungraded(U, 无百分位) / preprints(arXiv)
+        graded_papers = []
+        ungraded_papers = []
+        preprints = []
+        for paper in deduped:
+            if paper.is_preprint or paper.journal == "arXiv":
+                paper.quality_level = "U"
+                paper.graded = False
+                paper.quality_detail = {"level": "U", "note": "Preprint, not formally published", "source": "preprint"}
+                preprints.append(paper)
+            else:
+                paper.quality_level = classify_dynamic(paper)
+                paper.graded = (paper.quality_level != "U")
+                if paper.graded:
+                    paper.quality_detail = {"level": paper.quality_level, "source": "openalex_percentile"}
+                    graded_papers.append(paper)
+                else:
+                    paper.quality_detail = {"level": "U", "note": "No cited_by_percentile_year", "source": "ungraded"}
+                    ungraded_papers.append(paper)
+
+        # 质量四筛只作用于 graded(S/A/B/C); U 论文只过相关性(下方统一处理)
+        filtered = self._apply_four_sieves(graded_papers, query=query)
+
+        # Quantity guarantee fallback: if filtered results < min_results, progressively relax filters
+        if len(filtered) < self.min_results:
+            _before_em = len(filtered)
+            filtered = self._ensure_minimum(graded_papers, filtered, query=query)
+            if len(filtered) > _before_em:
+                print(f"    [ensure_minimum] rescued {len(filtered) - _before_em} papers (now {len(filtered)})")
+            elif len(filtered) < self.min_results:
+                print(f"    [ensure_minimum] nothing rescuable (still {len(filtered)} < {self.min_results})")
+
+        # Sort by level
+        level_order = {"S": 0, "A": 1, "B": 2, "C": 3, "D": 4}
+        filtered.sort(key=lambda p: (level_order.get(p.quality_level, 5), -p.citation_count))
+
+        # Sort preprints by citations, take top
+        preprints.sort(key=lambda p: -p.citation_count)
+
+        # v0.8.2: Filter preprints through relevance — no unfiltered preprints
+        # Preprints must pass the same _compute_relevance() check as journal papers
+        # This prevents astronomy/Bitcoin/irrelevant arXiv papers from leaking through
+        if self.include_preprints and preprints and query:
+            filtered_preprints = []
+            for p in preprints:
+                rel = self._compute_relevance(p, query, domain_config=self.domain_config)
+                if rel >= 0.15:  # Same threshold as journal papers
+                    filtered_preprints.append(p)
+            preprints = filtered_preprints
+
+        # U 论文(无百分位期刊): 只过相关性, 不过质量筛; 与预印本同通道
+        if ungraded_papers and query:
+            ungraded_papers = [p for p in ungraded_papers
+                               if self._compute_relevance(p, query, domain_config=self.domain_config) >= 0.15]
+
+        stats = {
+            "total_fetched": total_fetched,
+            "after_dedup": after_dedup,
+            "after_filter": len(filtered),
+            "preprint_count": len(preprints),
+            "ungraded_count": len(ungraded_papers),
+            "per_source": _per_source,
+        }
+
+        return {
+            "papers": filtered,
+            "preprints": preprints if self.include_preprints else [],
+            "ungraded": ungraded_papers,
+            "stats": stats,
+        }
+
+    def search_simple(
+        self,
+        query: str,
+        max_results_per_source: int = 50,
+        sources: Optional[List[str]] = None,
+    ) -> List[PaperCandidate]:
+        """Backward-compatible interface: return paper list (excluding preprints and stats)"""
+        result = self.search(query, max_results_per_source, sources)
+        return result["papers"]
+
+    def _ensure_minimum(
+        self,
+        all_papers: List[PaperCandidate],
+        filtered: List[PaperCandidate],
+        query: str = "",
+    ) -> List[PaperCandidate]:
+        """
+        Guarantee minimum output papers. Progressively relax filters:
+        1. Relax citation requirement (halve)
+        2. Include C-level papers
+        3. Include highly-cited preprints
+
+        v4.5: All fallback papers must pass a minimal relevance check (>= 0.05)
+        to prevent completely off-topic papers from being added.
+        """
+        result = list(filtered)
+        filtered_dois = {p.doi for p in result if p.doi}
+        filtered_titles = {p.title[:30].lower() for p in result}
+
+        def _is_minimally_relevant(paper: PaperCandidate) -> bool:
+            """Check if paper has at least minimal relevance to the query."""
+            if not query:
+                return True  # No query = no filtering
+            relevance = self._compute_relevance(paper, query, domain_config=self.domain_config)
+            return relevance >= 0.05
+
+        # Stage 1: Relax citation (S/A/C pass through, B-level citations halved)
+        if len(result) < self.min_results:
+            relaxed = []
+            for paper in all_papers:
+                if paper.doi in filtered_dois or paper.title[:30].lower() in filtered_titles:
+                    continue
+                # v4.5: Skip off-topic papers even in fallback
+                if not _is_minimally_relevant(paper):
+                    continue
+                if paper.quality_level in ["S", "A"]:
+                    relaxed.append(paper)
+                elif paper.quality_level == "B":
+                    # Citation requirement halved
+                    if paper.citation_count >= self.min_citations // 2:
+                        relaxed.append(paper)
+                elif paper.quality_level == "C":
+                    # Highly-cited C-level also included
+                    if paper.citation_count >= self.min_citations * 2:
+                        relaxed.append(paper)
+            result.extend(relaxed)
+
+        # Stage 2: If still insufficient, add C-level papers (sorted by citations, take top)
+        if len(result) < self.min_results:
+            current_dois = {p.doi for p in result if p.doi}
+            current_titles = {p.title[:30].lower() for p in result}
+            c_papers = [
+                p for p in all_papers
+                if p.quality_level == "C"
+                and p.doi not in current_dois
+                and p.title[:30].lower() not in current_titles
+                and _is_minimally_relevant(p)  # v4.5: relevance check
+            ]
+            c_papers.sort(key=lambda p: -p.citation_count)
+            needed = self.min_results - len(result)
+            result.extend(c_papers[:needed])
+
+        return result
+
+    def _search_single_source(
+        self, source: str, query: str, max_results: int
+    ) -> List[PaperCandidate]:
+        """Single source search"""
+        results = []
+
+        if source == "arxiv":
+            results = self._search_arxiv(query, max_results)
+        elif source == "semantic_scholar":
+            results = self._search_semantic_scholar(query, max_results)
+        elif source == "openalex":
+            results = self._search_openalex(query, max_results)
+        elif source == "crossref":
+            results = self._search_crossref(query, max_results)
+
+        return results
+
+    def _search_arxiv(self, query: str, max_results: int) -> List[PaperCandidate]:
+        """arXiv search (v4.4: mark as preprint, v0.8.2: retry + longer timeout)"""
+        import urllib.request
+        import xml.etree.ElementTree as ET
+        import urllib.parse as _urlp
+        import time
+
+        url = f"https://export.arxiv.org/api/query?search_query=all:{_urlp.quote_plus(query)}&max_results={max_results}"
+
+        for attempt in range(2):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    xml_data = resp.read()
+
+                root = ET.fromstring(xml_data)
+                ns = {"atom": "http://www.w3.org/2005/Atom"}
+
+                results = []
+                for entry in root.findall("atom:entry", ns):
+                    title = entry.find("atom:title", ns).text.strip().replace("\n", " ")
+                    doi_elem = entry.find("atom:arxiv:doi", ns) if entry.find("atom:arxiv:doi", ns) is not None else None
+                    doi = doi_elem.text if doi_elem is not None else ""
+                    summary = entry.find("atom:summary", ns).text.strip()
+                    published = entry.find("atom:published", ns).text[:4]
+
+                    authors = []
+                    for author_elem in entry.findall("atom:author", ns):
+                        name_elem = author_elem.find("atom:name", ns)
+                        if name_elem is not None and name_elem.text:
+                            authors.append(name_elem.text.strip())
+
+                    results.append(PaperCandidate(
+                        title=title,
+                        doi=doi,
+                        authors=authors,
+                        journal="arXiv",
+                        year=int(published) if published.isdigit() else 0,
+                        abstract=safe_truncate(summary, 500),
+                        source="arxiv",
+                        quality_level="D",
+                        is_preprint=True,
+                    ))
+
+                return results
+
+            except Exception as e:
+                if attempt < 1:
+                    print(f"  arXiv error ({e}), retrying with longer timeout... (attempt {attempt+1}/2)")
+                    time.sleep(3)
+                    continue
+                print(f"arXiv search error: {e}")
+                return []
+
+    def _search_semantic_scholar(self, query: str, max_results: int) -> List[PaperCandidate]:
+        """Semantic Scholar search (v4.4: try fetching h-index, v0.8.2: retry on 429)"""
+        import urllib.request
+        import urllib.parse as _urlp
+        import time
+
+        url = f"https://api.semanticscholar.org/graph/v1/paper/search?query={_urlp.quote_plus(query)}&limit={max_results}&fields=title,doi,year,abstract,citationCount,journal,authors"
+
+        for attempt in range(3):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
+                with urllib.request.urlopen(req, timeout=20) as resp:
+                    data = json.loads(resp.read())
+
+                results = []
+                for paper in data.get("data", []):
+                    journal_info = paper.get("journal") or {}
+                    journal_name = journal_info.get("name", "") if journal_info else ""
+
+                    authors = []
+                    max_h_index = 0
+                    for a in (paper.get("authors") or []):
+                        if a.get("name"):
+                            authors.append(a["name"])
+                        h = a.get("hIndex") or 0
+                        if h and h > max_h_index:
+                            max_h_index = h
+
+                    results.append(PaperCandidate(
+                        title=paper.get("title", ""),
+                        doi=paper.get("doi", "") or "",
+                        authors=authors,
+                        journal=journal_name,
+                        year=paper.get("year") or 0,
+                        abstract=safe_truncate(paper.get("abstract") or "", 500),
+                        citation_count=paper.get("citationCount", 0) or 0,
+                        source="semantic_scholar",
+                        author_h_index=max_h_index,
+                    ))
+
+                return results
+
+            except urllib.error.HTTPError as e:
+                if e.code == 429 and attempt < 2:
+                    wait = 3 * (attempt + 1)
+                    print(f"  S2 rate limited (429), retrying in {wait}s... (attempt {attempt+1}/3)")
+                    time.sleep(wait)
+                    continue
+                print(f"Semantic Scholar search error: HTTP {e.code}")
+                return []
+            except Exception as e:
+                if attempt < 2:
+                    print(f"  S2 error ({e}), retrying... (attempt {attempt+1}/3)")
+                    time.sleep(2)
+                    continue
+                print(f"Semantic Scholar search error: {e}")
+                return []
+
+    def _search_openalex(self, query: str, max_results: int) -> List[PaperCandidate]:
+        """OpenAlex search (v4.4: fetch more metadata)"""
+        try:
+            import urllib.request
+
+            import urllib.parse as _urlp
+            # mailto enters the OpenAlex polite pool (separate, more generous rate
+            # limit). Without it, shared-IP deployments (e.g. cloud free tier) get
+            # throttled hard — observed fetch collapse from ~30/query to ~4/query.
+            url = f"https://api.openalex.org/works?search={_urlp.quote_plus(query)}&per_page={max_results}&mailto=fangqian616@users.noreply.github.com&select=id,doi,title,publication_year,cited_by_count,cited_by_percentile_year,authorships,primary_location,type,abstract_inverted_index"
+            req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                data = json.loads(resp.read())
+
+            results = []
+            for work in data.get("results", []):
+                loc = work.get("primary_location") or {}
+                source_info = loc.get("source") or {}
+                journal_name = source_info.get("display_name", "")
+                venue_type = (source_info.get("type") or "") if source_info else ""
+                work_type = work.get("type", "")
+
+                authors = []
+                for a in (work.get("authorships") or []):
+                    author = a.get("author") or {}
+                    if author.get("display_name"):
+                        authors.append(author["display_name"])
+
+                doi = work.get("doi", "") or ""
+                if doi and doi.startswith("https://doi.org/"):
+                    doi = doi.replace("https://doi.org/", "")
+
+                is_preprint = work_type in ["preprint", "working_paper"]
+
+                # v5.1.7: Reconstruct abstract text from abstract_inverted_index
+                abstract_text = ""
+                aii = work.get("abstract_inverted_index")
+                if aii and isinstance(aii, dict):
+                    # Reconstruct ordered text from inverted index
+                    word_positions = []
+                    for word, positions in aii.items():
+                        for pos in positions:
+                            word_positions.append((pos, word))
+                    word_positions.sort()
+                    abstract_text = " ".join(w for _, w in word_positions)
+
+                results.append(PaperCandidate(
+                    title=work.get("title", ""),
+                    doi=doi,
+                    authors=authors,
+                    journal=journal_name,
+                    year=work.get("publication_year") or 0,
+                    abstract=safe_truncate(abstract_text, 500),
+                    citation_count=work.get("cited_by_count", 0) or 0,
+                    source="openalex",
+                    is_preprint=is_preprint,
+                    cited_by_percentile_year=work.get("cited_by_percentile_year"),
+                    venue_type=venue_type,
+                ))
+
+            return results
+
+        except Exception as e:
+            print(f"OpenAlex search error: {e}")
+            return []
+
+    def _search_crossref(self, query: str, max_results: int) -> List[PaperCandidate]:
+        """Crossref search: journal-article only metadata source.
+
+        Free, keyless, cloud-IP friendly fallback for journal papers when
+        OpenAlex/S2 are throttled on shared cloud egress IPs. Uses the polite
+        pool via mailto. Only type=journal-article is kept, so everything it
+        returns counts as a journal paper (never a preprint).
+        """
+        import urllib.request
+        import urllib.parse as _urlp
+        import re as _re
+
+        try:
+            url = (
+                f"https://api.crossref.org/works?query={_urlp.quote_plus(query)}"
+                f"&rows={max_results}&filter=type:journal-article"
+                f"&mailto=fangqian616@users.noreply.github.com"
+                f"&select=DOI,title,author,issued,container-title,is-referenced-by-count,abstract,type"
+            )
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "ConsensusPipeline/4.4 (mailto:fangqian616@users.noreply.github.com)"},
+            )
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                data = json.loads(resp.read())
+
+            items = (data.get("message") or {}).get("items", [])
+            results = []
+            for it in items:
+                title_list = it.get("title") or []
+                title = title_list[0].strip() if title_list and title_list[0] else ""
+                if not title:
+                    continue
+
+                ct = it.get("container-title") or []
+                journal_name = ct[0] if ct else ""
+
+                authors = []
+                for a in (it.get("author") or []):
+                    name = " ".join(x for x in [a.get("given", ""), a.get("family", "")] if x).strip()
+                    if name:
+                        authors.append(name)
+
+                year = 0
+                date_parts = (it.get("issued") or {}).get("date-parts") or []
+                if date_parts and date_parts[0] and date_parts[0][0]:
+                    year = int(date_parts[0][0])
+
+                # Crossref abstracts are JATS XML — strip tags
+                abstract_raw = it.get("abstract") or ""
+                abstract_text = _re.sub(r"<[^>]+>", " ", abstract_raw)
+                abstract_text = _re.sub(r"\s+", " ", abstract_text).strip()
+
+                results.append(PaperCandidate(
+                    title=title,
+                    doi=it.get("DOI", "") or "",
+                    authors=authors,
+                    journal=journal_name,
+                    year=year,
+                    abstract=safe_truncate(abstract_text, 500),
+                    citation_count=it.get("is-referenced-by-count", 0) or 0,
+                    source="crossref",
+                ))
+
+            return results
+
+        except Exception as e:
+            print(f"Crossref search error: {e}")
+            return []
+
+    def enrich_abstracts(self, papers: List[PaperCandidate]) -> int:
+        """Backfill missing abstracts via OpenAlex batch DOI lookup.
+
+        Crossref rarely provides abstracts, which starves downstream debate
+        grounding and citation verification. One batched request per 25 DOIs;
+        best-effort — failures leave abstracts empty. Returns count filled.
+        """
+        need = [p for p in papers if (not p.abstract or not p.abstract.strip()) and p.doi]
+        if not need:
+            return 0
+        got = openalex_batch_abstracts([p.doi for p in need])
+        filled = 0
+        for p in need:
+            text = got.get(p.doi) or got.get(p.doi.lower())
+            if text:
+                p.abstract = safe_truncate(text, 500)
+                filled += 1
+        return filled
+
+    def _deduplicate(self, papers: List[PaperCandidate]) -> List[PaperCandidate]:
+        """Deduplication: exact DOI match + title similarity dedup"""
+        seen_dois = set()
+        seen_titles = set()
+        result = []
+
+        for paper in papers:
+            if paper.doi and paper.doi in seen_dois:
+                existing = next((p for p in result if p.doi == paper.doi), None)
+                if existing and paper.citation_count > existing.citation_count:
+                    existing.citation_count = paper.citation_count
+                    existing.source = f"{existing.source}+{paper.source}"
+                continue
+
+            title_key = paper.title.lower()[:30].strip()
+            if title_key in seen_titles:
+                continue
+
+            if paper.doi:
+                seen_dois.add(paper.doi)
+            seen_titles.add(title_key)
+            result.append(paper)
+
+        return result
+
+    def _apply_four_sieves(
+        self,
+        papers: List[PaperCandidate],
+        query: str = "",
+        relevance_threshold: float = 0.15,
+    ) -> List[PaperCandidate]:
+        """
+        Four-stage filtering (v5.1: 4th stage activated — content relevance filtering)
+
+        Args:
+            papers: Candidate papers
+            query: Original search query (for relevance calculation)
+            relevance_threshold: Relevance threshold (0~1), papers below this are filtered
+        """
+        import datetime
+        current_year = datetime.datetime.now().year
+        result = []
+        b_accepted = 0
+        _k_level = _k_cit = _k_h = _k_rel = 0
+
+        for paper in papers:
+            # Stage 1: Source ranking
+            if paper.quality_level not in self.quality_levels:
+                _k_level += 1
+                continue
+
+            # B-level: keep at most 2 representatives
+            if paper.quality_level == "B":
+                if b_accepted >= 2:
+                    _k_level += 1
+                    continue
+                b_accepted += 1
+
+            # Stage 2: Citation weighting
+            years_since_pub = current_year - paper.year if paper.year > 0 else 10
+            is_recent = years_since_pub <= self.recent_year_buffer
+
+            if not is_recent and paper.citation_count < self.min_citations:
+                if paper.quality_level != "S":
+                    _k_cit += 1
+                    continue
+
+            if not is_recent and years_since_pub > 0:
+                yearly_avg = paper.citation_count / years_since_pub
+                if yearly_avg < self.min_yearly_citations and paper.quality_level not in ["S", "A"]:
+                    _k_cit += 1
+                    continue
+
+            # Stage 3: Downweight non-S papers with author h-index < 5
+            if paper.author_h_index and paper.author_h_index < 5:
+                if paper.quality_level not in ["S"]:
+                    _k_h += 1
+                    continue
+
+            # Stage 4: Content relevance filtering (v5.1 activated, v0.7.0: domain_config driven)
+            if query:
+                relevance = self._compute_relevance(paper, query, domain_config=self.domain_config)
+                if relevance < relevance_threshold:
+                    _k_rel += 1
+                    continue
+
+            result.append(paper)
+
+        if papers:
+            print(f"    [sieves] in={len(papers)} killed(level={_k_level}, citations={_k_cit}, "
+                  f"h_index={_k_h}, relevance={_k_rel}) -> kept={len(result)}")
+
+        return result
+
+    @staticmethod
+    def _compute_relevance(paper: PaperCandidate, query: str, domain_config: Optional[Dict[str, Any]] = None) -> float:
+        """
+        Calculate relevance score (0~1) between paper and search query.
+
+        v0.7.0: If domain_config provided, read exclusion_signals and tier_definitions from it,
+        instead of hardcoded domain keywords. Papers matching exclusion_signals return 0.0 directly (not penalty×0.0).
+
+        Algorithm: split query into keywords, count hit ratio in title+abstract,
+        with title hits weighted higher. Penalize if core domain words are completely absent.
+
+        Args:
+            paper: Candidate paper
+            query: Original search query
+            domain_config: v0.7.0 dynamic domain config (optional)
+
+        Returns:
+            Relevance score 0~1
+        """
+        # Preprocess: split query into keyword set
+        stop_words = {
+            "a", "an", "the", "in", "on", "of", "for", "and", "or",
+            "to", "with", "by", "from", "at", "is", "are", "was",
+            "were", "be", "been", "being", "that", "this", "it",
+            "not", "no", "but", "as", "its", "has", "had", "have",
+            "can", "will", "would", "could", "should", "may", "might",
+            "do", "does", "did", "using", "used", "use", "based",
+            "via", "through", "into", "over", "between", "among",
+        }
+
+        # v0.7.0: If domain_config exists, read exclusion signals and tier definitions
+        if domain_config:
+            exclusion_signals = domain_config.get("exclusion_signals", [])
+            tier_defs = domain_config.get("tier_definitions", {})
+
+            # Extract domain core words and method words from tier_definitions
+            domain_must_have = set()
+            ml_must_have = set()
+            carbon_exclude = set()
+
+            # core tier keywords → domain_must_have
+            if "core" in tier_defs:
+                domain_must_have.update(kw.lower() for kw in tier_defs["core"].get("keywords", []))
+            # method tier keywords → ml_must_have
+            if "method" in tier_defs:
+                ml_must_have.update(kw.lower() for kw in tier_defs["method"].get("keywords", []))
+            # background tier keywords also added to domain_must_have
+            if "background" in tier_defs:
+                domain_must_have.update(kw.lower() for kw in tier_defs["background"].get("keywords", []))
+
+            # exclusion_signals → carbon_exclude (legacy name, actually all exclusion signals)
+            carbon_exclude = set(s.lower() for s in exclusion_signals)
+        else:
+            # Fallback to v5.1.8-fix2 hardcoded logic
+            # Domain core words (must hit at least one, otherwise penalize)
+            # v5.1.8-fix2: carbon counts as energy only with market/price/emission context
+            # v0.7.x: legacy energy/economics domain keywords removed — the
+            # no-domain_config fallback no longer assumes an energy domain and
+            # keeps only the generic ML keyword penalty (ml_must_have below).
+            domain_must_have = set()
+            # Exclusion words: contain carbon but not in energy context
+            carbon_exclude = {
+                "carbon nitride", "carbon nanotube", "carbon fiber",
+                "carbon dioxide reduction", "graphitic carbon", "activated carbon",
+                "carbon black", "carbon film",
+            }
+
+            ml_must_have = {
+                "machine learning", "deep learning", "neural network",
+                "lstm", "xgboost", "random forest", "transformer",
+                "gradient boosting", "reinforcement learning", "cnn",
+                "rnn", "gnn", "svm", "regression", "classification",
+                "clustering", "nlp", "gan", "autoencoder", "attention",
+                "ai", "artificial intelligence", "ml", "dl",
+                "机器学习", "深度学习", "神经网络",
+            }
+
+        query_lower = query.lower()
+        # Extract query keywords
+        query_tokens = set()
+        for token in query_lower.replace(",", " ").replace("/", " ").split():
+            token = token.strip()
+            if token and token not in stop_words and len(token) > 1:
+                query_tokens.add(token)
+
+        # Coarse-grained phrases (e.g., "machine learning")
+        query_phrases = set()
+        for phrase in [query_lower]:
+            for sub in phrase.split(","):
+                sub = sub.strip()
+                if len(sub.split()) >= 2:
+                    query_phrases.add(sub)
+
+        if not query_tokens:
+            return 0.5  # No filtering when no valid keywords
+
+        # Paper text
+        title_lower = paper.title.lower()
+        abstract_lower = (paper.abstract or "").lower()
+        combined = title_lower + " " + abstract_lower
+
+        # v0.7.0: Papers matching exclusion_signals return 0.0 directly (not penalty×0.2)
+        # Universal exclusion: always exclude education/pedagogy/nutrition noise
+        # regardless of domain_config (these are never relevant to academic research reviews)
+        _universal_exclude = {
+            "course design", "course construction", "syllabus", "pedagogy",
+            "teaching method", "curriculum", "ideological", "课程建设",
+            "课程思政", "教学设计", "教学改革", "教学改革", "教育发展",
+            "obesity", "dietary", "nutrition", "weight loss", "body mass",
+            "肥胖", "膳食", "营养", "减肥",
+            # Astronomy/astrophysics — "dark energy" matches "energy" in domain_must_have
+            "dark energy", "dark matter", "galaxy", "galaxies", "galactic",
+            "telescope", "astronomical", "astrophysics", "cosmological",
+            "supernova", "redshift", "exoplanet", "nebula", "pulsar",
+            "quasar", "black hole", "cosmic microwave", "stellar evolution",
+        }
+        if any(ex in combined for ex in _universal_exclude):
+            return 0.0  # Universal rejection: education/pedagogy/nutrition noise
+        if domain_config and carbon_exclude:
+            # In domain_config mode, carbon_exclude = exclusion_signals
+            if any(ex in combined for ex in carbon_exclude):
+                return 0.0  # Direct rejection, not penalty
+
+        # Hit calculation
+        title_hits = sum(1 for t in query_tokens if t in title_lower)
+        abstract_hits = sum(1 for t in query_tokens if t in abstract_lower)
+        phrase_hits = sum(1 for p in query_phrases if p in combined)
+
+        # Title hits weighted 2x, phrase hits weighted 3x
+        raw_score = (title_hits * 2 + abstract_hits + phrase_hits * 3)
+        max_score = len(query_tokens) * 2 + len(query_phrases) * 3  # Max score when all query tokens hit the title
+
+        if max_score == 0:
+            return 0.5
+
+        base_score = min(raw_score / max_score, 1.0)
+
+        # Domain must-have check: downweight if paper completely unrelated to energy or ML
+        has_domain = any(w in combined for w in domain_must_have)
+        has_ml = any(w in combined for w in ml_must_have)
+
+        penalty = 1.0
+        # v0.11.1: Skip domain penalty entirely when no domain/ml keywords are
+        # configured (e.g. literature-dept strategy supplies no tier_definitions).
+        # Empty keyword sets previously forced penalty=0.15, which made relevance
+        # permanently fall below the 0.15 threshold and wiped out ALL papers.
+        if domain_must_have or ml_must_have:
+            if not has_domain:
+                penalty *= 0.3  # Unrelated to domain → heavy penalty
+            if not has_ml and not has_domain:
+                penalty *= 0.5  # Unrelated to both ML and domain → additional penalty
+        # v5.1.8-fix2: Exclude non-energy carbon context (nanomaterials/chemistry etc.)
+        # v0.7.0: If no domain_config (fallback mode), keep legacy logic
+        if not domain_config and any(ex in combined for ex in carbon_exclude):
+            penalty *= 0.2
+
+        return base_score * penalty

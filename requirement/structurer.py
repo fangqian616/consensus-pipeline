@@ -1,0 +1,311 @@
+"""
+Requirement Structuring Module — Consensus Pipeline v4.0
+
+Further structures the requirement document output by the interviewer,
+providing standardized input for discussion groups and config recommendation modules.
+"""
+import json
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass, field
+
+from .interviewer import RequirementDocument
+
+
+@dataclass
+class StructuredRequirement:
+    """Structured requirement — output of structurer"""
+    # Basic info
+    topic: str = ""
+    domain: str = ""
+    domain_code: str = ""  # academic_research / animation / general
+
+    # Core requirements
+    objectives: List[str] = field(default_factory=list)
+    key_questions: List[str] = field(default_factory=list)
+
+    # Constraints
+    constraints: Dict[str, Any] = field(default_factory=dict)
+
+    # Deliverables
+    deliverable_type: str = ""
+    quality_criteria: str = ""
+
+    # Discussion group config suggestions
+    suggested_roles: List[Dict[str, str]] = field(default_factory=list)
+    """[
+        {"role": "Methodology Review", "reason": "..."},
+        {"role": "Literature Coverage Review", "reason": "Academic research needs..."},
+    ]"""
+
+    # Department config direction hints
+    department_hints: List[Dict[str, str]] = field(default_factory=list)
+    """[
+        {"type": "retrieval", "description": "Multi-source literature retrieval"},
+        {"type": "validation", "description": "Data validation and cross-checking"},
+    ]"""
+
+    # Metadata
+    source_doc: Optional[Dict[str, Any]] = None
+    domain_specific: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        import dataclasses
+        return dataclasses.asdict(self)
+
+    def to_json(self, indent: int = 2) -> str:
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
+
+
+# ============ Domain → Role Mapping ============
+
+DOMAIN_ROLE_MAP = {
+    "academic_research": {
+        "fixed_roles": [
+            {"role": "Methodology Review", "reason": "Evaluate the soundness of research paths and method choices"},
+            {"role": "Devil's Advocate", "reason": "Challenge assumptions, point out potential blind spots"},
+            {"role": "Feasibility Assessment", "reason": "Assess whether search tools and data sources can support the objectives"},
+        ],
+        "domain_roles": [
+            {"role": "Literature Coverage Review", "reason": "Ensure no key sources are missed in retrieval"},
+            {"role": "Statistical Method Scrutiny", "reason": "Question the applicability and robustness of methods"},
+            {"role": "Citation Chain Integrity", "reason": "Check whether key references are missing"},
+        ],
+    },
+    "animation": {
+        "fixed_roles": [
+            {"role": "Methodology Review", "reason": "Evaluate the soundness of creative methodology and workflow"},
+            {"role": "Devil's Advocate", "reason": "Challenge visual and narrative choices"},
+            {"role": "Feasibility Assessment", "reason": "Assess technical implementation difficulty"},
+        ],
+        "domain_roles": [
+            {"role": "Audience Analysis", "reason": "Review content from the target audience perspective"},
+            {"role": "Platform Adaptation", "reason": "Check adaptability across different platforms"},
+            {"role": "Visual Style Consistency", "reason": "Ensure visual style consistency"},
+        ],
+    },
+    "general": {
+        "fixed_roles": [
+            {"role": "Methodology Review", "reason": "Evaluate path soundness"},
+            {"role": "Devil's Advocate", "reason": "Challenge assumptions and direction"},
+            {"role": "Feasibility Assessment", "reason": "Assess executability"},
+        ],
+        "domain_roles": [],
+    },
+}
+
+# ============ Domain → Department Direction Mapping ============
+
+DOMAIN_DEPARTMENT_HINTS = {
+    "academic_research": [
+        {"type": "retrieval", "description": "Multi-source literature retrieval (arXiv/SS/OA)"},
+        {"type": "metadata", "description": "DOI precise metadata extraction"},
+        {"type": "citation_network", "description": "Citation network analysis"},
+        {"type": "methodology_review", "description": "Methodological rigor assessment"},
+        {"type": "data_validation", "description": "Cross-validation and data consistency"},
+        {"type": "counter_evidence", "description": "Counter-evidence search"},
+        {"type": "topic_clustering", "description": "9-dimension topic clustering"},
+        {"type": "visualization", "description": "Trend/distribution/breakthrough charts"},
+        {"type": "report_integration", "description": "PDF/Markdown report integration"},
+    ],
+    "animation": [
+        {"type": "screenwriter", "description": "Script / Narrative"},
+        {"type": "spatial", "description": "Spatial Layout"},
+        {"type": "storyboard", "description": "Storyboard Design"},
+        {"type": "dp", "description": "Cinematography"},
+        {"type": "lighting", "description": "Lighting Design"},
+        {"type": "vfx", "description": "Visual Effects"},
+        {"type": "sound", "description": "Sound Design"},
+        {"type": "editing", "description": "Editing Rhythm"},
+    ],
+}
+
+
+class RequirementStructurer:
+    """
+    Requirement Structuring
+
+    Converts RequirementDocument to StructuredRequirement,
+    adding discussion group role suggestions and department direction hints.
+    """
+
+    def __init__(self, llm_call_fn=None):
+        self.llm_call_fn = llm_call_fn
+
+    def structure(self, doc: RequirementDocument) -> StructuredRequirement:
+        """
+        Structure a requirement document.
+
+        Args:
+            doc: Requirement document output by interviewer
+
+        Returns:
+            StructuredRequirement: Structured requirement
+        """
+        # Infer domain code
+        domain_code = self._infer_domain_code(doc.domain)
+
+        # Get domain template
+        role_template = DOMAIN_ROLE_MAP.get(domain_code, DOMAIN_ROLE_MAP["general"])
+        dept_hints = DOMAIN_DEPARTMENT_HINTS.get(domain_code, [])
+
+        # v0.8.0: For academic_research, generate topic-specific department hints via LLM
+        # instead of using hardcoded pipeline infrastructure module names
+        if self.llm_call_fn and domain_code == "academic_research":
+            topic_hints = self._generate_topic_dept_hints(doc)
+            if topic_hints:
+                dept_hints = topic_hints
+
+        # Assemble fixed roles + domain-specific roles
+        suggested_roles = list(role_template["fixed_roles"])
+
+        # Dynamically select domain-specific roles based on requirements
+        domain_roles = role_template.get("domain_roles", [])
+        for role_info in domain_roles:
+            # Simple heuristic: add role if requirement doc mentions related keywords
+            if self._is_role_relevant(role_info["role"], doc):
+                suggested_roles.append(role_info)
+
+        # If LLM is available, refine further
+        if self.llm_call_fn:
+            suggested_roles = self._refine_roles_with_llm(doc, suggested_roles)
+
+        structured = StructuredRequirement(
+            topic=doc.topic,
+            domain=doc.domain,
+            domain_code=domain_code,
+            objectives=doc.objectives,
+            key_questions=doc.key_questions,
+            constraints=doc.constraints,
+            deliverable_type=doc.deliverable_type,
+            quality_criteria=doc.quality_criteria,
+            suggested_roles=suggested_roles,
+            department_hints=dept_hints,
+            source_doc=doc.to_dict(),
+            domain_specific=doc.domain_specific,
+        )
+
+        return structured
+
+    def _infer_domain_code(self, domain_name: str) -> str:
+        """Infer domain code from domain name (supports EN/CN/code)"""
+        mapping = {
+            # Chinese
+            "学术调研": "academic_research",
+            "动画创作": "animation",
+            "通用": "general",
+            # English (from DOMAIN_INTERVIEW_TEMPLATES domain_name)
+            "Academic Research": "academic_research",
+            "Animation": "animation",
+            "General": "general",
+            # Code (direct)
+            "academic_research": "academic_research",
+            "animation": "animation",
+            "general": "general",
+        }
+        if domain_name in mapping:
+            return mapping[domain_name]
+        # Fallback: keyword-based detection
+        name_lower = domain_name.lower()
+        academic_kw = ["学术", "研究", "论文", "文献", "调研", "综述", "academic", "research", "paper", "literature"]
+        if any(kw in name_lower for kw in academic_kw):
+            return "academic_research"
+        return "general"
+
+    def _is_role_relevant(self, role: str, doc: RequirementDocument) -> bool:
+        """Determine whether a domain-specific role is relevant to the requirement"""
+        text = f"{doc.topic} {' '.join(doc.objectives)} {' '.join(doc.key_questions)}".lower()
+
+        relevance_map = {
+            "Literature Coverage Review": ["检索", "文献", "论文", "调研", "搜索"],
+            "Statistical Method Scrutiny": ["统计", "计量", "回归", "模型", "因果"],
+            "Citation Chain Integrity": ["引用", "溯源", "doi", "影响"],
+            "Audience Analysis": ["受众", "用户", "观看", "播放", "传播"],
+            "Platform Adaptation": ["平台", "发布", "b站", "抖音", "youtube"],
+            "Visual Style Consistency": ["风格", "视觉", "美术", "色调", "一致"],
+        }
+
+        keywords = relevance_map.get(role, [])
+        if not keywords:
+            return True  # Default to including when no matching rules exist
+
+        return any(kw in text for kw in keywords)
+
+    def _refine_roles_with_llm(
+        self, doc: RequirementDocument, current_roles: List[Dict]
+    ) -> List[Dict]:
+        """Refine role suggestions using LLM"""
+        roles_json = json.dumps(current_roles, ensure_ascii=False)
+        system_prompt = f"""You are a requirements analysis expert. Adjust the discussion group role suggestions based on the user's requirement document.
+Current role list:
+{roles_json}
+
+Output the adjusted role list as JSON, format:
+[{{"role": "Role name", "reason": "Reason"}}]
+Output only JSON, no other text."""
+
+        user_msg = f"Requirement document:\n{doc.to_json()}"
+        response = self.llm_call_fn(system_prompt, user_msg)
+
+        try:
+            return json.loads(response)
+        except json.JSONDecodeError:
+            return current_roles
+
+    def _generate_topic_dept_hints(self, doc: RequirementDocument) -> List[Dict]:
+        """Generate topic-specific department direction hints using LLM.
+
+        Replaces the hardcoded DOMAIN_DEPARTMENT_HINTS that used pipeline infrastructure
+        module names (e.g., 'Multi-source literature retrieval', 'DOI metadata extraction')
+        instead of actual research sub-topics.
+
+        Args:
+            doc: Requirement document with user's actual research topic
+
+        Returns:
+            List of {"type": str, "description": str} with topic-specific research directions
+        """
+        topic = doc.topic
+        objectives = "；".join(doc.objectives) if doc.objectives else "未指定"
+        questions = "；".join(doc.key_questions) if doc.key_questions else "未指定"
+
+        system_prompt = """You are a research methodology expert. Your task is to decompose a research topic into 6-8 specific sub-directions that will serve as expert debate departments.
+
+IMPORTANT: These sub-directions must be actual RESEARCH SUB-TOPICS of the given domain, NOT literature review methodology terms (do NOT use terms like "literature retrieval", "metadata extraction", "citation analysis", "topic clustering", "data validation", "report generation" — these are pipeline infrastructure, not research topics).
+
+For each sub-direction, provide:
+- type: a short English identifier (lowercase, underscores)
+- description: a concise Chinese description of the research sub-direction
+
+Output ONLY a JSON array, no other text. Format:
+[{"type": "sub_topic_1", "description": "研究方向1描述"}, ...]
+
+Example for topic "人工智能在游戏中的NPC行为生成":
+[{"type": "npc_behavior_generation", "description": "基于LLM的NPC行为与对话生成"},
+ {"type": "persona_consistency", "description": "角色人设一致性与长期记忆"},
+ {"type": "narrative_generation", "description": "游戏剧情与叙事自动生成"},
+ {"type": "player_interaction", "description": "玩家与NPC的多轮交互体验"},
+ {"type": "evaluation_metrics", "description": "角色扮演质量的自动与人工评估"},
+ {"type": "game_master_systems", "description": "LLM驱动的游戏主持人系统"},
+ {"type": "safety_alignment", "description": "NPC生成内容的安全与价值观对齐"}]"""
+
+        user_msg = f"""Research topic: {topic}
+Research objectives: {objectives}
+Key questions: {questions}
+
+Please decompose this topic into 6-8 specific research sub-directions for expert debate."""
+
+        response = self.llm_call_fn(system_prompt, user_msg)
+
+        try:
+            hints = json.loads(response)
+            if isinstance(hints, list) and len(hints) >= 3:
+                # Validate each hint has required fields
+                valid_hints = [
+                    h for h in hints
+                    if isinstance(h, dict) and "type" in h and "description" in h
+                ]
+                if len(valid_hints) > 3:
+                    return valid_hints
+            return []
+        except (json.JSONDecodeError, TypeError):
+            return []

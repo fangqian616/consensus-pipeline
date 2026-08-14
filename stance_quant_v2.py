@@ -68,10 +68,14 @@ ARGUMENT_EXTRACT_PROMPT = """\
 基于以下第 1 轮全部辩手发言，抽取本场辩论的 3-7 条核心论点。
 
 要求：
-1. 每条论点是一句可判断对错的命题（陈述句），不要问题、不要泛泛主题。
-2. 论点之间尽量不重叠；合并同义表述。
-3. 既覆盖主要分歧点，也保留 1-2 条明显共识点（共识点在后续量化中充当对照组）。
-4. 用稳定 ID 编号：P1, P2, P3……一旦确定，后续轮次沿用不变。
+1. 每条论点必须是「可被论文证据支撑或反驳的学术主张」（有立场的判断），而不是「事实陈述/统计观察」。
+   - 合格（可辩论）：如「LLM 驱动的 NPC 对话在长期交互中存在人设漂移问题」「基于检索增强的方法比端到端微调更适合游戏 NPC 生成」「当前评估过度依赖人工评判、缺乏自动化指标」
+   - 不合格（纯事实）：如「20 篇论文覆盖了 6 个主题聚类」「80% 的论文发表于 2018 年后」「被引集中度较高」——这些是数据描述，不是主张
+   判断标准：如果一个论点找不到「支撑它的论文」或「反驳它的论文」，它就不是合格论点，不要抽取。
+2. 每条论点是一句可判断对错的命题（陈述句），不要问题、不要泛泛主题。
+3. 论点之间尽量不重叠；合并同义表述。
+4. 既覆盖主要分歧点，也保留 1-2 条明显共识点（共识点在后续量化中充当对照组）。
+5. 用稳定 ID 编号：P1, P2, P3……一旦确定，后续轮次沿用不变。
 
 输出格式（严格输出一个 JSON 代码块，不要任何其他内容）：
 ```json
@@ -158,6 +162,51 @@ def _try_parse_arguments(raw: str) -> list:
     return []
 
 
+def filter_debatable_arguments(arguments: list[dict], llm_call_fn) -> list[dict]:
+    """
+    后验过滤：剔除纯事实陈述/统计观察，只保留「可辩论的学术主张」。
+
+    这是论点抽取的保险丝：第一步抽取可能有漏网之鱼（把数据描述当主张），
+    这里再让 LLM 校验一遍，把事实陈述改写为可辩论主张，无法改写则丢弃。
+
+    参数：
+      arguments: [{"id": "P1", "text": "..."}, ...]
+      llm_call_fn: 签名 fn(prompt: str) -> str
+
+    返回：
+      过滤/改写后的论点列表（失败则原样返回，宁可不滤不误删）。
+    """
+    if not arguments or not llm_call_fn:
+        return arguments
+
+    arg_list = "\n".join(f'{a["id"]}: {a["text"]}' for a in arguments)
+    prompt = f"""判断以下每个论点是「可辩论的学术主张」还是「事实陈述/统计观察」。
+
+只保留「可辩论的学术主张」。如果是事实陈述，尝试改写为可辩论的主张；如果无法改写，则丢弃。
+
+判断标准：一个论点必须能被「论文证据」支撑或反驳。纯粹的数据描述（如"20篇论文覆盖6个聚类"）不是主张。
+
+论点列表：
+{arg_list}
+
+输出 JSON（只保留合格/改写后的论点，沿用原 ID）：
+{{"keep": [{{"id": "P1", "text": "改写后的主张"}}, ...]}}
+"""
+    try:
+        raw = llm_call_fn(prompt)
+        data = extract_json_block(raw, '"keep"')
+        if isinstance(data, dict) and isinstance(data.get("keep"), list):
+            kept = []
+            for item in data["keep"]:
+                if isinstance(item, dict) and item.get("id") and item.get("text"):
+                    kept.append({"id": str(item["id"]), "text": str(item["text"])})
+            if kept:
+                return kept
+    except Exception:
+        pass
+    return arguments
+
+
 def extract_arguments(
     round1_transcript: str,
     llm_call_fn,
@@ -218,6 +267,16 @@ def extract_arguments(
                 result["error"] = None
         except Exception:
             pass  # Keep original error from Attempt 1
+
+    # === 后验过滤: 只保留可辩论的学术主张(剔除纯事实陈述) ===
+    if result["ok"] and result["arguments"]:
+        try:
+            result["arguments"] = filter_debatable_arguments(
+                result["arguments"], llm_call_fn)
+        except Exception:
+            pass
+
+    return result["arguments"]
 
 
 

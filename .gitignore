@@ -30,3 +30,19 @@ v2_run_output/
 # SECRET files
 SECRET.md
 secret*
+
+# 实验产物
+real_output*/
+user_profiles/
+experiment_config.json
+
+# 日志
+*.log
+
+# 临时脚本
+_patch*.py
+real_experiment*.py
+mock_experiment.py
+analyze_stance_log.py
+calibrate_thresholds.py
+git_push.py

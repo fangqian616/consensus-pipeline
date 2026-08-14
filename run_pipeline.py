@@ -24,6 +24,10 @@ from datetime import datetime
 # Ensure module path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Windows UTF-8 output (fix GBK emoji/Chinese crash)
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # Load .env file (secret management)
 from dotenv import load_dotenv
 _env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
@@ -120,7 +124,7 @@ def phase0_interview():
 
     # Simulated user answers (replace with real input in production)
     answers = [
-        "I focus on forecasting and demand prediction, methodology偏ML (LSTM, XGBoost, etc.)",
+        f"I focus on {TOPIC}",
         "Recent 5 years, 2021-2026",
         "CSSCI and above, SCI Q1 preferred",
         "Expected deliverable: review paper and presentation PDF",
@@ -233,6 +237,13 @@ def phase4_search():
                     seen_titles.add(title_key)
                     all_papers.append(p)
 
+            # U 论文(无百分位期刊): 合并进主列表, graded=False 由下游识别
+            for p in result.get("ungraded", []):
+                title_key = p.title[:30].lower()
+                if title_key not in seen_titles:
+                    seen_titles.add(title_key)
+                    all_papers.append(p)
+
             for p in preprints:
                 title_key = p.title[:30].lower()
                 if title_key not in seen_titles:
@@ -327,6 +338,13 @@ def phase4_search_v6(domain_config=None):
                  f"filtered={stats['after_filter']}, preprints={stats['preprint_count']}")
 
             for p in papers:
+                title_key = p.title[:30].lower()
+                if title_key not in seen_titles:
+                    seen_titles.add(title_key)
+                    all_papers.append(p)
+
+            # U 论文(无百分位期刊): 合并进主列表, graded=False 由下游识别
+            for p in result.get("ungraded", []):
                 title_key = p.title[:30].lower()
                 if title_key not in seen_titles:
                     seen_titles.add(title_key)
@@ -500,13 +518,13 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
 6. 创新程度（权重0.15）：原创方法还是标准应用？
 7. 可复现性（权重0.10）：代码开源？数据公开？
 
-**方法-问题矩阵**：分析各方法在碳价预测/负荷预测/政策评估/碳排放核算/新能源消纳中的适用性
+**方法-问题矩阵**：分析各方法在本研究主题不同子问题/应用场景中的适用性
 
 **辩论维度**：
-- 深度学习是否在碳价预测中显著优于统计方法？（区分大样本vs小样本）
-- 可解释性是否应成为准入门槛？（区分政策评估vs实时预测）
+- 深度学习方法是否显著优于传统/统计方法？（区分大样本vs小样本）
+- 可解释性是否应成为准入门槛？（区分高风险决策vs实时应用）
 - 分解-集成是最优解还是过度工程？（检查未来信息泄露）
-- 因果ML能否替代传统计量？（替代vs互补）""",
+- 因果/机制方法能否替代纯相关建模？（替代vs互补）""",
         "data_validation": "请基于以下论文列表，分析核心结论的交叉验证情况，指出一致性和矛盾之处。",
         "counter_evidence": """请基于以下论文列表，主动寻找与主流结论矛盾的证据。要求：
 
@@ -516,15 +534,15 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
    - 中：有研究支持但存在争议，或样本量有限
    - 低：初步探索阶段，论文数量少
 3. **具体争议方向**：
-   - 深度学习在碳价预测中是否真的优于统计方法？（小样本下可能不成立）
+   - 深度学习方法是否在小样本下真的优于传统/统计方法？
    - 分解-集成方法的边际收益是否递减？（简单模型调参后差距可能不大）
-   - Transformer在能源时序预测中是否被高估？（中小样本过拟合风险）
+   - Transformer/大模型类方法是否在中小样本下被高估？（过拟合风险）
    - 因果ML的稳健性是否足够？（正则化偏差可能影响因果估计）
 4. **指出结论的适用边界**：在什么条件下结论不成立？""",
         "topic_clustering": "请基于以下论文列表，使用9维度（研究领域、方法论、数据类型、地理范围、时间特征、研究设计、核心发现、政策含义、技术路线）对论文进行主题聚类。",
         "visualization": "请基于以下论文列表，描述4张核心图表的设计：研究趋势时间线、方法论分布饼图、关键突破时间轴、引用网络演化图。给出每张图的数据来源和呈现建议。",
         "report_integration": "请基于以下论文列表和各部门观点，整合为最终的学术调研报告：摘要→领域概览→方法论综述→核心发现→争议与前沿→研究建议→参考文献。",
-        "programming": "请基于以下论文列表，分析该领域主流的机器学习模型和工具链：\n1. 技术选型分析（对比LSTM/XGBoost/Transformer等方案）\n2. 给出碳价预测的完整可运行Python代码\n3. 调试和部署注意事项",
+        "programming": "请基于以下论文列表，分析该领域主流的机器学习模型和工具链：\n1. 技术选型分析（对比该领域主流的ML/DL方案）\n2. 给出该领域一个代表性任务的完整可运行Python代码\n3. 调试和部署注意事项",
         "tutorial": "请基于以下论文列表，编写该领域的教程：\n1. 零基础入门教程（环境搭建→数据获取→模型训练→结果解读）\n2. 进阶实战指南（生产环境踩坑→参数调优→模型部署）\n3. 最佳实践清单（代码规范→目录结构→测试策略）",
     }
 
@@ -711,19 +729,19 @@ Analyze the disagreements and consensus between both sides:
 # ============ Phase 4.5: 重新分级论文（v5.1.3） ============
 def reclassify_papers(papers):
     """
-    用最新注册表+easyScholar重新分级论文。
-    解决phase4检索时等级写死到JSON的问题——注册表更新后无需重新检索。
+    用动态分级(百分位 + easyScholar + 快照)重新分级论文。
+    解决 phase4 检索时等级写死到 JSON 的问题——快照更新后无需重新检索。
     """
-    log("Phase4.5", "Re-grading papers with latest registry / 用最新注册表重新分级论文...")
+    log("Phase4.5", "Re-grading papers with dynamic grading / 用动态分级重新分级论文...")
 
-    from academic.journal_classifier import classify_journal_enhanced
+    from academic.search_engine import classify_dynamic
 
     changed = 0
     for p in papers:
         old_level = p.quality_level
-        # 重新分类
-        result = classify_journal_enhanced(p.journal or "", use_easyscholar=True)
-        new_level = result.get("level", old_level)
+        # 动态重新分级
+        new_level = classify_dynamic(p)
+        p.graded = (new_level != "U")
         if new_level != old_level:
             log("Phase4.5", f"  Grade change / 等级变更: [{old_level}→{new_level}] {p.title[:50]}... ({p.journal})")
             p.quality_level = new_level
@@ -1037,7 +1055,7 @@ def generate_programming_output(papers):
     """Generate complete programming department output"""
     log("Programming", "Generating complete programming department output")
 
-    prompt = f"""你是能源经济学机器学习领域的技术专家。基于以下论文，完成三大任务：
+    prompt = f"""你是该研究领域机器学习应用的技术专家。基于以下论文，完成三大任务：
 
 ## 任务1：技术选型分析
 对比以下方案，给出选型建议：
@@ -1048,9 +1066,9 @@ def generate_programming_output(papers):
 
 每个方案给出：名称、适用场景、成熟度评级(★~★★★★★)、推荐理由
 
-## 任务2：碳价预测完整代码
-写一个完整的、可直接运行的Python碳价预测项目代码：
-- 使用LSTM + XGBoost混合模型
+## 任务2：代表性任务完整代码
+写一个完整的、可直接运行的Python项目代码（针对该领域一个代表性任务）：
+- 使用该领域主流的机器学习模型
 - 数据从公开数据集获取
 - 包含数据预处理、特征工程、模型训练、预测评估
 - 有中文注释和类型注解
@@ -1071,21 +1089,21 @@ def generate_tutorial_output(papers):
     """Generate complete tutorial department output"""
     log("Tutorial", "Generating complete tutorial department output")
 
-    prompt = f"""你是能源经济学机器学习领域的教学专家。基于以下论文，完成三大教程：
+    prompt = f"""你是该研究领域机器学习应用的教学专家。基于以下论文，完成三大教程：
 
 ## 教程1：零基础入门教程
 从环境安装开始，逐步教读者：
 1. Python + Anaconda 安装
 2. 必要库安装（pandas, scikit-learn, tensorflow/keras, xgboost）
-3. 数据获取（从公开数据源下载能源价格数据）
-4. 第一个ML模型：用XGBoost预测能源需求
+3. 数据获取（从公开数据源下载该领域数据）
+4. 第一个ML模型：用该领域主流方法完成一个基线任务
 5. 模型评估和结果解读
 
 每步格式：操作 → 原因 → 预期输出 → 常见报错
 
 ## 教程2：进阶实战指南
 面向有基础的读者：
-1. LSTM时序预测最佳实践
+1. 该领域主流模型的训练与调优最佳实践
 2. 特征工程技巧（技术指标、滞后特征、外部变量）
 3. 超参数调优（GridSearch, Optuna）
 4. 部署踩坑指南
