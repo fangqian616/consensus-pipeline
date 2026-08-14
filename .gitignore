@@ -1,0 +1,32 @@
+# Environment and secrets
+.env
+.env.*
+*.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Fix scripts (temporary)
+fix_all.py
+fix_stance_quant.py
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Output
+v2_run_output/
+*.pdf
+
+# SECRET files
+SECRET.md
+secret*
