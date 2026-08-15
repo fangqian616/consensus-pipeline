@@ -416,15 +416,24 @@ DEPT_PAPER_FILTERS = {
 
 
 def _filter_papers_for_dept(dept_key, papers, top_n=40):
-    """Filter relevant papers by department keywords, return relevance-sorted subset"""
+    """Filter relevant papers by department keywords, return relevance-sorted subset.
+
+    种子论文(source='user_seed')强制包含并放在最前面——用户指定的重点论文
+    必须出现在每个部门的辩论中，不能被部门关键词过滤掉。
+    """
+    seed_papers = [p for p in papers if p.source == "user_seed"]
+
     filters = DEPT_PAPER_FILTERS.get(dept_key)
     if filters is None:
-        # Full set, but limit count
-        return papers[:top_n]
+        # Full set: 种子论文优先 + 其余
+        rest = [p for p in papers if p.source != "user_seed"]
+        return (seed_papers + rest)[:top_n]
 
     keywords = filters.get("any", [])
     scored = []
     for p in papers:
+        if p.source == "user_seed":
+            continue  # 种子论文单独处理
         text = (p.title + " " + (p.abstract or "")).lower()
         score = sum(1 for kw in keywords if kw in text)
         # Quality weighted: S-tier +2, A-tier +1
@@ -440,12 +449,16 @@ def _filter_papers_for_dept(dept_key, papers, top_n=40):
     if len(result) < 15:
         existing_ids = {id(p) for p in result}
         for p in papers:
+            if p.source == "user_seed":
+                continue
             if id(p) not in existing_ids and p.quality_level in ('S', 'A'):
                 result.append(p)
                 existing_ids.add(id(p))
                 if len(result) >= 15:
                     break
-    return result[:top_n]
+
+    # 种子论文放在最前面
+    return (seed_papers + result)[:top_n]
 
 
 def _build_papers_summary(papers, max_abstract=300):
