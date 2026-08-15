@@ -279,15 +279,14 @@ For each sub-direction, provide:
 Output ONLY a JSON array, no other text. Format:
 [{"type": "sub_topic_1", "description": "研究方向1描述"}, ...]
 
-Example for topic "碳价预测与能源经济学":
-[{"type": "carbon_price_drivers", "description": "碳价形成机制与影响因素"},
- {"type": "ml_forecasting", "description": "机器学习碳价预测方法"},
- {"type": "electricity_carbon_coupling", "description": "电碳市场联动机制"},
- {"type": "policy_evaluation", "description": "能源政策评估方法"},
- {"type": "emission_trading", "description": "碳排放权交易机制设计"},
- {"type": "renewable_integration", "description": "可再生能源与碳市场互动"},
- {"type": "risk_modeling", "description": "碳价波动风险建模"},
- {"type": "international_comparison", "description": "国际碳市场比较研究"}]"""
+Example for topic "人工智能在游戏中的NPC行为生成":
+[{"type": "npc_behavior_generation", "description": "基于LLM的NPC行为与对话生成"},
+ {"type": "persona_consistency", "description": "角色人设一致性与长期记忆"},
+ {"type": "narrative_generation", "description": "游戏剧情与叙事自动生成"},
+ {"type": "player_interaction", "description": "玩家与NPC的多轮交互体验"},
+ {"type": "evaluation_metrics", "description": "角色扮演质量的自动与人工评估"},
+ {"type": "game_master_systems", "description": "LLM驱动的游戏主持人系统"},
+ {"type": "safety_alignment", "description": "NPC生成内容的安全与价值观对齐"}]"""
 
         user_msg = f"""Research topic: {topic}
 Research objectives: {objectives}

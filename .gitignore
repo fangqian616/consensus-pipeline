@@ -1,57 +1,51 @@
-# 运行产出
-run_output/
+# Environment and secrets
+.env
+.env.*
+*.env
 
-# 测试产出
-test_results/
-test_v514/
-
-# 本地状态
-.local/
-
-# 备份文件
-*.bak
-*.bak.*
-
-# 临时文件
+# Python
 __pycache__/
 *.pyc
 *.pyo
-.env
 *.egg-info/
-*.log
+dist/
+build/
 
-# 操作系统文件
-.DS_Store
-Thumbs.db
+# Fix scripts (temporary)
+fix_all.py
+fix_stance_quant.py
 
 # IDE
 .vscode/
 .idea/
 
-# 审校报告（在项目空间管理）
-审校报告*.md
+# OS
+Thumbs.db
+.DS_Store
 
-# 开发笔记/计划
-ALIGNMENT_PLAN*
-journal_registry_extension*
-v517_acceptance*
+# Output
+v2_run_output/
+*.pdf
 
-# 运行脚本（含本地路径/敏感配置）
-run_v6.sh
-run_wrapper.sh
+# SECRET files
+SECRET.md
+secret*
 
-# 测试脚本
-run_test.sh
-test_full_pipeline.py
+# 实验产物
+real_output*/
+user_profiles/
+experiment_config.json
 
-# 根目录残留的旧版文件
-/report_generator.py
+# 日志
+*.log
 
-# 断点文件
-.checkpoints/
+# 临时脚本
+_patch*.py
+real_experiment*.py
+mock_experiment.py
+analyze_stance_log.py
+calibrate_thresholds.py
+git_push.py
 
-# local scratch tests
-test_fixes*.py
-test_full_search.py
-test_search.py
-test_v011.py
+# 运行时派生缓存
+academic/journal_grades_snapshot.json

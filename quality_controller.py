@@ -144,14 +144,27 @@ class QualityController:
 
         return approved, rejected
 
+    # LLM fallback prompt for tag_layer
+    TAG_LLM_PROMPT = """You are an academic paper classifier. Given a paper's title and abstract, classify it into one of three tiers:
+
+- **core**: Directly addresses the research topic; provides key evidence or findings.
+- **method**: Provides methodology, tools, datasets, or technical approaches relevant to the topic.
+- **background**: Provides context, related work, or tangential information.
+
+Output ONLY a single word: core, method, or background. No explanation.
+
+Paper title: {title}
+Paper abstract: {abstract}
+Classification:"""
+
     def tag_layer(self, papers: list) -> list:
         """
         Label three tiers: core/method/background
 
-        Based on domain_config['tier_definitions'] keywords:
-        - core: Matches core-tier keywords
-        - method: Matches method-supplement keywords
-        - background: Matches mechanism-background keywords
+        Two-pass approach:
+        1. Keyword matching (fast, deterministic)
+        2. LLM fallback for papers that keyword matching assigns to background
+           (fixes the "all background" problem when keywords don't match)
 
         Adds a `layer` attribute to each paper object.
 
@@ -174,19 +187,43 @@ class QualityController:
         if "background" in tier_defs:
             background_keywords = tier_defs["background"].get("keywords", [])
 
+        # Pass 1: keyword-based classification
+        needs_llm_fallback = []
         for p in papers:
             text = (p.title + " " + (p.abstract or "")).lower()
 
-            # Determine tier by priority: core > method > background
             if any(kw.lower() in text for kw in core_keywords):
                 p.layer = "core"
             elif any(kw.lower() in text for kw in method_keywords):
                 p.layer = "method"
             elif any(kw.lower() in text for kw in background_keywords):
                 p.layer = "background"
+                if len(background_keywords) < 3:
+                    needs_llm_fallback.append(p)
             else:
-                # Default to background
+                # No keyword matched at all — needs LLM
                 p.layer = "background"
+                needs_llm_fallback.append(p)
+
+        # Pass 2: LLM fallback for unclassified papers
+        if needs_llm_fallback:
+            for p in needs_llm_fallback:
+                try:
+                    abstract_text = (p.abstract or "N/A")[:500]
+                    prompt = self.TAG_LLM_PROMPT.format(
+                        title=p.title, abstract=abstract_text
+                    )
+                    response = self.llm_call_fn(prompt, "", temperature=0.1)
+                    if response:
+                        label = response.strip().lower()
+                        if "core" in label:
+                            p.layer = "core"
+                        elif "method" in label:
+                            p.layer = "method"
+                        else:
+                            p.layer = "background"
+                except Exception:
+                    pass  # Keep default "background" on failure
 
         return papers
 

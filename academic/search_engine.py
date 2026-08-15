@@ -5,12 +5,11 @@ Tri-source parallel retrieval (arXiv/Semantic Scholar/OpenAlex) + journal qualit
 v4.4: Increased output to 20+ papers, arXiv preprint special handling, guaranteed quantity fallback mechanism
 """
 import json
+import os
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
-
-from .journal_registry import JOURNAL_QUALITY_REGISTRY
 
 
 # ============ Safe Truncation Utilities ============
@@ -24,47 +23,94 @@ def safe_truncate(text: str, max_chars: int = 200) -> str:
     return text[:max_chars]
 
 
-def classify_journal(journal_name: str, use_easyscholar: bool = True) -> Dict[str, Any]:
-    """
-    Rank journal quality (enhanced version).
+# ── 期刊分级快照缓存(累积式, API 写回) ──────────────────────────────────
+_JOURNAL_SNAPSHOT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "journal_grades_snapshot.json")
+_snapshot_cache = None
 
-    Ranking priority: local registry → easyScholar API → default rules
 
-    Args:
-        journal_name: Journal name
-        use_easyscholar: Whether to try easyScholar API query
+def _load_journal_snapshot():
+    global _snapshot_cache
+    if _snapshot_cache is None:
+        try:
+            with open(_JOURNAL_SNAPSHOT_PATH, "r", encoding="utf-8") as f:
+                _snapshot_cache = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            _snapshot_cache = {"snapshot_date": "2026.8.15", "journals": {}}
+    return _snapshot_cache
 
-    Returns:
-        {"level": "S/A/B/C/D", "if_2026": float|None, "jcr": str, "note": str, "source": "local/api/fallback"}
-    """
+
+def _snapshot_get(journal_name):
+    snap = _load_journal_snapshot()
+    entry = snap.get("journals", {}).get(journal_name)
+    return entry.get("level") if isinstance(entry, dict) else None
+
+
+def _snapshot_set(journal_name, detail):
+    snap = _load_journal_snapshot()
+    snap.setdefault("journals", {})[journal_name] = detail
+    tmp = _JOURNAL_SNAPSHOT_PATH + ".tmp"
     try:
-        from .journal_classifier import classify_journal_enhanced
-        return classify_journal_enhanced(journal_name, use_easyscholar=use_easyscholar)
-    except ImportError:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(snap, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, _JOURNAL_SNAPSHOT_PATH)
+    except OSError:
         pass
 
-    # Fallback: exact match priority
-    if journal_name in JOURNAL_QUALITY_REGISTRY:
-        return {**JOURNAL_QUALITY_REGISTRY[journal_name], "source": "local"}
 
-    normalized = journal_name.lower().strip().replace(".", "").replace(",", "")
-    for key, val in JOURNAL_QUALITY_REGISTRY.items():
-        key_norm = key.lower().strip().replace(".", "").replace(",", "")
-        if normalized == key_norm:
-            return {**val, "source": "local"}
+def classify_dynamic(paper: "PaperCandidate") -> str:
+    """
+    混合动态分级:
+    1. 论文级被引百分位(OpenAlex cited_by_percentile_year) → S/A/B/C
+    2. 期刊分级快照命中 → S/A/B/C
+    3. easyScholar API(中科院分区 + JCR + CSSCI) → S/A/B/C + 写回快照
+    4. 都没有(预印本 / 真无数据) → U (graded=False)
 
-    # Substring match only when length ratio >= 80%
-    for key, val in JOURNAL_QUALITY_REGISTRY.items():
-        key_norm = key.lower().strip().replace(".", "").replace(",", "")
-        shorter = min(len(normalized), len(key_norm))
-        longer = max(len(normalized), len(key_norm))
-        if longer == 0:
-            continue
-        if shorter / longer >= 0.8:
-            if normalized in key_norm or key_norm in normalized:
-                return {**val, "source": "local"}
+    阈值(百分位): >=90→S, >=70→A, >=50→B, else→C
+    """
+    pct = paper.cited_by_percentile_year
+    # OpenAlex 返回对象 {"min": X, "max": Y}, 取 min(保守, 宁缺毋滥)
+    if isinstance(pct, dict):
+        pct = pct.get("min") if pct.get("min") is not None else pct.get("max")
+    if pct is not None:
+        try:
+            pct = float(pct)
+        except (TypeError, ValueError):
+            pct = None
+    if pct is not None:
+        if pct >= 90:
+            return "S"
+        if pct >= 70:
+            return "A"
+        if pct >= 50:
+            return "B"
+        return "C"
 
-    return {"level": "C", "if_2026": None, "jcr": "Unknown", "note": "Not found in registry", "source": "fallback"}
+    if paper.journal:
+        # 2. 快照命中(离线、快)
+        cached = _snapshot_get(paper.journal)
+        if cached in ("S", "A", "B", "C"):
+            return cached
+
+        # 3. easyScholar API(有 key), 绕过静态表
+        try:
+            from .journal_classifier import query_easyscholar, _level_from_easyscholar
+            rank = query_easyscholar(paper.journal)
+            if rank:
+                level = _level_from_easyscholar(rank)
+                if level in ("S", "A", "B", "C"):
+                    official = (rank.get("officialRank") or {}).get("all") or {}
+                    _snapshot_set(paper.journal, {
+                        "level": level,
+                        "jcr": official.get("sci") or "",
+                        "cas": official.get("sciUp") or "",
+                        "if": official.get("sciif") or "",
+                        "source": "easyscholar",
+                    })
+                    return level
+        except Exception:
+            pass
+
+    return "U"
 
 
 def openalex_batch_abstracts(dois: List[str], mailto: str = "fang616@users.noreply.github.com") -> Dict[str, str]:
@@ -140,6 +186,9 @@ class PaperCandidate:
     author_h_index: int = 0  # Used by third filter stage
     is_preprint: bool = False  # v4.4: Mark preprints
     layer: str = ""  # v0.7.0: QC annotation layer (core/method/background)
+    cited_by_percentile_year: Optional[float] = None  # OpenAlex 同年同领域被引百分位(0~100)
+    venue_type: str = ""  # journal / conference / repository / None
+    graded: bool = False  # True=有真实等级(S/A/B/C); False=U(未定级)
 
     def to_dict(self) -> dict:
         import dataclasses
@@ -272,28 +321,33 @@ class AcademicSearchEngine:
         deduped = self._deduplicate(all_results)
         after_dedup = len(deduped)
 
-        # Separate preprints from journal papers
+        # 动态分级: 拆成 graded(S/A/B/C, 有百分位) / ungraded(U, 无百分位) / preprints(arXiv)
+        graded_papers = []
+        ungraded_papers = []
         preprints = []
-        journal_papers = []
         for paper in deduped:
             if paper.is_preprint or paper.journal == "arXiv":
-                paper.quality_level = "D"
-                paper.quality_detail = {"level": "D", "note": "Preprint, not formally published", "source": "preprint"}
+                paper.quality_level = "U"
+                paper.graded = False
+                paper.quality_detail = {"level": "U", "note": "Preprint, not formally published", "source": "preprint"}
                 preprints.append(paper)
             else:
-                # Journal quality ranking
-                detail = classify_journal(paper.journal)
-                paper.quality_level = detail["level"]
-                paper.quality_detail = detail
-                journal_papers.append(paper)
+                paper.quality_level = classify_dynamic(paper)
+                paper.graded = (paper.quality_level != "U")
+                if paper.graded:
+                    paper.quality_detail = {"level": paper.quality_level, "source": "openalex_percentile"}
+                    graded_papers.append(paper)
+                else:
+                    paper.quality_detail = {"level": "U", "note": "No cited_by_percentile_year", "source": "ungraded"}
+                    ungraded_papers.append(paper)
 
-        # Four-stage filtering (journal papers only; v5.1: pass query to activate 4th relevance filter)
-        filtered = self._apply_four_sieves(journal_papers, query=query)
+        # 质量四筛只作用于 graded(S/A/B/C); U 论文只过相关性(下方统一处理)
+        filtered = self._apply_four_sieves(graded_papers, query=query)
 
         # Quantity guarantee fallback: if filtered results < min_results, progressively relax filters
         if len(filtered) < self.min_results:
             _before_em = len(filtered)
-            filtered = self._ensure_minimum(journal_papers, filtered, query=query)
+            filtered = self._ensure_minimum(graded_papers, filtered, query=query)
             if len(filtered) > _before_em:
                 print(f"    [ensure_minimum] rescued {len(filtered) - _before_em} papers (now {len(filtered)})")
             elif len(filtered) < self.min_results:
@@ -317,17 +371,24 @@ class AcademicSearchEngine:
                     filtered_preprints.append(p)
             preprints = filtered_preprints
 
+        # U 论文(无百分位期刊): 只过相关性, 不过质量筛; 与预印本同通道
+        if ungraded_papers and query:
+            ungraded_papers = [p for p in ungraded_papers
+                               if self._compute_relevance(p, query, domain_config=self.domain_config) >= 0.15]
+
         stats = {
             "total_fetched": total_fetched,
             "after_dedup": after_dedup,
             "after_filter": len(filtered),
             "preprint_count": len(preprints),
+            "ungraded_count": len(ungraded_papers),
             "per_source": _per_source,
         }
 
         return {
             "papers": filtered,
             "preprints": preprints if self.include_preprints else [],
+            "ungraded": ungraded_papers,
             "stats": stats,
         }
 
@@ -543,7 +604,7 @@ class AcademicSearchEngine:
             # mailto enters the OpenAlex polite pool (separate, more generous rate
             # limit). Without it, shared-IP deployments (e.g. cloud free tier) get
             # throttled hard — observed fetch collapse from ~30/query to ~4/query.
-            url = f"https://api.openalex.org/works?search={_urlp.quote_plus(query)}&per_page={max_results}&mailto=fang616@users.noreply.github.com&select=id,doi,title,publication_year,cited_by_count,authorships,primary_location,type,abstract_inverted_index"
+            url = f"https://api.openalex.org/works?search={_urlp.quote_plus(query)}&per_page={max_results}&mailto=fang616@users.noreply.github.com&select=id,doi,title,publication_year,cited_by_count,cited_by_percentile_year,authorships,primary_location,type,abstract_inverted_index"
             req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
             with urllib.request.urlopen(req, timeout=20) as resp:
                 data = json.loads(resp.read())
@@ -553,6 +614,7 @@ class AcademicSearchEngine:
                 loc = work.get("primary_location") or {}
                 source_info = loc.get("source") or {}
                 journal_name = source_info.get("display_name", "")
+                venue_type = (source_info.get("type") or "") if source_info else ""
                 work_type = work.get("type", "")
 
                 authors = []
@@ -565,7 +627,14 @@ class AcademicSearchEngine:
                 if doi and doi.startswith("https://doi.org/"):
                     doi = doi.replace("https://doi.org/", "")
 
-                is_preprint = work_type in ["preprint", "working_paper"]
+                journal_lower = journal_name.lower()
+                is_preprint = (
+                    work_type in ["preprint", "working_paper"]
+                    or venue_type in ("repository", "preprint")
+                    or "预印本" in journal_name
+                    or "preprint" in journal_lower
+                    or "repository" in journal_lower
+                )
 
                 # v5.1.7: Reconstruct abstract text from abstract_inverted_index
                 abstract_text = ""
@@ -589,6 +658,8 @@ class AcademicSearchEngine:
                     citation_count=work.get("cited_by_count", 0) or 0,
                     source="openalex",
                     is_preprint=is_preprint,
+                    cited_by_percentile_year=work.get("cited_by_percentile_year"),
+                    venue_type=venue_type,
                 ))
 
             return results
@@ -836,25 +907,10 @@ class AcademicSearchEngine:
             # Fallback to v5.1.8-fix2 hardcoded logic
             # Domain core words (must hit at least one, otherwise penalize)
             # v5.1.8-fix2: carbon counts as energy only with market/price/emission context
-            domain_must_have = {
-                "energy", "electricity", "power", "renewable",
-                "solar", "wind", "oil", "gas", "fuel", "climate",
-                "emission", "grid", "load", "price", "demand", "supply",
-                "forecast", "market", "nuclear", "hydrogen", "battery",
-                "carbon price", "carbon market", "carbon emission", "carbon trading",
-                "carbon tax", "carbon capture", "carbon budget",
-                "能源", "电力", "碳", "电价", "负荷", "预测",
-                # v4.5: Economics & policy keywords
-                "economics", "economic", "economy", "policy", "regulation",
-                "efficiency", "productivity", "causal", "treatment effect",
-                "difference-in-differences", "instrumental variable", "panel data",
-                "empirical", "welfare", "externality", "tax", "subsidy",
-                "environmental regulation", "energy efficiency", "energy policy",
-                "energy economics", "carbon pricing", "emission trading",
-                "经济学", "经济", "政策", "规制", "效率", "生产率",
-                "因果", "面板数据", "实证", "外部性", "补贴",
-                "环境规制", "能源效率", "能源政策", "碳排放", "碳交易",
-            }
+            # v0.7.x: legacy energy/economics domain keywords removed — the
+            # no-domain_config fallback no longer assumes an energy domain and
+            # keeps only the generic ML keyword penalty (ml_must_have below).
+            domain_must_have = set()
             # Exclusion words: contain carbon but not in energy context
             carbon_exclude = {
                 "carbon nitride", "carbon nanotube", "carbon fiber",

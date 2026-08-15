@@ -287,7 +287,7 @@ class RequirementInterviewer:
             # v0.7.6: academic discipline keywords
             "经济学", "金融学", "管理学", "社会学", "心理学", "物理学",
             "计算机科学", "生物学", "化学", "数学", "统计学", "工程学",
-            "能源经济", "环境经济", "公共管理", "政治学", "法学",
+            "公共管理", "政治学", "法学",
             "economics", "finance", "sociology", "psychology", "physics",
             "biology", "chemistry", "philosophy", "history",
         ]
