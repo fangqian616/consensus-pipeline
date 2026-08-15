@@ -89,7 +89,7 @@ def _build_papers_summary(papers, max_abstract=300):
 
 
 def _debate_department_v2(dept_key, dept_name, debaters, papers_summary,
-                          rounds_unused, output_dir):
+                          rounds_unused, output_dir, topic_directions=None):
     """
     v2 部门辩论: StanceTracker 采集表态 + CV 量化 + 动态终止
 
@@ -120,11 +120,14 @@ def _debate_department_v2(dept_key, dept_name, debaters, papers_summary,
         "topic_clustering": "请基于以下论文列表，评估主题聚类结构，指出分布是否均衡、有何盲区。",
         "visualization": "请基于以下论文列表，评估应如何设计核心图表，并说明取舍理由。",
         "report_integration": "请基于以下论文列表和各部门观点，整合为学术综述，对关键结论给出倾向性判断。",
-        "programming": "请基于以下论文列表，评估主流工具链的取舍，并给出代码。",
+        "programming": "请基于以下论文列表，评估主流工具链的取舍，并给出架构设计与关键代码骨架。",
         "tutorial": "请基于以下论文列表，编写教程，并对最佳实践给出判断。",
     }
     task_prompt = dept_prompt_map.get(dept_key,
         f"请基于以下论文列表，从{dept_name}角度给出专业分析。")
+
+    # v2: Inject topic-specific research directions (from Phase 1)
+    topic_context = v1._build_topic_direction_context(topic_directions)
 
     # ============ 创建 StanceTracker ============
     tracker = StanceTracker(
@@ -163,7 +166,7 @@ def _debate_department_v2(dept_key, dept_name, debaters, papers_summary,
             system_prompt = f"""你是Consensus Pipeline的{dept_name}辩手「{debater['name']}」。
 你的专业视角：{debater['style']}
 
-{task_prompt}
+{task_prompt}{topic_context}
 
 【引用忠实性规则】
 1. 引用论文[N]时，只能描述该论文标题和摘要中明确出现的信息
@@ -304,6 +307,7 @@ def phase5_debate_v2(config, papers, preprints, output_dir):
 
     departments = config.get("departments", {})
     dept_order = config.get("dept_order", list(departments.keys()))
+    topic_directions = config.get("topic_directions", [])
 
     state = _load_state(output_dir)
     completed = set(state.get("phase5_depts_completed", []))
@@ -333,7 +337,8 @@ def phase5_debate_v2(config, papers, preprints, output_dir):
 
         output = _debate_department_v2(
             dept_key, dept_name, debaters, papers_summary,
-            rounds_unused=0, output_dir=output_dir)
+            rounds_unused=0, output_dir=output_dir,
+            topic_directions=topic_directions)
         dept_outputs[dept_key] = output
         # 部门输出落盘(原子) + 更新状态
         _atomic_write_json(output_dir, f"phase5_dept_{dept_key}.json", output)
@@ -519,7 +524,8 @@ def _run_single_dept(dept_key, config, papers, preprints, output_dir):
     papers_summary = _build_papers_summary(dept_papers, max_abstract=400)
     v1.log("Phase5-v2", f"[单部门] {dept_name} ({dept_key}), debaters={list(debaters.keys())}, papers={len(dept_papers)}/{len(papers)}")
     output = _debate_department_v2(dept_key, dept_name, debaters, papers_summary,
-                                   rounds_unused=0, output_dir=output_dir)
+                                   rounds_unused=0, output_dir=output_dir,
+                                   topic_directions=config.get("topic_directions", []))
     _atomic_write_json(output_dir, f"phase5_dept_{dept_key}.json", output)
     return {dept_key: output}
 

@@ -190,6 +190,10 @@ def phase3_config(structured, discussion):
     recommender = ConfigRecommender(llm_call_fn=llm_call)
     config = recommender.recommend(structured, discussion)
 
+    # v2: Inject topic-specific research directions (from Phase 1) so Phase 5
+    # can add them to each department's debate prompt.
+    config["topic_directions"] = getattr(structured, "department_hints", None) or []
+
     save_json(config, "phase3_recommended_config.json")
     log("Phase3", f"Config recommendation complete: name={config.get('name','?')}, "
          f"departments={len(config.get('departments',{}))}")
@@ -461,6 +465,32 @@ def _build_papers_summary(papers, max_abstract=300):
     return "\n".join(lines)
 
 
+def _build_topic_direction_context(topic_directions):
+    """v2: Build topic-specific research-direction context for debate prompts.
+
+    Phase 1 (structurer) decomposes the research topic into sub-directions
+    (e.g. LLM roleplay, persona consistency, safety alignment). Injecting them
+    into each department's prompt makes departments analyze with a topic-specific
+    lens instead of generic pipeline framing.
+    """
+    if not topic_directions:
+        return ""
+    dirs = []
+    for h in topic_directions:
+        if not isinstance(h, dict):
+            continue
+        desc = (h.get("description") or h.get("type") or "").strip()
+        if desc:
+            dirs.append(desc)
+    if not dirs:
+        return ""
+    return (
+        "\n\n【本研究主题的子方向】\n"
+        + "、".join(dirs)
+        + "\n请务必围绕这些子方向展开分析，把你的专业职能落到具体研究问题上，不要泛泛而谈。"
+    )
+
+
 def phase5_debate(config, papers, preprints):
     """Department debate outputs (v5.1.5: filter papers by dept + inject abstracts)"""
     log("Phase5", "Starting department debate")
@@ -468,6 +498,7 @@ def phase5_debate(config, papers, preprints):
     departments = config.get("departments", {})
     dept_order = config.get("dept_order", list(departments.keys()))
     debate_rounds = config.get("debate_rounds", 2)
+    topic_directions = config.get("topic_directions", [])
 
     dept_outputs = {}
 
@@ -484,7 +515,7 @@ def phase5_debate(config, papers, preprints):
             f"papers: {len(dept_papers)}/{len(papers)}")
 
         # Generate debate output for each department
-        output = _debate_department(dept_key, dept_name, debaters, papers_summary, debate_rounds)
+        output = _debate_department(dept_key, dept_name, debaters, papers_summary, debate_rounds, topic_directions)
         dept_outputs[dept_key] = output
         save_json(output, f"phase5_dept_{dept_key}.json")
 
@@ -492,7 +523,7 @@ def phase5_debate(config, papers, preprints):
     return dept_outputs
 
 
-def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
+def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds, topic_directions=None):
     """Single department debate"""
     debater_list = []
     for key, info in debaters.items():
@@ -542,12 +573,16 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
         "topic_clustering": "请基于以下论文列表，使用9维度（研究领域、方法论、数据类型、地理范围、时间特征、研究设计、核心发现、政策含义、技术路线）对论文进行主题聚类。",
         "visualization": "请基于以下论文列表，描述4张核心图表的设计：研究趋势时间线、方法论分布饼图、关键突破时间轴、引用网络演化图。给出每张图的数据来源和呈现建议。",
         "report_integration": "请基于以下论文列表和各部门观点，整合为最终的学术调研报告：摘要→领域概览→方法论综述→核心发现→争议与前沿→研究建议→参考文献。",
-        "programming": "请基于以下论文列表，分析该领域主流的机器学习模型和工具链：\n1. 技术选型分析（对比该领域主流的ML/DL方案）\n2. 给出该领域一个代表性任务的完整可运行Python代码\n3. 调试和部署注意事项",
+        "programming": "请基于以下论文列表，分析该领域主流的技术方案和工具链：\n1. 技术选型分析（从论文中识别该领域实际使用的方案，不要预设技术栈）\n2. 给出该领域一个代表性任务的技术架构设计和关键代码骨架（不必是完整可运行工程）\n3. 调试和部署注意事项",
         "tutorial": "请基于以下论文列表，编写该领域的教程：\n1. 零基础入门教程（环境搭建→数据获取→模型训练→结果解读）\n2. 进阶实战指南（生产环境踩坑→参数调优→模型部署）\n3. 最佳实践清单（代码规范→目录结构→测试策略）",
     }
 
     task_prompt = dept_prompt_map.get(dept_key,
         f"请基于以下论文列表，从{dept_name}角度给出专业分析。")
+
+    # v2: Inject topic-specific research directions so the department analyzes
+    # with a topic-specific lens instead of generic pipeline framing.
+    topic_context = _build_topic_direction_context(topic_directions)
 
     arguments = []
     rounds = max(1, rounds)  # Ensure at least 1 round
@@ -578,7 +613,7 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
             system_prompt = f"""你是Consensus Pipeline的{dept_name}辩手「{debater['name']}」。
 你的专业视角：{debater['style']}
 
-{task_prompt}
+{task_prompt}{topic_context}
 
 【引用忠实性规则——必须严格遵守】
 1. 引用论文[N]时，只能描述该论文标题和摘要中明确出现的信息
@@ -1046,14 +1081,11 @@ def generate_programming_output(papers):
     """Generate complete programming department output"""
     log("Programming", "Generating complete programming department output")
 
-    prompt = f"""你是该研究领域机器学习应用的技术专家。基于以下论文，完成三大任务：
+    prompt = f"""你是研究主题「{TOPIC}」的技术专家。基于以下论文，完成三大任务：
 
 ## 任务1：技术选型分析
-对比以下方案，给出选型建议：
-- LSTM/GRU（时序预测）
-- XGBoost/LightGBM（特征驱动预测）
-- Transformer（注意力机制）
-- 混合模型（CNN-LSTM, Attention-XGBoost等）
+从论文中识别该领域实际使用的主流技术方案/模型/工具链，进行对比并给出选型建议。
+注意：不要预设技术栈（例如不要假设是时序预测或某个特定框架），必须从论文摘要中提取真实使用的技术。
 
 每个方案给出：名称、适用场景、成熟度评级(★~★★★★★)、推荐理由
 
@@ -1080,14 +1112,14 @@ def generate_tutorial_output(papers):
     """Generate complete tutorial department output"""
     log("Tutorial", "Generating complete tutorial department output")
 
-    prompt = f"""你是该研究领域机器学习应用的教学专家。基于以下论文，完成三大教程：
+    prompt = f"""你是研究主题「{TOPIC}」的教学专家。基于以下论文，完成三大教程：
 
 ## 教程1：零基础入门教程
 从环境安装开始，逐步教读者：
-1. Python + Anaconda 安装
-2. 必要库安装（pandas, scikit-learn, tensorflow/keras, xgboost）
-3. 数据获取（从公开数据源下载该领域数据）
-4. 第一个ML模型：用该领域主流方法完成一个基线任务
+1. Python 环境安装
+2. 必要依赖库安装（以论文中实际使用的框架为准）
+3. 数据获取（从公开数据源下载该领域数据，或说明如何构造）
+4. 第一个模型：用该领域主流方法完成一个基线任务
 5. 模型评估和结果解读
 
 每步格式：操作 → 原因 → 预期输出 → 常见报错
@@ -1095,7 +1127,7 @@ def generate_tutorial_output(papers):
 ## 教程2：进阶实战指南
 面向有基础的读者：
 1. 该领域主流模型的训练与调优最佳实践
-2. 特征工程技巧（技术指标、滞后特征、外部变量）
+2. 特征工程技巧（以论文为准，不要假设是时序特征）
 3. 超参数调优（GridSearch, Optuna）
 4. 部署踩坑指南
 

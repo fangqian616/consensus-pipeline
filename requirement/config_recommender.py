@@ -101,6 +101,12 @@ ACADEMIC_DEPARTMENT_TEMPLATE = {
                     "en_name": "DOI Tracer",
                     "zh_style": "你专注通过Crossref DOI获取精确的论文元数据：作者、机构、发表日期、卷期页码、基金信息。你确保每篇论文的身份信息完整可溯源，拒绝来路不明的引用。",
                     "en_style": "Focus on precise DOI-based metadata extraction"
+                },
+                "B": {
+                    "zh_name": "机构与基金核验派",
+                    "en_name": "Affiliation & Funding Verifier",
+                    "zh_style": "你专注核验论文的机构背景与基金支持：作者所属机构在该领域是否权威、基金来源是否可信、是否存在利益冲突。你的职责是识别'来路不明'或'利益相关'的文献，防止低可信度论文混入候选池。",
+                    "en_style": "Verify author affiliations, funding sources and conflicts of interest"
                 }
             }
         },
@@ -113,6 +119,12 @@ ACADEMIC_DEPARTMENT_TEMPLATE = {
                     "en_name": "Impact Tracker",
                     "zh_style": "你专注通过OpenCitations分析引用链路，识别领域核心节点和高影响力论文。你能从引用结构中发现隐藏的研究脉络和学术传承关系。",
                     "en_style": "Focus on citation network analysis and core node identification"
+                },
+                "B": {
+                    "zh_name": "前沿演化派",
+                    "en_name": "Frontier Evolution",
+                    "zh_style": "你专注识别研究前沿的演化轨迹：哪些方向正在爆发（引用快速增长）、哪些已经过气、领域重心如何随时间迁移。你的职责是从引用时间序列中发现新兴热点和衰落方向，补充静态影响力分析的盲区。",
+                    "en_style": "Trace research frontier evolution and citation bursts over time"
                 }
             }
         },
@@ -143,6 +155,12 @@ ACADEMIC_DEPARTMENT_TEMPLATE = {
                     "en_name": "Cross Validator",
                     "zh_style": "你专注对论文核心结论进行多源交叉验证：不同数据集是否得到一致结论？不同方法是否指向相同结果？稳健性是否经得起检验？",
                     "en_style": "Cross-validate conclusions across multiple sources"
+                },
+                "B": {
+                    "zh_name": "数据质量审计派",
+                    "en_name": "Data Quality Auditor",
+                    "zh_style": "你专注审计论文的数据质量本身：样本量是否足够、是否存在选择偏倚、数据来源是否可信、结果是否可复现。你的职责是找出'结论漂亮但数据站不住'的论文，防止由垃圾数据支撑的结论混入共识。",
+                    "en_style": "Audit data quality, bias and reproducibility"
                 }
             }
         },
@@ -173,6 +191,12 @@ ACADEMIC_DEPARTMENT_TEMPLATE = {
                     "en_name": "9D Classifier",
                     "zh_style": "你使用9个维度对论文进行主题归类：研究领域、方法论、数据类型、地理范围、时间特征、研究设计、核心发现、政策含义、技术路线。你的职责是构建完整的主题地图。",
                     "en_style": "Classify papers across 9 dimensions"
+                },
+                "B": {
+                    "zh_name": "跨域桥接派",
+                    "en_name": "Cross-domain Bridge",
+                    "zh_style": "你专注识别主题之间的语义关系与跨域桥接：哪些看似独立的方向其实共享方法或数据、哪些交叉领域正在形成新热点。你的职责是发现9维度归类之外的隐藏关联，避免主题地图过于割裂。",
+                    "en_style": "Identify cross-domain bridges and hidden topic relationships"
                 }
             }
         },
@@ -185,6 +209,12 @@ ACADEMIC_DEPARTMENT_TEMPLATE = {
                     "en_name": "Trend & Distribution",
                     "zh_style": "你负责生成4张核心图表：研究趋势时间线、方法论分布饼图、关键突破时间轴、引用网络演化图。图表要清晰、信息密度高、适合组会汇报。",
                     "en_style": "Generate 4 core charts for presentation"
+                },
+                "B": {
+                    "zh_name": "信息设计派",
+                    "en_name": "Information Designer",
+                    "zh_style": "你专注图表的信息设计与可读性：信息层级是否清晰、是否避免了误导性可视化（截断坐标轴、比例失真等）、是否针对汇报场景优化了呈现。你的职责是让图表'一眼看懂且不误导'。",
+                    "en_style": "Optimize chart readability and avoid misleading visualization"
                 }
             }
         },
@@ -197,6 +227,12 @@ ACADEMIC_DEPARTMENT_TEMPLATE = {
                     "en_name": "Structural Integrator",
                     "zh_style": "你负责将所有部门的输出整合为最终的组会汇报PDF。报告结构：摘要→领域概览→方法论综述→核心发现→争议与前沿→研究建议→参考文献。12页，约9000字，20篇参考文献，4张图表。",
                     "en_style": "Integrate all outputs into structured report"
+                },
+                "B": {
+                    "zh_name": "证据链核验派",
+                    "en_name": "Evidence Auditor",
+                    "zh_style": "你专注核验报告的证据链完整性：每条结论是否有对应文献支撑、引用是否准确、是否从证据过度推断。你的职责是确保最终报告的每个论断都经得起溯源，防止'结论正确但证据缺失'的整合。",
+                    "en_style": "Verify evidence-chain integrity and citation accuracy in the report"
                 }
             }
         },
@@ -213,8 +249,8 @@ ACADEMIC_DEPARTMENT_TEMPLATE = {
                 "B": {
                     "zh_name": "代码架构师",
                     "en_name": "Code Architect",
-                    "zh_style": "你专注将选型结果转化为可运行代码。核心工作：(1) 设计模块结构和调用关系；(2) 写出完整可运行代码，含import、配置、核心逻辑、异常处理；(3) 标注关键参数含义和调优方向。代码必须：能直接复制运行、有类型注解、有中文注释。输出格式：先画架构图，再输出完整代码块。",
-                    "en_style": "Turn tech selection into runnable code with architecture diagrams and error handling."
+                    "zh_style": "你专注把选型结果转化为可落地的技术架构。核心工作：(1) 设计模块结构和调用关系，用架构图说明；(2) 给出关键模块的核心代码骨架（含import、接口签名、关键逻辑、异常处理），不必是完整可运行工程；(3) 标注关键参数含义和调优方向。重点是可复用的设计思路，而非堆砌完整代码。输出格式：先画架构图，再输出关键代码片段。",
+                    "en_style": "Turn tech selection into an actionable architecture with module design and key code skeletons."
                 },
                 "C": {
                     "zh_name": "调试优化师",
@@ -320,6 +356,12 @@ class ConfigRecommender:
         # If cross-debates are empty after all adjustments, auto-generate from departments
         config = self._ensure_cross_debates(config)
 
+        # === v2: Minimum debaters guarantee ===
+        # Several academic departments shipped with a single debater; a 1-person
+        # "debate" has no disagreement and a meaningless CV. Guarantee >= 2 here
+        # as a safety net (also covers LLM adjustments that drop a debater).
+        config = self._ensure_min_debaters(config)
+
         # Inject requirement info into configuration description
         config["name"] = f"{requirement.topic} - {config.get('name', 'Custom Configuration')}"
         config["description"] = self._build_description(requirement, discussion)
@@ -348,6 +390,59 @@ class ConfigRecommender:
         if not p5 and len(dept_order) >= 2:
             # Generate at least 1 pair for final consensus check
             config["p5_cross_debates"] = _auto_generate_cross_debates(dept_order, max_pairs=1)
+
+        return config
+
+    def _ensure_min_debaters(self, config: dict, min_debaters: int = 2) -> dict:
+        """Ensure every department has at least `min_debaters` debaters.
+
+        v2 fix: the academic template shipped 6 departments with a single
+        debater. A 1-person "debate" produces no disagreement and a meaningless
+        CV, so guarantee a minimum here (also covers LLM adjustments that
+        silently drop a debater).
+        """
+        departments = config.get("departments")
+        if not isinstance(departments, dict):
+            return config
+
+        for dept_key, dept in departments.items():
+            if not isinstance(dept, dict):
+                continue
+            debaters = dept.get("debaters")
+            if not isinstance(debaters, dict):
+                debaters = {}
+            # Drop malformed (non-dict) entries
+            debaters = {k: v for k, v in debaters.items() if isinstance(v, dict)}
+            dept["debaters"] = debaters
+
+            if len(debaters) >= min_debaters:
+                continue
+
+            dept_zh = dept.get("zh_name") or dept_key
+            dept_en = dept.get("en_name") or dept_key
+
+            def _next_key(used):
+                letter = "A"
+                while letter in used:
+                    letter = chr(ord(letter) + 1)
+                return letter
+
+            # Add a skeptic first (complements an existing proponent-style debater)
+            k = _next_key(debaters)
+            debaters[k] = {
+                "zh_name": f"{dept_zh}反方",
+                "en_name": "Skeptic",
+                "zh_style": f"你是{dept_zh}领域的反方专家，从质疑和挑战的角度审视问题，指出潜在风险和不足，防止结论被过度乐观地接受。",
+                "en_style": f"Skeptic expert in {dept_en}, critically examining from a challenging perspective",
+            }
+            if len(debaters) < min_debaters:
+                k = _next_key(debaters)
+                debaters[k] = {
+                    "zh_name": f"{dept_zh}正方",
+                    "en_name": "Proponent",
+                    "zh_style": f"你是{dept_zh}领域的正方专家，从支持和肯定的角度分析问题，提出建设性观点。",
+                    "en_style": f"Proponent expert in {dept_en}, analyzing from a supportive perspective",
+                }
 
         return config
 

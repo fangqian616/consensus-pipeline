@@ -371,6 +371,8 @@ class ReportGenerator:
             # Review needs long output, use dedicated call
             report = self._llm_call_long(system_prompt, user_prompt, temperature=0.25)
             if report and len(report) > 500:
+                # Normalize drifted section numbers (LLM often restarts at "一")
+                report = self._renumber_sections(report)
                 # Rebuild references with paper metadata, ensure citation numbers match
                 report = self._rebuild_references(report, qualified)
 
@@ -398,6 +400,28 @@ class ReportGenerator:
         sections.append(self._build_final_trends(papers))
         sections.append(self._build_final_references(s_papers, a_papers))
         return "\n\n".join(sections)
+
+    @staticmethod
+    def _renumber_sections(report: str) -> str:
+        """Normalize top-level Chinese section numbering to be continuous.
+
+        LLM long-form generation often drifts section numbers (e.g. writes
+        "一、研究概况" then "一、核心发现" instead of "三、核心发现"). Renumber
+        top-level "## N、" sections by occurrence order so the final report is
+        consistently numbered.
+        """
+        import re
+        cn = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"]
+        counter = 0
+        pattern = re.compile(r'^(##\s*)[一二三四五六七八九十]+([、.．])\s*(.*)$', re.MULTILINE)
+
+        def _repl(m):
+            nonlocal counter
+            counter += 1
+            num = cn[counter - 1] if counter <= len(cn) else str(counter)
+            return f"{m.group(1)}{num}{m.group(2)}{m.group(3)}"
+
+        return pattern.sub(_repl, report)
 
     @staticmethod
     def _rebuild_references(report: str, papers: List[PaperCandidate]) -> str:
