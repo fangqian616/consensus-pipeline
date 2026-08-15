@@ -1289,10 +1289,23 @@ def merge_seed_papers(papers):
         doi = (sp.get("doi") or "").lower()
         title = (sp.get("title") or "").lower().strip()
         if doi and doi in existing_dois:
-            log("Phase4.8", f"种子论文 DOI 重复，跳过: {sp.get('title','')[:50]}")
+            # DOI 重复：给搜索版打上 user_seed 标记（用户指定，优先引用），
+            # 保留搜索版已有的真实分级/引用数，不丢弃也不重复添加
+            for p in papers:
+                if p.doi.lower() == doi:
+                    p.source = "user_seed"
+                    p.quality_detail = {"note": "用户指定种子论文", "source": "user_seed"}
+                    break
+            log("Phase4.8", f"种子论文 DOI 重复，已标记 user_seed: {sp.get('title','')[:50]}")
             continue
         if title and title in existing_titles:
-            log("Phase4.8", f"种子论文标题重复，跳过: {title[:50]}")
+            # 标题重复（无 DOI）：同样标记
+            for p in papers:
+                if p.title.lower().strip() == title:
+                    p.source = "user_seed"
+                    p.quality_detail = {"note": "用户指定种子论文", "source": "user_seed"}
+                    break
+            log("Phase4.8", f"种子论文标题重复，已标记 user_seed: {title[:50]}")
             continue
 
         year = sp.get("year") or 0
