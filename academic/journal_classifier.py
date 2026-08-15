@@ -13,9 +13,6 @@ import requests
 from typing import Dict, Any, Optional, List
 from functools import lru_cache
 
-from .journal_registry import JOURNAL_QUALITY_REGISTRY
-
-
 # ============================================================
 # easyScholar API Configuration
 # ============================================================
@@ -98,89 +95,3 @@ def query_easyscholar(journal_name: str) -> Optional[Dict[str, Any]]:
             return None
     except Exception:
         return None
-
-
-def classify_journal_enhanced(
-    journal_name: str,
-    use_easyscholar: bool = True,
-) -> Dict[str, Any]:
-    """
-    Enhanced journal classification: local registry → easyScholar API → default rules.
-
-    v4.3: Fixed fuzzy matching — exact match first; substring match only triggers when
-    the shorter string length is >= 80% of the longer one.
-
-    Args:
-        journal_name: Journal name
-        use_easyscholar: Whether to try the easyScholar API
-
-    Returns:
-        {"level": "S/A/B/C/D", "if_2026": float|None, "jcr": str, "note": str, "source": "local/api/fallback"}
-    """
-    normalized = journal_name.lower().strip().replace(".", "").replace(",", "")
-
-    # 1. Local registry — exact match first
-    for key, val in JOURNAL_QUALITY_REGISTRY.items():
-        key_norm = key.lower().strip().replace(".", "").replace(",", "")
-        if normalized == key_norm:
-            return {**val, "source": "local"}
-
-    # Substring match — only triggers when shorter string length >= 80% of longer string
-    # Avoid "Energy" matching all journals containing "Energy"
-    for key, val in JOURNAL_QUALITY_REGISTRY.items():
-        key_norm = key.lower().strip().replace(".", "").replace(",", "")
-        shorter = min(len(normalized), len(key_norm))
-        longer = max(len(normalized), len(key_norm))
-        if longer == 0:
-            continue
-        if shorter / longer >= 0.8:
-            if normalized in key_norm or key_norm in normalized:
-                return {**val, "source": "local"}
-
-    # 2. easyScholar API
-    if use_easyscholar and EASYSCHOLAR_SECRET_KEY:
-        api_data = query_easyscholar(journal_name)
-        if api_data:
-            level = _level_from_easyscholar(api_data)
-            official = api_data.get("officialRank", {}).get("all") or {}
-
-            sci_if = None
-            try:
-                if_str = official.get("sciif", "") or ""
-                sci_if = float(if_str) if if_str else None
-            except (ValueError, TypeError):
-                pass
-
-            jcr_parts = []
-            if official.get("sci"):
-                jcr_parts.append(f"JCR {official['sci']}")
-            if official.get("ssci"):
-                jcr_parts.append(f"SSCI {official['ssci']}")
-            if official.get("sciUp"):
-                jcr_parts.append(f"CAS {official['sciUp']}")
-            if official.get("cssci"):
-                jcr_parts.append("CSSCI")
-            if official.get("cscd"):
-                jcr_parts.append("CSCD")
-
-            return {
-                "level": level,
-                "if_2026": sci_if,
-                "jcr": " / ".join(jcr_parts) if jcr_parts else "API query",
-                "note": f"easyScholar query",
-                "source": "api",
-            }
-
-    # 3. Default rules
-    return {"level": "C", "if_2026": None, "jcr": "Unknown", "note": "Not in registry and API not queried", "source": "fallback"}
-
-
-def batch_classify_journals(
-    journal_names: List[str],
-    use_easyscholar: bool = True,
-) -> Dict[str, Dict[str, Any]]:
-    """Batch-query journal rankings."""
-    results = {}
-    for name in journal_names:
-        results[name] = classify_journal_enhanced(name, use_easyscholar=use_easyscholar)
-    return results

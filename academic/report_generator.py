@@ -38,6 +38,7 @@ class ReportGenerator:
     def __init__(self, output_dir: str = "./output", llm_call_fn=None, output_lang: str = "zh"):
         self.output_dir = output_dir
         self.llm_call_fn = llm_call_fn
+        self.output_lang = output_lang
 
     def generate(
         self,
@@ -1041,18 +1042,10 @@ class ReportGenerator:
                         methods.add(kw)
             if methods:
                 findings.append({
-                    "text": f"深度学习方法（{', '.join(sorted(methods)[:3])}）在能源经济预测任务中已取代传统计量模型成为主流",
+                    "text": f"深度学习方法（{', '.join(sorted(methods)[:3])}）在本研究领域已成为主流方法",
                     "confidence": "高",
                     "evidence": f"基于{s_papers[0].title[:40] if s_papers else ''}等S级论文",
                 })
-
-        # Data source findings
-        if len(findings) < 5:
-            findings.append({
-                "text": "高频时序数据（电力负荷、碳价格、天气）是多模态融合的主要数据基础",
-                "confidence": "中",
-                "evidence": "",
-            })
 
         for i, f in enumerate(findings[:5], 1):
             conf_tag = {"高": "🟢", "中": "🟡", "低": "🔴"}.get(f["confidence"], "⚪")
@@ -1139,10 +1132,10 @@ class ReportGenerator:
         lines = ["## 5. Research Gaps and Opportunities" if self.output_lang == "en" else "## 五、研究空白与机会", ""]
 
         gaps = [
-            {"gap": "多任务联合建模", "detail": "碳排放-电价-负荷缺乏联合优化框架", "suggestion": "多任务学习(MTL)"},
-            {"gap": "动态因果效应", "detail": "因果ML在能源政策评估中起步", "suggestion": "DID+因果森林"},
-            {"gap": "跨领域迁移学习", "detail": "EU-ETS vs 中国碳市场模型迁移鲜有研究", "suggestion": "域自适应方法"},
-            {"gap": "GNN网络效应", "detail": "电力/碳市场图结构信息未利用", "suggestion": "图神经网络建模溢出效应"},
+            {"gap": "多任务联合建模", "detail": "多个相关任务之间缺乏联合优化框架", "suggestion": "多任务学习(MTL)"},
+            {"gap": "动态因果效应", "detail": "因果推断方法在本领域的应用仍处起步阶段", "suggestion": "因果推断+机器学习"},
+            {"gap": "跨领域迁移学习", "detail": "跨数据集/跨场景的模型迁移研究不足", "suggestion": "域自适应方法"},
+            {"gap": "结构信息利用", "detail": "图结构/关系信息未被充分利用", "suggestion": "图神经网络建模"},
             {"gap": "可解释性标配化", "detail": "多数ML论文缺SHAP/LIME分析", "suggestion": "可解释性作为标准输出"},
         ]
 
@@ -1174,14 +1167,14 @@ class ReportGenerator:
         lines.append("")
 
         lines.append("### 方法论评估的边界条件")
-        lines.append("- 方法论优劣比较依赖于特定数据规模、市场类型和预测窗口")
+        lines.append("- 方法论优劣比较依赖于特定数据规模、应用场景和评估设定")
         lines.append("- 小样本场景下深度学习未必优于传统统计方法")
-        lines.append("- 不同碳市场（EU-ETS vs 中国）的结论可能不可直接迁移")
+        lines.append("- 不同数据集/应用场景的结论可能不可直接迁移")
         lines.append("")
 
         lines.append("### 结论适用范围与外推风险")
         lines.append("- 本综述结论主要基于近5年英语学术文献，适用范围有限")
-        lines.append("- 不应将有限样本上的方法论对比结论简单外推至所有能源经济场景")
+        lines.append("- 不应将有限样本上的方法论对比结论简单外推至所有应用场景")
         lines.append("- 建议读者结合自身研究场景，审慎评估本综述结论的适用性")
 
         return "\n".join(lines)
@@ -1518,19 +1511,17 @@ class ReportGenerator:
         if "survey" in title_lower or "review" in title_lower:
             return "该领域系统性综述，梳理了方法论演进脉络"
         if "causal" in title_lower:
-            return "将因果推断引入能源经济学，方法论创新性强"
+            return "将因果推断引入该领域，方法论创新性强"
         if "transformer" in title_lower or "attention" in title_lower:
-            return "Transformer架构在能源时序预测中的前沿应用"
+            return "Transformer/注意力架构的前沿应用"
         if "graph" in title_lower or "gnn" in title_lower:
-            return "图神经网络在能源网络建模中的开创性工作"
+            return "图神经网络建模的开创性工作"
         if "explain" in title_lower or "interpret" in title_lower:
-            return "可解释性ML在能源政策分析中的关键研究"
+            return "可解释性ML的关键研究"
         if "hybrid" in title_lower or "ensemble" in title_lower:
             return "混合模型策略，在预测精度上取得突破"
         if "lstm" in title_lower or "gru" in title_lower:
-            return "深度学习在能源时序预测中的基准性工作"
-        if "carbon price" in title_lower or "carbon market" in title_lower or "carbon emission" in title_lower or "carbon trading" in title_lower or "carbon budget" in title_lower:
-            return "碳市场/碳价格建模的核心研究"
+            return "深度学习的基准性工作"
         return "在方法论或应用场景上有重要贡献"
 
     # ================================================================
