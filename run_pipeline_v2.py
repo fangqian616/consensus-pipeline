@@ -612,6 +612,9 @@ def main():
             state["current_phase"] = "5"
             _save_state(output_dir, state)
 
+        # Phase 4.8: 种子论文导入
+        papers = v1.merge_seed_papers(papers)
+
         # Phase 5: v2 辩论(量化增强)
         v1.log("MAIN-v2", ">>> Phase 5: v2 辩论(StanceTracker + 动态终止)")
         if args.only_dept:

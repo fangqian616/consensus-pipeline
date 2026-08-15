@@ -1247,6 +1247,73 @@ def self_evaluation(report, papers, dept_outputs):
     return result
 
 
+# ============ Seed Paper Import (Phase 4.8) ============
+def merge_seed_papers(papers):
+    """导入 seed_papers/ 文件夹的种子论文并合并到 papers（按 DOI/title 去重）。
+
+    种子论文由 paper_importer 解析（PDF → Crossref 元数据），返回 dict，
+    这里转成 PaperCandidate。种子论文 source='user_seed'，辩论时优先引用。
+    """
+    try:
+        from paper_importer import SeedPaperImporter
+        importer = SeedPaperImporter(seed_folder="seed_papers")
+        seed_papers = importer.scan_folder()
+    except Exception as e:
+        log("Phase4.8", f"种子论文导入失败(可能缺 PyMuPDF 依赖): {e}")
+        return papers
+
+    from academic.search_engine import PaperCandidate
+
+    if not seed_papers:
+        log("Phase4.8", "无种子论文，跳过")
+        return papers
+
+    existing_dois = {p.doi.lower() for p in papers if p.doi}
+    existing_titles = {p.title.lower().strip() for p in papers if p.title}
+
+    added = 0
+    for sp in seed_papers:
+        doi = (sp.get("doi") or "").lower()
+        title = (sp.get("title") or "").lower().strip()
+        if doi and doi in existing_dois:
+            log("Phase4.8", f"种子论文 DOI 重复，跳过: {sp.get('title','')[:50]}")
+            continue
+        if title and title in existing_titles:
+            log("Phase4.8", f"种子论文标题重复，跳过: {title[:50]}")
+            continue
+
+        year = sp.get("year") or 0
+        try:
+            year = int(year)
+        except (TypeError, ValueError):
+            year = 0
+
+        # 摘要为空时用全文摘录兜底，保证辩论有内容可引用
+        abstract = sp.get("abstract") or sp.get("full_text_excerpt") or ""
+
+        papers.append(PaperCandidate(
+            title=sp.get("title", ""),
+            doi=sp.get("doi", ""),
+            authors=sp.get("authors") or [],
+            journal=sp.get("journal", ""),
+            year=year,
+            abstract=abstract[:3000],
+            citation_count=0,
+            source="user_seed",
+            quality_level=sp.get("grade", "B"),
+            quality_detail={"note": "用户指定种子论文", "source": "user_seed"},
+            graded=True,
+        ))
+        if doi:
+            existing_dois.add(doi)
+        if title:
+            existing_titles.add(title)
+        added += 1
+
+    log("Phase4.8", f"种子论文合并完成: 新增 {added} 篇, 总计 {len(papers)} 篇")
+    return papers
+
+
 # ============ Main Flow ============
 def main():
     start_time = time.time()
@@ -1339,6 +1406,9 @@ def main():
         # Save QC-filtered papers (for downstream use)
         papers_data = [p.to_dict() for p in papers]
         save_json(papers_data, "phase3.5_qc_papers.json")
+
+        # Phase 4.8: 种子论文导入
+        papers = merge_seed_papers(papers)
 
         # Phase 5: Department debate
         dept_outputs = phase5_debate(config, papers, preprints)
