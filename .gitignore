@@ -49,3 +49,10 @@ git_push.py
 
 # 运行时派生缓存
 academic/journal_grades_snapshot.json
+
+# Temporary scripts (auto-generated, do not commit)
+verify_files.py
+verify_app.py
+apply_ui_patch.py
+fix_init.py
+download_files.ps1

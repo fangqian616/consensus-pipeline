@@ -475,15 +475,24 @@ LANG = {
         "tab_setup_req": "📋 需求调研",
         "tab_setup_config": "🧠 智能配组",
         "tab_setup_input": "📝 内容输入",
+        "tab_setup_seed": "📚 种子论文导入",
         "tab_debate_combined": "🗣️ 辩论",
         "tab_dept_debate": "🗣️ 部门辩论",
         "tab_cross_debate_sub": "⚔️ 交叉辩论",
-        "tab_output_combined": "🎬 产出",
+        "tab_output_combined": "🎬 产出与工具",
         "tab_final_output": "🎬 最终产出",
         "tab_proofread_sub": "🔍 校对",
-        "tab_tools": "📊 工具",
         "tab_compare_sub": "📊 运行对比",
         "tab_market_sub": "🏪 市场模式",
+        "seed_papers_title": "📚 种子论文导入",
+        "seed_papers_desc": "将需要重点参考的论文 PDF 放入项目根目录的 `seed_papers/` 文件夹，管线运行时自动扫描合并。也可在此处直接上传。",
+        "seed_papers_upload": "上传论文 PDF",
+        "seed_papers_scanning": "正在扫描种子论文...",
+        "seed_papers_found": "✅ 已导入 {count} 篇种子论文",
+        "seed_papers_empty": "暂无种子论文，请上传 PDF 或放入 seed_papers/ 文件夹",
+        "seed_papers_doi_ok": "✅ DOI 识别成功",
+        "seed_papers_doi_fail": "⚠️ 无 DOI，使用文本提取",
+        "seed_papers_error": "❌ 解析失败",
         "toast_config_confirmed": "✅ 配置已确认！请切换到「辩论」Tab开始",
     },
     "en": {
@@ -709,15 +718,24 @@ LANG = {
         "tab_setup_req": "📋 Requirement",
         "tab_setup_config": "🧠 Smart Config",
         "tab_setup_input": "📝 Input",
+        "tab_setup_seed": "📚 Seed Papers",
         "tab_debate_combined": "🗣️ Debate",
         "tab_dept_debate": "🗣️ Dept. Debate",
         "tab_cross_debate_sub": "⚔️ Cross Debate",
-        "tab_output_combined": "🎬 Output",
+        "tab_output_combined": "🎬 Output & Tools",
         "tab_final_output": "🎬 Final Output",
         "tab_proofread_sub": "🔍 Proofread",
-        "tab_tools": "📊 Tools",
         "tab_compare_sub": "📊 Compare",
         "tab_market_sub": "🏪 Market",
+        "seed_papers_title": "📚 Seed Papers Import",
+        "seed_papers_desc": "Place PDFs in `seed_papers/` folder for auto-import, or upload directly below.",
+        "seed_papers_upload": "Upload PDFs",
+        "seed_papers_scanning": "Scanning seed papers...",
+        "seed_papers_found": "✅ Imported {count} seed papers",
+        "seed_papers_empty": "No seed papers. Upload PDFs or place in seed_papers/ folder.",
+        "seed_papers_doi_ok": "✅ DOI found",
+        "seed_papers_doi_fail": "⚠️ No DOI, using text extraction",
+        "seed_papers_error": "❌ Parse failed",
         "toast_config_confirmed": "✅ Config confirmed! Switch to Debate tab",
     }
 }
@@ -2634,6 +2652,81 @@ def render_search_review_panel():
                 else:
                     st.error("❌ " + ("没有可用的英文检索式" if is_zh else "No valid English queries"))
 
+
+
+# ============ Seed Papers Tab ============
+
+def render_seed_papers_tab():
+    """Seed papers upload and management UI"""
+    is_zh = st.session_state.get("lang", "zh") == "zh"
+
+    st.markdown(t("seed_papers_desc"))
+
+    # File uploader
+    uploaded_files = st.file_uploader(
+        t("seed_papers_upload"),
+        type=["pdf"],
+        accept_multiple_files=True,
+        key="seed_papers_uploader",
+    )
+
+    if uploaded_files:
+        try:
+            from paper_importer import SeedPaperImporter
+        except ImportError:
+            st.error("paper_importer.py not found. Please place it in project root.")
+            return
+
+        import tempfile
+
+        importer = SeedPaperImporter()
+        papers = []
+
+        with st.spinner(t("seed_papers_scanning")):
+            for uf in uploaded_files:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                    tmp.write(uf.read())
+                    tmp_path = tmp.name
+
+                try:
+                    paper = importer.parse_pdf(tmp_path)
+                    if paper:
+                        paper["file_name"] = uf.name
+                        papers.append(paper)
+                    else:
+                        st.warning(f"{uf.name}: {t('seed_papers_error')}")
+                except Exception as e:
+                    st.warning(f"{uf.name}: {e}")
+                finally:
+                    os.unlink(tmp_path)
+
+        if papers:
+            st.session_state.seed_papers = papers
+            st.success(t("seed_papers_found").format(count=len(papers)))
+
+            for p in papers:
+                doi_status = t("seed_papers_doi_ok") if p.get("doi") else t("seed_papers_doi_fail")
+                with st.expander(f"{p.get('title', 'Unknown')[:60]} -- {doi_status}"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"**Authors:** {', '.join(p.get('authors', [])[:5]) or 'N/A'}")
+                        st.markdown(f"**Year:** {p.get('year', 'N/A')}")
+                    with col2:
+                        st.markdown(f"**DOI:** {p.get('doi', 'N/A')}")
+                        st.markdown(f"**Journal:** {p.get('journal', 'N/A')}")
+        else:
+            st.warning(t("seed_papers_empty"))
+
+    # Show already imported seed papers
+    existing = st.session_state.get("seed_papers", [])
+    if existing:
+        st.markdown("---")
+        is_zh2 = st.session_state.get("lang", "zh") == "zh"
+        label = f"**{'Imported' if not is_zh2 else '已导入'} {len(existing)} {'seed papers' if not is_zh2 else '篇种子论文'}：**"
+        st.markdown(label)
+        for i, p in enumerate(existing):
+            doi_badge = "✅" if p.get("doi") else "⚠️"
+            st.markdown(f"{i+1}. {doi_badge} **{p.get('title', 'Unknown')[:60]}** ({p.get('year', '?')})")
 
 # ============ Debate Tab ============
 
@@ -5703,8 +5796,7 @@ def main():
     _tab_labels = [
         t("tab_setup"),
         t("tab_debate_combined"),
-        t("tab_output_combined"),
-        t("tab_tools"),
+        t("tab_output_combined"),  # now "Output & Tools"
     ]
     # If our desired tab differs from radio's current value, sync the widget
     # state in place. v0.12.9: the old pop+reinit-via-index approach left the
@@ -5734,20 +5826,16 @@ def main():
         label_visibility="collapsed",
     )
     
-    # Tab0: 需求与配置 — sub-tabs
-    with st.container():
-        if _active_tab == 0:
-            sub_tab0, sub_tab1, sub_tab2 = st.tabs([
-                t("tab_setup_req"),
-                t("tab_setup_config"),
-                t("tab_setup_input"),
-            ])
-            with sub_tab0:
-                render_requirement_tab()
-            with sub_tab1:
-                render_config_tab()
-            with sub_tab2:
-                render_input_tab()
+    # Tab0: 需求与配置 — expanders (was sub-tabs)
+    if _active_tab == 0:
+        with st.expander(t("tab_setup_req"), expanded=True):
+            render_requirement_tab()
+        with st.expander(t("tab_setup_config"), expanded=False):
+            render_config_tab()
+        with st.expander(t("tab_setup_input"), expanded=False):
+            render_input_tab()
+        with st.expander(t("tab_setup_seed"), expanded=False):
+            render_seed_papers_tab()
     
     # Tab1: 辩论 — expanders
     if _active_tab == 1:
@@ -5756,16 +5844,13 @@ def main():
         with st.expander(t("tab_cross_debate_sub"), expanded=False):
             render_cross_tab()
     
-    # Tab2: 产出 — expanders
+    # Tab2: Output & Tools — merged expanders (was Tab2+Tab3)
     if _active_tab == 2:
         with st.expander(t("tab_final_output"), expanded=True):
             render_output_tab()
         with st.expander(t("tab_proofread_sub"), expanded=False):
             render_proofread_tab()
-    
-    # Tab3: 工具 — expanders
-    if _active_tab == 3:
-        with st.expander(t("tab_compare_sub"), expanded=True):
+        with st.expander(t("tab_compare_sub"), expanded=False):
             render_compare_tab()
         with st.expander(t("tab_market_sub"), expanded=False):
             render_market_tab()
