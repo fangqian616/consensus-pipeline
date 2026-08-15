@@ -46,3 +46,6 @@ mock_experiment.py
 analyze_stance_log.py
 calibrate_thresholds.py
 git_push.py
+
+# 运行时派生缓存
+academic/journal_grades_snapshot.json
