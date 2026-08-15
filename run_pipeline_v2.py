@@ -376,7 +376,7 @@ def _run_phases_0_to_4():
 
     # Phase 4.5-4.7
     papers = v1.reclassify_papers(papers)
-    papers = v1.filter_by_content_relevance(papers)
+    papers = v1.filter_by_content_relevance(papers, domain_config=domain_config)
     papers = v1.backfill_abstracts(papers)
 
     # Phase 3.5: QC

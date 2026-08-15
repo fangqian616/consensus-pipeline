@@ -874,27 +874,29 @@ def backfill_abstracts(papers):
     return papers
 
 
-def filter_by_content_relevance(papers):
+def filter_by_content_relevance(papers, domain_config=None):
     """
-    v5.1.7: Content relevance filter — S-tier papers cannot pass on journal name alone.
-    Check if each paper's title+abstract is relevant to topic (energy+ML),
-    Irrelevant papers are downgraded to C (not deleted, but excluded from review citation pool).
+    v5.1.7: Content relevance filter — S-tier papers cannot pass on citation alone.
+    检查每篇论文的 title+abstract 是否与主题相关(用 domain_config 的主题关键词),
+    完全无关的论文降级到 C(不删除, 但移出审阅引用池)。
     """
     log("Phase4.6", "Content relevance filter (title+abstract vs topic keywords)...")
 
-    # Energy domain core keywords
-    energy_keywords = {
-        "energy", "electricity", "carbon", "power", "renewable",
-        "solar", "wind", "oil", "gas", "fuel", "climate",
-        "emission", "grid", "load", "price", "demand", "supply",
-        "forecast", "market", "nuclear", "hydrogen", "battery",
-        "能源", "电力", "碳", "电价", "负荷", "预测",
-        "pv", "photovoltaic", "consumption", "heating", "cooling",
-        "building energy", "smart grid", "microgrid", "storage",
-        "coal", "petroleum", "lng", "cng", "thermal",
-    }
+    # 从 domain_config 提取主题关键词(替代硬编码能源词表)
+    topic_keywords = set()
+    if domain_config:
+        for q in (domain_config.get("query_rotation") or []):
+            if isinstance(q, str):
+                for token in q.replace(",", " ").replace("/", " ").split():
+                    token = token.strip().lower()
+                    if len(token) > 2:
+                        topic_keywords.add(token)
 
-    # ML/AI core keywords
+    if not topic_keywords:
+        log("Phase4.6", "No topic keywords from domain_config, skipping content relevance filter")
+        return papers
+
+    # ML/AI core keywords(通用)
     ml_keywords = {
         "machine learning", "deep learning", "neural network",
         "lstm", "gru", "xgboost", "random forest", "transformer",
@@ -902,37 +904,26 @@ def filter_by_content_relevance(papers):
         "gnn", "svm", "svr", "regression", "classification",
         "clustering", "nlp", "gan", "autoencoder", "attention",
         "ai", "artificial intelligence", "ml", "dl", "prediction",
-        "forecasting model", "time series", "optimization algorithm",
         "ensemble", "bayesian", "causal inference", "transfer learning",
         "federated learning", "机器学习", "深度学习", "神经网络",
-        "分解-集成", "混合模型", "集成学习",
     }
 
     demoted = 0
     for p in papers:
         if p.quality_level not in ("S", "A"):
-            continue  # B/C-tier not filtered, already low citation probability
+            continue  # B/C-tier not filtered
 
         text = (p.title + " " + (p.abstract or "")).lower()
 
-        has_energy = any(kw in text for kw in energy_keywords)
+        has_topic = any(kw in text for kw in topic_keywords)
         has_ml = any(kw in text for kw in ml_keywords)
 
-        if not has_energy and not has_ml:
-            # Completely irrelevant (chemistry/biology/pure social science, etc.)
+        if not has_topic and not has_ml:
+            # 既无主题关键词也无ML关键词 → 完全无关, 降级
             old = p.quality_level
             p.quality_level = "C"
-            log("Phase4.6", f"  Downgraded [{old}→C] no energy no ML: {p.title[:50]}... ({p.journal})")
+            log("Phase4.6", f"  Downgraded [{old}→C] no topic no ML: {p.title[:50]}... ({p.journal})")
             demoted += 1
-        elif has_ml and not has_energy:
-            # ML paper but not in energy domain (cybersecurity/medicine/NLP, etc.)
-            old = p.quality_level
-            p.quality_level = "C"
-            log("Phase4.6", f"  Downgraded [{old}→C] has ML no energy: {p.title[:50]}... ({p.journal})")
-            demoted += 1
-        elif has_energy and not has_ml:
-            # Energy paper without ML — keep but note (can serve as domain background citation)
-            pass
 
     from collections import Counter
     level_counts = Counter(p.quality_level for p in papers)
@@ -1269,7 +1260,7 @@ def main():
         papers = reclassify_papers(papers)
 
         # Phase 4.6: Content relevance filter (v5.1.7, kept as double insurance)
-        papers = filter_by_content_relevance(papers)
+        papers = filter_by_content_relevance(papers, domain_config=domain_config)
 
         # Phase 4.7: Backfill S/A-tier paper abstracts (v5.1.7)
         papers = backfill_abstracts(papers)

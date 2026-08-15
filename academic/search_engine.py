@@ -627,7 +627,14 @@ class AcademicSearchEngine:
                 if doi and doi.startswith("https://doi.org/"):
                     doi = doi.replace("https://doi.org/", "")
 
-                is_preprint = work_type in ["preprint", "working_paper"]
+                journal_lower = journal_name.lower()
+                is_preprint = (
+                    work_type in ["preprint", "working_paper"]
+                    or venue_type in ("repository", "preprint")
+                    or "预印本" in journal_name
+                    or "preprint" in journal_lower
+                    or "repository" in journal_lower
+                )
 
                 # v5.1.7: Reconstruct abstract text from abstract_inverted_index
                 abstract_text = ""
