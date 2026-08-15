@@ -59,39 +59,28 @@ def _snapshot_set(journal_name, detail):
 
 def classify_dynamic(paper: "PaperCandidate") -> str:
     """
-    混合动态分级:
-    1. 论文级被引百分位(OpenAlex cited_by_percentile_year) → S/A/B/C
-    2. 期刊分级快照命中 → S/A/B/C
-    3. easyScholar API(中科院分区 + JCR + CSSCI) → S/A/B/C + 写回快照
-    4. 都没有(预印本 / 真无数据) → U (graded=False)
+    期刊分级(easyScholar) — 废弃被引百分位, 改用 v5.0 分级规则。
 
-    阈值(百分位): >=90→S, >=70→A, >=50→B, else→C
+    分级规则见 _level_from_easyscholar:
+    - JCR Q1 + IF>=10 → S
+    - 中科院 1区 → S
+    - Q1 或 中科院 2区 → A
+    - CSSCI/CSCD 或 Q2 → B
+    - 其他有数据(含 3区/4区) → C
+    - 无数据 → U (graded=False, 宁缺毋滥)
+
+    数据源优先级:
+    1. 期刊分级快照缓存(离线、快)
+    2. easyScholar API → S/A/B/C + 写回快照
+    3. 都没有 → U
     """
-    pct = paper.cited_by_percentile_year
-    # OpenAlex 返回对象 {"min": X, "max": Y}, 取 min(保守, 宁缺毋滥)
-    if isinstance(pct, dict):
-        pct = pct.get("min") if pct.get("min") is not None else pct.get("max")
-    if pct is not None:
-        try:
-            pct = float(pct)
-        except (TypeError, ValueError):
-            pct = None
-    if pct is not None:
-        if pct >= 90:
-            return "S"
-        if pct >= 70:
-            return "A"
-        if pct >= 50:
-            return "B"
-        return "C"
-
     if paper.journal:
-        # 2. 快照命中(离线、快)
+        # 1. 快照命中(离线、快)
         cached = _snapshot_get(paper.journal)
         if cached in ("S", "A", "B", "C"):
             return cached
 
-        # 3. easyScholar API(有 key), 绕过静态表
+        # 2. easyScholar API(有 key), 绕过静态表
         try:
             from .journal_classifier import query_easyscholar, _level_from_easyscholar
             rank = query_easyscholar(paper.journal)
