@@ -179,8 +179,8 @@ class ReportGenerator:
         debate_outputs: Optional[Dict[str, str]] = None,
     ) -> str:
         """Use LLM to write academic review report based on paper metadata"""
-        # Build paper list for AI reference — only pass S/A/B-tier, not C-tier
-        qualified = [p for p in papers if p.quality_level in ("S", "A", "B")]
+        # Build paper list for AI reference — S/A/B-tier + 用户种子论文(即使U级也强制包含)
+        qualified = [p for p in papers if p.quality_level in ("S", "A", "B") or p.source == "user_seed"]
         paper_list = self._format_paper_list(qualified)
         year_dist = self._compute_year_distribution(qualified)
         method_dist = self._compute_method_distribution(qualified)
