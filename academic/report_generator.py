@@ -826,7 +826,12 @@ class ReportGenerator:
             # Check relevance
             text = (p.title + " " + (p.journal or "")).lower()
             is_irrelevant = any(kw in text for kw in irrelevant_markers)
-            marker = " ⚠️可能不相关" if is_irrelevant else ""
+            if p.source == "user_seed":
+                marker = " ⭐【用户指定种子论文】"
+            elif is_irrelevant:
+                marker = " ⚠️可能不相关"
+            else:
+                marker = ""
             # v5.1.7: Inject abstract so review AI can see paper content
             abstract_text = ""
             if p.abstract:

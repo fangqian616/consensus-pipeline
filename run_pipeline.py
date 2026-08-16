@@ -469,8 +469,9 @@ def _build_papers_summary(papers, max_abstract=300):
         if len(p.authors) > 3:
             authors += " et al."
         abstract_text = (p.abstract or 'N/A')[:max_abstract]
+        seed_mark = " ⭐【用户指定种子论文】" if p.source == "user_seed" else ""
         lines.append(
-            f"[{i}] {p.title}\n"
+            f"[{i}]{seed_mark} {p.title}\n"
             f"    Author/作者: {authors} | Journal/期刊: {p.journal} | Year/年份: {p.year} | "
             f"被引: {p.citation_count} | 等级: {p.quality_level}\n"
             f"    Abstract/摘要: {abstract_text}"
@@ -1102,11 +1103,11 @@ def generate_programming_output(papers):
 
 每个方案给出：名称、适用场景、成熟度评级(★~★★★★★)、推荐理由
 
-## 任务2：代表性任务完整代码
-写一个完整的、可直接运行的Python项目代码（针对该领域一个代表性任务）：
-- 使用该领域主流的机器学习模型
-- 数据从公开数据集获取
-- 包含数据预处理、特征工程、模型训练、预测评估
+## 任务2：代表性任务技术架构与关键代码骨架
+针对该领域一个代表性任务，给出技术架构设计和关键代码骨架（不必是完整可运行工程）：
+- 模块结构与调用关系（可用架构图说明）
+- 关键模块的核心代码片段（含import、接口签名、核心逻辑）
+- 以论文中实际使用的模型/框架为准，不要假设特定技术栈
 - 有中文注释和类型注解
 
 ## 任务3：调试与部署注意事项
