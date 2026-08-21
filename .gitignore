@@ -16,7 +16,6 @@ seed_papers/manifest.json
 run_output/
 v2_run_output/
 real_output*/
-requirement/
 user_profiles/
 experiment_config.json
 academic/journal_grades_snapshot.json
