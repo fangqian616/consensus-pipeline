@@ -128,7 +128,7 @@ export function apply(ctx, config = {}) {
   ctx.systemPrompt?.section?.({
     name: 'tool:consensus-pipeline',
     order: 100,
-    text: 'Consensus Pipeline tools run the academic research pipeline (search → debate → report). run_full_pipeline runs end-to-end; use get_pipeline_status to check progress and locate output files. A web control panel is served at /consensus-pipeline/ on this host.',
+    text: 'Consensus Pipeline tools run the academic research pipeline (search → debate → report). Important: when the user expresses a research intent — even a vague one — do NOT ask them to finalize a topic upfront. First run a requirement research interview in conversation: ask about core questions, discipline/scope, time range, methodology, quality standard, and deliverable, refining the topic through this multi-turn dialogue. Then call run_requirement_research with the refined topic and a free-text summary of what you gathered to produce the working-group configuration, then call run_full_pipeline with that topic to start the pipeline. Use get_pipeline_status to check progress and locate output files. A web control panel is served at /consensus-pipeline/ on this host.',
   });
 
   (async () => {
@@ -376,32 +376,6 @@ function registerWebPanel(ctx, { cwd, callTool, disposers, python }) {
           const found = await findReport(cwd, topic);
           if (!found) return json(res, 404, { error: 'report not found (still generating?)' });
           json(res, 200, found);
-        } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
-        return;
-      }
-
-      if (pathname === '/consensus-pipeline/api/requirement-research' && req.method === 'POST') {
-        try {
-          const body = await readRequestBody(req);
-          let p = {};
-          try { p = JSON.parse(body || '{}'); } catch {}
-          const topic = String(p.topic ?? '').trim();
-          if (!topic) return json(res, 400, { error: 'topic is required' });
-          const text = await callTool('run_requirement_research', {
-            topic,
-            requirements: p.requirements ?? '',
-            lang: p.lang ?? 'zh',
-          });
-          // 工具返回 {status, stdout_tail, ...}；stdout_tail 是 run_requirement_research.py 打印的 JSON 摘要
-          let outer = {};
-          try { outer = JSON.parse(text); } catch {}
-          let summary = {};
-          try { summary = JSON.parse(outer.stdout_tail || '{}'); } catch {}
-          if (!summary.status) {
-            summary = { status: outer.status || 'error', error: outer.stderr_tail || text };
-          }
-          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
-          res.end(JSON.stringify(summary));
         } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
         return;
       }
