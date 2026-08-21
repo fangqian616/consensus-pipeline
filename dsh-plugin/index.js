@@ -10,21 +10,41 @@
 // regardless of hoisted dependency versions and needs no bundled node_modules.
 import readline from 'node:readline';
 import { readFile, readdir, stat, mkdir } from 'node:fs/promises';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, realpathSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { join } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const name = 'dsh-consensus-pipeline';
 export const inject = ['tools', 'subprocess', 'systemPrompt', 'webServer'];
 
-const REQUEST_TIMEOUT_MS = 30_000; // JSON-RPC handshake budget
-const TOOL_CALL_TIMEOUT_MS = 3600_000; // long-running sync tools (search/verify/requirement) run minutes-hours
+const REQUEST_TIMEOUT_MS = 30_000;
+const TOOL_CALL_TIMEOUT_MS = 3600_000;
 const POLL_INTERVAL_MS = 15_000;
+
+function detectProjectRoot() {
+  // Walk up from this plugin file (resolving symlinks for pnpm) to find mcp_server.py
+  let here;
+  try {
+    here = dirname(fileURLToPath(import.meta.url));
+    here = dirname(realpathSync(here)); // resolve pnpm symlink if any
+  } catch {
+    here = process.cwd();
+  }
+  for (let i = 0; i < 8; i++) {
+    if (existsSync(join(here, 'mcp_server.py'))) return here;
+    const parent = dirname(here);
+    if (parent === here) break;
+    here = parent;
+  }
+  return process.cwd();
+}
 
 export function apply(ctx, config = {}) {
   const python = config.python ?? 'python';
-  const script = config.script ?? 'C:/Users/gfl_s/Desktop/consensus-pipeline-dev-v2-stance/mcp_server.py';
-  const cwd = config.cwd ?? 'C:/Users/gfl_s/Desktop/consensus-pipeline-dev-v2-stance';
+  const _root = config.cwd ?? detectProjectRoot();
+  const script = config.script ?? join(_root, 'mcp_server.py');
+  const cwd = _root;
   const graceMs = config.graceMs ?? 5000;
 
   const disposers = [];
