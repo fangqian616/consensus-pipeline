@@ -184,6 +184,20 @@ class PaperCandidate:
         return dataclasses.asdict(self)
 
 
+def is_core_seed(p) -> bool:
+    """判断是否核心种子论文（享受保活/前置/⭐标记/强制进报告待遇）。
+
+    仅 weight=='core' 享受特权；normal 档按普通论文对待（spec §4.2）。
+    向后兼容：无 weight 字段时，source=='user_seed' 视为 core（无 manifest 默认）。
+    公共函数：run_pipeline 与 report_generator 共用，避免双份维护。
+    """
+    qd = getattr(p, "quality_detail", None) or {}
+    w = getattr(p, "weight", None) or qd.get("weight", "")
+    if not w:
+        w = "core" if getattr(p, "source", "") == "user_seed" else ""
+    return w == "core"
+
+
 class AcademicSearchEngine:
     """
     Academic search engine

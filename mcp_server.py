@@ -84,6 +84,18 @@ def _register_tool(name: str, description: str, input_schema: dict, handler):
     })
 
 
+# ── Background job management (long-running pipeline runs) ────────────────
+# run_full_pipeline 现在异步启动: 立即返回 job_id, 用 get_job_status 轮询结果。
+JOBS: dict[str, dict[str, Any]] = {}
+_JOB_COUNTER = 0
+
+
+def _new_job_id() -> str:
+    global _JOB_COUNTER
+    _JOB_COUNTER += 1
+    return f"job-{_JOB_COUNTER}"
+
+
 # ── Protocol dispatcher ──────────────────────────────────────────────────
 
 async def handle_request(msg: dict) -> str | None:
@@ -234,6 +246,18 @@ async def _run_v2_department(topic: str, dept_key: str, lang: str = "zh",
     return json.dumps(r, ensure_ascii=False, indent=2)
 
 
+async def _run_requirement_research(topic: str, requirements: str = "",
+                                    lang: str = "zh", timeout: int = 900) -> str:
+    """Run Phase 0-3: requirement interview → structuring → discussion → config recommendation."""
+    cmd = [sys.executable, "run_requirement_research.py", "--topic", topic, "--lang", lang]
+    if requirements:
+        cmd += ["--requirements", requirements]
+    r = await _subprocess_run(cmd, timeout=timeout)
+    r["pipeline_version"] = "requirement_research"
+    r["phases"] = "0 → 1 → 2 → 3"
+    return json.dumps(r, ensure_ascii=False, indent=2)
+
+
 # ══════════════════════════════════════════════════════════════════════════
 #  Tool Implementations
 # ══════════════════════════════════════════════════════════════════════════
@@ -363,10 +387,30 @@ async def _handle_run_full_pipeline(params: dict) -> str:
     if not topic:
         return json.dumps({"status": "error", "error": "topic is required"}, ensure_ascii=False)
 
-    if use_v2:
-        return await _run_v2_pipeline(topic, lang, shadow=True, max_rounds=max_rounds, timeout=3600)
-    else:
-        return await _run_v1_pipeline(topic, lang, timeout=1800)
+    # 异步启动: 立即返回 job_id, 后台跑完整流程(可能 2-6 小时)
+    job_id = _new_job_id()
+    JOBS[job_id] = {"status": "running", "topic": topic, "lang": lang,
+                    "use_v2": use_v2, "max_rounds": max_rounds}
+
+    async def _job():
+        try:
+            if use_v2:
+                result = await _run_v2_pipeline(topic, lang, shadow=True,
+                                                max_rounds=max_rounds, timeout=21600)
+            else:
+                result = await _run_v1_pipeline(topic, lang, timeout=10800)
+            JOBS[job_id]["status"] = "done"
+            JOBS[job_id]["result"] = result
+        except Exception as e:
+            JOBS[job_id]["status"] = "error"
+            JOBS[job_id]["error"] = str(e)
+
+    JOBS[job_id]["task"] = asyncio.create_task(_job())
+    return json.dumps({
+        "status": "started",
+        "job_id": job_id,
+        "note": "轮询 get_job_status 获取进度与结果",
+    }, ensure_ascii=False)
 
 _register_tool(
     name="run_full_pipeline",
@@ -418,6 +462,36 @@ _register_tool(
         "required": ["topic", "dept_key"],
     },
     handler=_handle_run_debate_department,
+)
+
+
+async def _handle_run_requirement_research(params: dict) -> str:
+    topic = params.get("topic", "")
+    requirements = params.get("requirements", "")
+    lang = params.get("lang", "zh")
+    if not topic:
+        return json.dumps({"status": "error", "error": "topic is required"}, ensure_ascii=False)
+    return await _run_requirement_research(topic, requirements, lang)
+
+
+_register_tool(
+    name="run_requirement_research",
+    description=(
+        "Run requirement research (Phase 0-3): conversational requirement interview → "
+        "structuring → discussion group → department configuration recommendation. "
+        "Pass the research topic and a free-text requirements summary gathered from the user. "
+        "Returns the recommended department configuration."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "topic": {"type": "string", "description": "Research topic"},
+            "requirements": {"type": "string", "description": "Free-text requirements summary: objectives, constraints, time range, deliverable, quality standard, search sources, etc."},
+            "lang": {"type": "string", "description": "Output language: zh or en", "default": "zh"},
+        },
+        "required": ["topic"],
+    },
+    handler=_handle_run_requirement_research,
 )
 
 
@@ -489,6 +563,58 @@ _register_tool(
     description="Check pipeline status: output files, API key configuration, script availability.",
     input_schema={"type": "object", "properties": {}},
     handler=_handle_get_pipeline_status,
+)
+
+
+# ── Tool: get_job_status ──────────────────────────────────────────────────
+
+async def _handle_get_job_status(params: dict) -> str:
+    job_id = params.get("job_id", "")
+    if not job_id:
+        jobs = [
+            {"job_id": jid, "status": j.get("status"), "topic": j.get("topic", "")}
+            for jid, j in JOBS.items()
+        ]
+        return json.dumps({"jobs": jobs}, ensure_ascii=False, indent=2)
+
+    job = JOBS.get(job_id)
+    if job is None:
+        return json.dumps({"status": "error", "error": f"Unknown job: {job_id}"}, ensure_ascii=False)
+
+    result = job.get("result", "")
+    summary = ""
+    if result:
+        try:
+            parsed = json.loads(result)
+            if parsed.get("status") == "error":
+                summary = (parsed.get("error", "") + "\n" + parsed.get("stderr_tail", ""))[-2000:]
+            else:
+                summary = parsed.get("stdout_tail", "")[-2000:]
+        except json.JSONDecodeError:
+            summary = result[-2000:]
+
+    return json.dumps({
+        "job_id": job_id,
+        "status": job.get("status"),
+        "topic": job.get("topic", ""),
+        "summary": summary,
+        "error": job.get("error", ""),
+    }, ensure_ascii=False, indent=2)
+
+
+_register_tool(
+    name="get_job_status",
+    description=(
+        "Poll a running/completed pipeline job. Pass job_id (returned by run_full_pipeline) "
+        "to get its status, summary of stdout tail, and final result. No job_id returns all jobs."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "job_id": {"type": "string", "description": "Job id returned by run_full_pipeline"},
+        },
+    },
+    handler=_handle_get_job_status,
 )
 
 

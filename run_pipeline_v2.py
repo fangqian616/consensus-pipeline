@@ -441,6 +441,8 @@ def _run_phases_6_to_7(config, papers, preprints, dept_outputs, relevance_log):
     csv_path = os.path.join(v1.OUTPUT_DIR, "papers_metadata.csv")
     if os.path.exists(csv_path):
         report = qc_val.validate_citations(report, csv_path)
+    # Phase 7.6: 种子论文引用存在性检查（D层，spec §5）
+    report = v1.check_seed_citations(report, papers)
     v1.save_text(report, "final_report_validated.md")
     log("Phase7.5", "Citation validation complete")
 

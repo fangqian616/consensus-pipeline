@@ -749,6 +749,19 @@ def t(key: str, **kwargs) -> str:
 
 
 
+# v0.13: AI 自行收敛模式的保险丝硬上限（用户不可见）。
+# A/B 题实测 3 轮收敛，10 轮给足 3 倍余量；触顶输出「未达成收敛」+ CV 曲线。
+# ε 校准锁定前收敛判定为影子模式：只记录展示，绝不提前截停。
+AUTO_MAX_ROUNDS = 10
+
+
+def _effective_rounds():
+    """auto 收敛模式：轮数锁定保险丝上限；manual 模式：返回用户设定值。"""
+    if st.session_state.get("convergence_mode", "manual") == "auto":
+        return AUTO_MAX_ROUNDS
+    return st.session_state.debate_rounds
+
+
 def init_state():
     defaults = {
         "lang": "zh",
@@ -760,6 +773,7 @@ def init_state():
         "api_key": "",
         "model_name": "deepseek-v4-flash",
         "debate_rounds": 3,
+        "convergence_mode": "manual",  # v0.13: manual=人工轮次 / auto=AI自行收敛
         "extra_instructions": "",
         "step_mode": True,
         # Debate result
@@ -909,7 +923,11 @@ def render_sidebar():
         
         # Debate parameters
         st.subheader("⚙️ " + ("辩论参数" if st.session_state.lang == "zh" else "Parameters"))
-        st.session_state.debate_rounds = st.slider(
+        if st.session_state.get("convergence_mode", "manual") == "auto":
+            st.session_state.debate_rounds = AUTO_MAX_ROUNDS
+            st.info("🤖 " + ("AI 自行收敛模式：轮次由系统按收敛情况自动决定（上限 10 轮；判定参数校准中，仅作展示）。" if st.session_state.lang == "zh" else "AI auto-convergence: rounds decided by the convergence judge (cap 10; judge in shadow mode, display only)."))
+        else:
+            st.session_state.debate_rounds = st.slider(
             t("debate_rounds"),
             min_value=1, max_value=10, value=st.session_state.debate_rounds,
             help=t("debate_rounds_hint"),
@@ -1190,7 +1208,7 @@ _CK_KEYS = [
     # deliberately excluded — credentials never touch the disk)
     "script", "positive_prompt", "negative_prompt", "character_refs",
     "extra_instructions", "carry_forward", "lang", "api_url", "model_name",
-    "debate_rounds", "architecture_mode", "step_mode",
+    "debate_rounds", "architecture_mode", "step_mode", "convergence_mode",
     "model_profile", "custom_api_url", "custom_model_name",
     "workgroup_config", "workgroup_name", "pipeline_mode",
 ]
@@ -1712,7 +1730,7 @@ def run_all_debates(progress_callback=None):
     api_url = st.session_state.api_url
     api_key = st.session_state.api_key
     model = st.session_state.model_name
-    rounds = st.session_state.debate_rounds
+    rounds = _effective_rounds()  # v0.13: auto 模式钳到保险丝上限 AUTO_MAX_ROUNDS
     lang = st.session_state.lang
     extra = st.session_state.extra_instructions
     
@@ -1824,6 +1842,7 @@ def run_all_debates(progress_callback=None):
                 input_content=build_dept_input(_LIT),
                 api_url=api_url, api_key=api_key, model=model,
                 rounds=rounds, lang=lang, extra_instructions=_lit_extra,
+                shadow_cv=True,
                 progress_callback=None,
                 carry_forward=st.session_state.carry_forward,
                 stats=stats,
@@ -1906,7 +1925,16 @@ def run_all_debates(progress_callback=None):
                 nonlocal step
                 d = _DEPTS_RUN.get(dk, {})
                 dn = (d.get("zh_name") if is_zh else d.get("en_name")) or d.get("zh_name") or d.get("en_name") or "?"
-                if debater == "consensus":
+                if isinstance(debater, str) and debater.startswith("cv:"):
+                    # v2 shadow CV 轮级心跳：不推进 step，只更新显示
+                    pct = min(step / total_steps, 0.99)
+                    text = (f"🧭 {dn} 第{rn}/{total_r}轮完成 · 影子CV={debater[3:]}（校准中，只记录不截停）" if is_zh
+                            else f"🧭 {dn} round {rn}/{total_r} done · shadow CV={debater[3:]} (calibrating, advisory)")
+                elif isinstance(debater, str) and debater.startswith("args:"):
+                    pct = min(step / total_steps, 0.99)
+                    text = (f"🧭 {dn} 已锁定 {debater[5:]} 个核心论点，开始逐轮共识度追踪" if is_zh
+                            else f"🧭 {dn}: {debater[5:]} key arguments locked, consensus tracking on")
+                elif debater == "consensus":
                     # Consensus generation phase
                     pct = min(step / total_steps, 0.99)
                     text = f"🔄 {dn} - 正在生成部门总结（可能需要2-5分钟）..."
@@ -1926,6 +1954,7 @@ def run_all_debates(progress_callback=None):
                 api_url=api_url, api_key=api_key, model=model,
                 rounds=rounds, lang=lang, extra_instructions=extra,
                 progress_callback=on_progress,
+                shadow_cv=True,
                 carry_forward=st.session_state.carry_forward,
                 stats=stats,
             )
@@ -2457,6 +2486,10 @@ def render_input_tab():
     if not st.session_state.script.strip():
         st.warning(t("need_script"))
         return
+    if st.session_state.script.strip().startswith("部门方向：") and "研究主题" not in st.session_state.script:
+        st.error("❌ " + ("检测到内容只有部门方向、缺少研究主题——请在上方输入框开头补上「研究主题：你的题目」再启动。" if is_zh else "Only department directions found, no research topic — prepend 'Topic: ...' in the input above before starting."))
+        return
+        return
     
     # Two start buttons
     btn_col1, btn_col2 = st.columns(2)
@@ -2656,6 +2689,192 @@ def render_search_review_panel():
 
 # ============ Seed Papers Tab ============
 
+_SEED_Q1_OPTIONS = {
+    "own":       {"zh": "我自己写的论文",   "en": "My own paper"},
+    "key_ref":   {"zh": "重要参考文献",     "en": "Key reference"},
+    "verify":    {"zh": "想验证它的结论",   "en": "Verify its claims"},
+    "challenge": {"zh": "想质疑它的观点",   "en": "Challenge its position"},
+    "casual":    {"zh": "顺便参考即可",     "en": "Casual reference"},
+}
+
+# Q1 答案 → (推断档位, user_relation)（spec §6.3）
+_SEED_RELATION_MAP = {
+    "own":       ("anchor", "own_work"),
+    "verify":    ("anchor", "to_verify"),
+    "key_ref":   ("core", "key_reference"),
+    "challenge": ("core", "to_challenge"),
+    "casual":    ("normal", "other"),
+}
+
+_SEED_WEIGHT_LABEL = {
+    "normal": {"zh": "普通参考", "en": "normal"},
+    "core":   {"zh": "核心文献", "en": "core"},
+    "anchor": {"zh": "立场锚定（本期按核心文献执行）", "en": "anchor (runs as core for now)"},
+}
+
+
+def _seed_manifest_update(file_name, profile):
+    """把单篇论文的 profile 合并写入 seed_papers/manifest.json（不覆盖他篇）"""
+    import json as _json
+    from pathlib import Path
+    from paper_importer import write_manifest
+    mpath = Path("seed_papers") / "manifest.json"
+    data = {"version": 1, "default_weight": "core", "papers": []}
+    if mpath.exists():
+        try:
+            loaded = _json.loads(mpath.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                data.update(loaded)
+        except Exception:
+            pass
+    papers_list = [x for x in data.get("papers", []) if x.get("file") != file_name]
+    papers_list.append(profile)
+    data["papers"] = papers_list
+    write_manifest("seed_papers", data)
+
+
+def _seed_iv_llm_questions(topic, title, abstract, is_zh):
+    """LLM 动态生成 Q2/Q3 + key_claims（spec §6.2）。失败返回 None。"""
+    import json as _json, re as _re
+    if is_zh:
+        sys_p = "你是研究助手，只输出合法 JSON，不要 markdown 代码围栏。"
+        user_p = (
+            f"用户研究课题：{topic or '（未填写）'}\n"
+            f"用户上传论文：标题《{title}》，摘要：{(abstract or '')[:800]}\n\n"
+            "请生成：\n"
+            "1. 两个单选题（questions 数组）：\n"
+            "   - 第1题：用户希望重点参考这篇论文的哪个部分（3-4个选项，结合论文具体内容，不要泛泛而谈）\n"
+            "   - 第2题：如果辩论结论与本文冲突，如何处理（3个选项：以辩论结论为准 / 以本文为准 / 标注分歧并列呈现）\n"
+            "2. 从摘要抽取 1-3 条论文核心论点（key_claims 数组，每条一句话）\n"
+            '输出 JSON：{"questions": [{"q": "...", "options": ["...", "..."]}], "key_claims": ["..."]}'
+        )
+    else:
+        sys_p = "You are a research assistant. Output valid JSON only, no markdown fences."
+        user_p = (
+            f"Research topic: {topic or '(unset)'}\n"
+            f"Uploaded paper: title '{title}', abstract: {(abstract or '')[:800]}\n\n"
+            "Generate:\n"
+            "1. Two multiple-choice questions (questions array):\n"
+            "   - Q1: which part of this paper to focus on (3-4 options, specific to the paper)\n"
+            "   - Q2: what to do if debate conclusions conflict with this paper (3 options: "
+            "trust debate / paper prevails / flag divergence side by side)\n"
+            "2. Extract 1-3 key claims from the abstract (key_claims array, one sentence each)\n"
+            'Output JSON: {"questions": [{"q": "...", "options": ["...", "..."]}], "key_claims": ["..."]}'
+        )
+    try:
+        raw = _simple_llm_call(sys_p, user_p, temperature=0.3, max_tokens=2000)
+        m = _re.search(r"\{.*\}", raw, _re.DOTALL)
+        data = _json.loads(m.group(0))
+        if isinstance(data.get("questions"), list) and data["questions"]:
+            return data
+    except Exception:
+        return None
+    return None
+
+
+def _seed_interview_ui(p, is_zh):
+    """单篇种子论文权重访谈 UI（spec §6：混合模式，可跳过，结果落 manifest）"""
+    fname = p.get("file_name", "")
+    if not fname:
+        return
+    sk = f"_seed_iv_{fname}"
+    iv = st.session_state.setdefault(sk, {})
+
+    if iv.get("saved"):
+        st.success(("已保存：" if is_zh else "Saved: ") + iv.get("saved_label", ""))
+        return
+
+    cur_w = p.get("weight", "core")
+    cur_label = _SEED_WEIGHT_LABEL.get(cur_w, {}).get("zh" if is_zh else "en", cur_w)
+    st.caption(("当前档位（manifest 默认 core）：" if is_zh else "Current weight (default core): ") + cur_label)
+
+    # 跳过按钮（spec §6.4：零 LLM 调用）
+    if st.button(("跳过访谈，按核心文献处理" if is_zh else "Skip interview, treat as core"),
+                 key=sk + "_skip"):
+        _seed_manifest_update(fname, {"file": fname, "weight": "core",
+                                      "interviewed": False, "interview_skipped": True})
+        iv["saved"] = True
+        iv["saved_label"] = "core（跳过访谈）" if is_zh else "core (skipped)"
+        st.rerun()
+
+    # Q1 固定题（关系判断，决定档位）
+    q1_keys = ["own", "key_ref", "verify", "challenge", "casual"]
+    lang_key = "zh" if is_zh else "en"
+    q1 = st.radio(
+        ("Q1. 这篇论文和你的课题是什么关系？" if is_zh else "Q1. How does this paper relate to your topic?"),
+        q1_keys, index=1, format_func=lambda k: _SEED_Q1_OPTIONS[k][lang_key], key=sk + "_q1")
+
+    # 生成动态题按钮
+    if st.button(("下一步：生成针对性问题" if is_zh else "Next: generate tailored questions"),
+                 key=sk + "_gen"):
+        topic = st.session_state.get("topic", "") or st.session_state.get("research_topic", "") or ""
+        with st.spinner("LLM..."):
+            data = _seed_iv_llm_questions(
+                topic, p.get("title", ""),
+                p.get("abstract", "") or p.get("full_text_excerpt", ""), is_zh)
+        iv["dyn"] = data  # 可能为 None（LLM 失败则跳过动态题）
+        iv["dyn_ready"] = True
+        iv["q1"] = q1
+        st.rerun()
+
+    if not iv.get("dyn_ready"):
+        return
+
+    dyn = iv.get("dyn") or {}
+    answers = []
+    for qi, q in enumerate(dyn.get("questions", [])[:2]):
+        opts = q.get("options", [])
+        if not opts:
+            continue
+        a = st.radio(q.get("q", f"Q{qi+2}"), opts, key=f"{sk}_q{qi+2}")
+        answers.append(a)
+
+    # key_claims 勾选确认（spec：本期落库，锚定期素材）
+    claims = []
+    kcs = dyn.get("key_claims", [])[:3]
+    if kcs:
+        st.markdown(("**核心论点确认**（勾选认可的）：" if is_zh else "**Key claims** (check to accept):"))
+        for ci, c in enumerate(kcs):
+            if st.checkbox(c, value=True, key=f"{sk}_claim_{ci}"):
+                claims.append(c)
+
+    # 推断档位 + 用户确认
+    weight, relation = _SEED_RELATION_MAP.get(q1, ("core", "key_reference"))
+    wlabel = _SEED_WEIGHT_LABEL[weight][lang_key]
+    st.info(("建议档位：" if is_zh else "Suggested weight: ") + wlabel)
+    if weight == "anchor":
+        st.caption("立场锚定功能开发中，本期自动按核心文献待遇执行；以下论点已落库，锚定上线后直接生效"
+                   if is_zh else
+                   "Anchor mode WIP; this paper runs as core for now. Key claims are saved for later.")
+
+    if st.button(("确认保存" if is_zh else "Confirm & save"), key=sk + "_save"):
+        # conflict_policy 由 Q2(冲突处理) 答案推断
+        conflict = "trust_debate"
+        if len(answers) >= 2:
+            a2 = answers[1]
+            if ("本文为准" in a2) or ("prevail" in a2.lower()):
+                conflict = "seed_prevails"
+            elif ("分歧" in a2) or ("divergence" in a2.lower()) or ("side by side" in a2.lower()):
+                conflict = "flag_divergence"
+        focus = [answers[0]] if answers else []
+        usage_note = f"{_SEED_Q1_OPTIONS[q1][lang_key]}" + (
+            f"；重点参考：{answers[0]}" if answers else "")
+        _seed_manifest_update(fname, {
+            "file": fname,
+            "weight": weight,
+            "user_relation": relation,
+            "focus_sections": focus,
+            "conflict_policy": conflict,
+            "key_claims": claims,
+            "usage_note": usage_note,
+            "interviewed": True,
+            "interview_skipped": False,
+        })
+        iv["saved"] = True
+        iv["saved_label"] = wlabel
+        st.rerun()
+
+
 def render_seed_papers_tab():
     """Seed papers upload and management UI"""
     is_zh = st.session_state.get("lang", "zh") == "zh"
@@ -2677,36 +2896,52 @@ def render_seed_papers_tab():
             st.error("paper_importer.py not found. Please place it in project root.")
             return
 
-        import tempfile
-
         importer = SeedPaperImporter()
-        papers = []
+        names = sorted(uf.name for uf in uploaded_files)
+        cached = st.session_state.get("seed_papers", [])
+        cached_names = sorted(p.get("file_name", "") for p in cached)
 
-        with st.spinner(t("seed_papers_scanning")):
-            for uf in uploaded_files:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                    tmp.write(uf.read())
-                    tmp_path = tmp.name
+        if cached and names == cached_names:
+            # rerun 复用缓存，避免每次交互都重新解析 PDF / 请求 Crossref
+            papers = cached
+        else:
+            papers = []
+            with st.spinner(t("seed_papers_scanning")):
+                # 确保 seed_papers/ 文件夹存在
+                from pathlib import Path
+                seed_dir = Path("seed_papers")
+                seed_dir.mkdir(exist_ok=True)
 
-                try:
-                    paper = importer.parse_pdf(tmp_path)
-                    if paper:
-                        paper["file_name"] = uf.name
-                        papers.append(paper)
-                    else:
-                        st.warning(f"{uf.name}: {t('seed_papers_error')}")
-                except Exception as e:
-                    st.warning(f"{uf.name}: {e}")
-                finally:
-                    os.unlink(tmp_path)
+                for uf in uploaded_files:
+                    # 直接保存到 seed_papers/ 文件夹（pipeline 会扫描这里）
+                    save_path = seed_dir / uf.name
+                    save_path.write_bytes(uf.read())
+
+                    try:
+                        paper = importer.parse_pdf(Path(str(save_path)))
+                        if paper:
+                            paper["file_name"] = uf.name
+                            papers.append(paper)
+                        else:
+                            st.warning(f"❌ {uf.name}: {t('seed_papers_error')}")
+                    except Exception as e:
+                        st.warning(f"❌ {uf.name}: {e}")
+            # 注入 weight/profile（manifest 驱动，无 manifest 默认 core）
+            try:
+                importer._inject_weights(papers)
+            except Exception:
+                pass
+            if papers:
+                st.session_state.seed_papers = papers
 
         if papers:
-            st.session_state.seed_papers = papers
             st.success(t("seed_papers_found").format(count=len(papers)))
 
             for p in papers:
                 doi_status = t("seed_papers_doi_ok") if p.get("doi") else t("seed_papers_doi_fail")
-                with st.expander(f"{p.get('title', 'Unknown')[:60]} -- {doi_status}"):
+                w = p.get("weight", "core")
+                wbadge = _SEED_WEIGHT_LABEL.get(w, {}).get("zh" if is_zh else "en", w)
+                with st.expander(f"[{wbadge}] {p.get('title', 'Unknown')[:55]} -- {doi_status}"):
                     col1, col2 = st.columns(2)
                     with col1:
                         st.markdown(f"**Authors:** {', '.join(p.get('authors', [])[:5]) or 'N/A'}")
@@ -2714,6 +2949,8 @@ def render_seed_papers_tab():
                     with col2:
                         st.markdown(f"**DOI:** {p.get('doi', 'N/A')}")
                         st.markdown(f"**Journal:** {p.get('journal', 'N/A')}")
+                    st.markdown("---")
+                    _seed_interview_ui(p, is_zh)
         else:
             st.warning(t("seed_papers_empty"))
 
@@ -2726,7 +2963,8 @@ def render_seed_papers_tab():
         st.markdown(label)
         for i, p in enumerate(existing):
             doi_badge = "✅" if p.get("doi") else "⚠️"
-            st.markdown(f"{i+1}. {doi_badge} **{p.get('title', 'Unknown')[:60]}** ({p.get('year', '?')})")
+            w = p.get("weight", "core")
+            st.markdown(f"{i+1}. {doi_badge} `[{w}]` **{p.get('title', 'Unknown')[:60]}** ({p.get('year', '?')})")
 
 # ============ Debate Tab ============
 
@@ -2751,8 +2989,8 @@ def render_debate_tab():
     # _debate_running 保持 True，下次运行自动断点续跑。之前用 finally 无条件清除，
     # 导致中断后 resume 机制失效、辩论永久卡死（用户只能退回需求页重来）。
     if st.session_state.get("_debate_running"):
-        st.info("⏳ " + ("辩论执行中，全程约1-2小时。部门逐个自动完成，页面每完成一个部门会自动刷新一次进度（属正常现象）。进度已实时保存到云端断点：即使页面被系统刷新或重开，也会自动恢复并从断点继续，无需手动操作。" if is_zh
-                         else "Debate running (~1-2h). Departments complete one by one and the page auto-refreshes after each (normal). Progress is checkpointed to the cloud in real time — even if the page reloads, it auto-recovers and resumes."))
+        st.info("⏳ " + ("辩论执行中，全程约" + ("3-6小时（AI自行收敛·每部门≤10轮保险丝）" if st.session_state.get("convergence_mode") == "auto" else "1-2小时") + "。部门逐个自动完成，页面每完成一个部门会自动刷新一次进度（属正常现象）。进度已实时保存到云端断点：即使页面被系统刷新或重开，也会自动恢复并从断点继续，无需手动操作。" if is_zh
+                         else "Debate running (~" + ("3-6h, AI-convergence, ≤10 rounds/dept fuse" if st.session_state.get("convergence_mode") == "auto" else "1-2h") + "). Departments complete one by one and the page auto-refreshes after each (normal). Progress is checkpointed to the cloud in real time — even if the page reloads, it auto-recovers and resumes."))
         try:
             run_all_debates()
         except Exception as e:
@@ -2861,6 +3099,28 @@ def render_debate_tab():
         st.info(t("debate_not_started"))
         return
     
+    # v2 全部门收敛总览：任一部门有影子CV数据才渲染（manual 分步路径无此键，自动跳过）
+    _ov_series = {}
+    for _dk in DEPT_ORDER:
+        _res = dept_results.get(_dk) or {}
+        _hist = _res.get("shadow_cv_history") or []
+        if not _hist:
+            continue
+        _d = DEPARTMENTS.get(_dk, {})
+        _nm = (_d.get("zh_name") if is_zh else _d.get("en_name")) or _d.get("zh_name") or _dk
+        _pts = {}
+        for _e in _hist:
+            if _e.get("cv") is not None:
+                _pts[f"R{_e['round']:02d}"] = _e["cv"]
+        if _pts:
+            _ov_series[_nm] = _pts
+    if _ov_series:
+        st.markdown("**" + ("📈 全部门共识度收敛总览（影子 CV · 校准中，只记录不截停）" if is_zh
+                             else "📈 All-department convergence overview (shadow CV · v1 calibrated, advisory only)") + "**")
+        st.line_chart(_ov_series)
+        st.caption(("每条线 = 一个部门的逐轮 CV · 越低 = 观点越趋同 · 实验参数未校准，仅供参考" if is_zh
+                    else "Each line = one department's per-round CV · lower = more converged · v1 calibrated (experimental), advisory only"))
+
     for dept_key in DEPT_ORDER:
         if dept_key not in dept_results:
             continue
@@ -2877,6 +3137,28 @@ def render_debate_tab():
             
             st.subheader(t("consensus"))
             st.markdown(result.get("consensus", ""))
+
+            # v2 shadow CV 面板：有数据才渲染（manual 分步路径无此键，自动跳过）
+            _cv_hist = result.get("shadow_cv_history") or []
+            if _cv_hist:
+                st.markdown("**" + ("🧭 共识度曲线（影子 CV · 校准中，只记录不截停）" if is_zh
+                                     else "🧭 Consensus curve (shadow CV · v1 calibrated, advisory only)") + "**")
+                _cv_series = {}
+                for _e in _cv_hist:
+                    if _e.get("cv") is not None:
+                        _cv_series[f"R{_e['round']}"] = _e["cv"]
+                if _cv_series:
+                    st.line_chart({"CV": _cv_series})
+                _cv_caps = []
+                for _e in _cv_hist:
+                    _v = _e.get("cv")
+                    _t = f"R{_e['round']}: " + (f"{_v:.3f}" if _v is not None else "n/a")
+                    if _e.get("shadow_reason"):
+                        _t += " ⚠️ " + str(_e["shadow_reason"])
+                    _cv_caps.append(_t)
+                st.caption(" ｜ ".join(_cv_caps))
+                st.caption(("实验参数 ε1=0.07 / ε2=0.01 / n=2（未校准占位值）· CV 越低 = 观点越趋同 · ⚠️ 为影子判定（未实际截停）" if is_zh
+                            else "Experimental ε1=0.07 / ε2=0.01 / n=2 (v1 calibrated, 9/10 accuracy, experimental) · lower CV = more convergence · ⚠️ = shadow verdict (not enforced)"))
             
             st.markdown("---")
             st.markdown("**" + t("director_review") + "**")
@@ -2934,7 +3216,7 @@ def render_step_mode():
         )
         
         col1, col2 = st.columns(2)
-        max_rounds = st.session_state.debate_rounds
+        max_rounds = _effective_rounds()  # v0.13: auto 模式钳到保险丝上限
         is_last_round = st.session_state.step_round >= max_rounds
         
         with col1:
@@ -3076,7 +3358,7 @@ def rerun_single_dept(dept_key: str, revision_note: str):
         api_url=st.session_state.api_url,
         api_key=st.session_state.api_key,
         model=st.session_state.model_name,
-        rounds=st.session_state.debate_rounds,
+        rounds=_effective_rounds(),  # v0.13: auto 模式钳到保险丝上限
         lang=st.session_state.lang,
         extra_instructions=extra,
         carry_forward=st.session_state.carry_forward,
@@ -5268,7 +5550,7 @@ def render_requirement_tab():
                     # If no auto-generated doc, manually build from user input
                     if not st.session_state.req_document:
                         st.session_state.req_document = RequirementDocument(
-                            topic=user_topic or follow_up or "",
+                            topic=(user_topic or follow_up or st.session_state.get("req_topic_input", "") or next((t.get("content", "") for t in st.session_state.get("req_interview_history", []) if t.get("role") == "user" and t.get("content")), "")),
                             domain=selected_domain,
                             objectives=[],
                             constraints={},
@@ -5584,6 +5866,13 @@ def render_requirement_tab():
                             script_parts.append(_topic_input)
                     
                     # Always set script content (even if empty, to clear stale state)
+                    if not any(str(p).startswith("研究主题：") for p in script_parts):
+                        _fb_topic = st.session_state.get("req_topic_input", "") or next((t.get("content", "") for t in st.session_state.get("req_interview_history", []) if t.get("role") == "user" and t.get("content")), "")
+                        if _fb_topic:
+                            script_parts.insert(0, f"研究主题：{_fb_topic}")
+                        else:
+                            st.error("❌ " + ("未识别到研究主题：请回到 Phase 0 在「描述你的需求」中写明主题，再重新走到本步确认。" if is_zh else "Research topic missing: go back to Phase 0 and state your topic, then confirm again."))
+                            st.stop()
                     _fill_content = "\n".join(script_parts) if script_parts else ""
                     if _fill_content:
                         st.session_state.script = _fill_content
@@ -5700,6 +5989,47 @@ def main():
     # rerun persists the current inputs, so a session death while filling in
     # the brief (before any debate starts) restores the form instead of
     # wiping the user back to the language gate with an empty form.
+    # v0.13: 模式分流页（8/8 三级页面决策的第 2 页）——语言门之后、主 UI 之前。
+    # 断点恢复的会话全是历史 manual run，直接放行，不弹分流页。
+    if st.session_state.get("_restored_from_disk") and not st.session_state.get("_mode_selected"):
+        st.session_state.convergence_mode = "manual"
+        st.session_state._mode_selected = True
+
+    if not st.session_state.get("_mode_selected", False):
+        _gate_zh = st.session_state.get("lang", "zh") == "zh"
+        st.markdown("---")
+        _mg1, _mg2, _mg3 = st.columns([1, 2, 1])
+        with _mg2:
+            st.markdown("<h2 style=\"text-align: center;\">🧠 " + ("选择辩论模式" if _gate_zh else "Choose Debate Mode") + "</h2>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+            _gate_mode = st.radio(
+                "模式 / Mode",
+                options=["manual", "auto"],
+                format_func=lambda m: (("⏱️ 人工轮次设定（经典模式，1-10 轮自己定）" if m == "manual" else "🤖 AI 自行收敛（实验性：观点收敛即停，安全上限 10 轮）") if _gate_zh else ("⏱️ Manual rounds (classic, set 1-10 yourself)" if m == "manual" else "🤖 AI auto-convergence (experimental: stops at convergence, 10-round cap)")),
+                label_visibility="collapsed",
+                key="_mode_gate_radio",
+            )
+            if _gate_mode == "auto":
+                st.info(("🤖 **AI 自行收敛**：不限定辩论轮次，系统逐轮检测各方观点收敛情况，达标即自动结束。"
+                         "收敛判定参数（ε）仍在校准中——本期判定结果仅作展示，不会真的提前截停；"
+                         "内部安全上限 10 轮，触顶输出「未达成收敛」结论并展示收敛曲线。")
+                        if _gate_zh else
+                        "🤖 **AI auto-convergence**: no fixed rounds — the system checks stance convergence "
+                        "after each round and stops when converged. The ε threshold is still being calibrated: "
+                        "this build only displays judge output and never truncates early. "
+                        "An internal 10-round fuse applies; on cap the run reports 'no convergence' with the CV curve.")
+            else:
+                st.caption(("经典模式：每个部门的辩论轮次由你在左侧栏手动设定（1-10 轮），流程与现有版本完全一致。")
+                           if _gate_zh else
+                           "Classic mode: you set rounds per department (1-10) in the sidebar — identical to the current flow.")
+            if st.button("▶️ " + ("进入" if _gate_zh else "Enter"), type="primary", use_container_width=True, key="_mode_gate_enter"):
+                st.session_state.convergence_mode = _gate_mode
+                st.session_state._mode_selected = True
+                if _gate_mode == "auto":
+                    st.session_state.debate_rounds = AUTO_MAX_ROUNDS
+                st.rerun()
+        st.stop()
+
     _ck_ensure_run_id()
     save_checkpoint()
 

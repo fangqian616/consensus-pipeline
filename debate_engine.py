@@ -3,6 +3,7 @@ AI 3D Animation Debate Engine v3.0 — Consensus Pipeline Edition
 8 departments × N debaters × N rounds → P2 spatial cross-review → P5 cross-debate → P7 proofread → Summary
 """
 import json
+import os
 import time
 import requests
 from typing import List, Dict, Optional, Callable, Any
@@ -1064,6 +1065,7 @@ def run_department_debate(
     progress_callback: Callable = None,
     carry_forward: str = "",
     debater_filter: list = None,  # 只激活这些辩手，None=全部
+    shadow_cv: bool = False,  # v2影子CV：只记录不截停（校准中）
     stats: dict = None,  # Token statistics累加器
 ) -> Dict:
     """
@@ -1085,6 +1087,29 @@ def run_department_debate(
     is_zh = lang == "zh"
     debate_log = []
     all_arguments = []
+
+    # === v2 shadow CV（影子模式：只记录不截停，校准中）===
+    _shadow_tracker = None
+    _shadow_cv_history = []
+    if shadow_cv:
+        try:
+            from stance_quant_v2 import StanceTracker
+            _shadow_tracker = StanceTracker(
+                run_id=f"ui_{department_key}_{int(time.time())}",
+                topic=(input_content or "")[:200],
+                log_dir=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".checkpoints"),
+            )
+        except Exception as _e:
+            print(f"[shadow_cv] tracker init failed: {_e}")
+            _shadow_tracker = None
+
+    def _shadow_llm(prompt_text: str) -> str:
+        try:
+            _r = call_api([{"role": "user", "content": prompt_text}],
+                          api_url, api_key, model, temperature=0.2, stats=stats)
+            return _r if isinstance(_r, str) else ""
+        except Exception:
+            return ""
     _is_academic_dept = department_key in {
         "literature_search", "methodology_review", "report_integration",
         "programming", "tutorial", "metadata_inspector", "citation_network",
@@ -1173,12 +1198,25 @@ Previous arguments from other debaters:
 
 This is Round {round_num}. Respond to other debaters—what do you agree with? Disagree with? How would you trade off between your approach and theirs? If fusion is possible, how?"""
             
+            # v2 shadow CV: R2起注入表态块（不影响轮次控制，只采集表态）
+            if _shadow_tracker is not None and round_num >= 2 and _shadow_tracker.arg_ids:
+                try:
+                    prompt = prompt + "\n\n" + _shadow_tracker.get_stance_block()
+                except Exception as _e:
+                    print(f"[shadow_cv] stance block inject failed: {_e}")
+
             messages = [{"role": "user", "content": prompt}]
             response = call_api(messages, api_url, api_key, model, temperature=0.7, stats=stats)
             
             if response and not response.startswith("ERROR:"):
                 arg_text = f"[{debater['zh_name'] if is_zh else debater['en_name']} 第{round_num}轮]: {response}"
                 all_arguments.append(arg_text)
+                # v2 shadow CV: 记录辩手表态（R2起）
+                if _shadow_tracker is not None and round_num >= 2 and _shadow_tracker.arg_ids:
+                    try:
+                        _shadow_tracker.record_debater_stance(debater_key, response)
+                    except Exception as _e:
+                        print(f"[shadow_cv] record stance failed: {_e}")
                 debate_log.append({
                     "round": round_num,
                     "debater": debater_key,
@@ -1188,6 +1226,30 @@ This is Round {round_num}. Respond to other debaters—what do you agree with? D
             
             if progress_callback:
                 progress_callback(department_key, round_num, rounds, debater_key)
+
+        # === v2 shadow CV 轮末处理（只记录不截停）===
+        if _shadow_tracker is not None:
+            try:
+                if round_num == 1:
+                    _r1_text = "\n\n---\n\n".join(all_arguments)
+                    _shadow_tracker.extract_arguments(_r1_text, _shadow_llm)
+                    if _shadow_tracker.arg_ids and progress_callback:
+                        progress_callback(department_key, round_num, rounds, f"args:{len(_shadow_tracker.arg_ids)}")
+                elif _shadow_tracker.arg_ids and _shadow_tracker.current_round_stances:
+                    _cv_res = _shadow_tracker.finish_round(round_num)
+                    _cv_val = _cv_res.get("overall")
+                    _term = _cv_res.get("termination") or (False, None)
+                    _shadow_cv_history.append({
+                        "round": round_num,
+                        "cv": _cv_val,
+                        "shadow_stop": bool(_term[0]),
+                        "shadow_reason": _term[1],
+                    })
+                    if progress_callback:
+                        progress_callback(department_key, round_num, rounds,
+                                          f"cv:{_cv_val:.3f}" if _cv_val is not None else "cv:n/a")
+            except Exception as _e:
+                print(f"[shadow_cv] round {round_num} finish failed: {_e}")
     
     # Final consensus
     all_args_text = "\n\n---\n\n".join(all_arguments)
@@ -1255,12 +1317,14 @@ Synthesize a final consensus. Requirements:
             "department": department_key,
             "debate_log": debate_log,
             "consensus": f"⚠️ 共识生成失败：{consensus}",
+            "shadow_cv_history": _shadow_cv_history,
         }
     
     return {
         "department": department_key,
         "debate_log": debate_log,
         "consensus": consensus or "辩论未能达成共识",
+        "shadow_cv_history": _shadow_cv_history,
     }
 
 # ============ New Architecture Mode Functions ============

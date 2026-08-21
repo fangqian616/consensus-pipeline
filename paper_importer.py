@@ -4,6 +4,12 @@
 扫描 seed_papers/ 文件夹中的 PDF 文件，提取元数据（标题/作者/摘要/DOI/年份/期刊），
 与自动搜索的论文库合并，辩论时优先引用用户指定的种子论文。
 
+v1 权重系统（2026-08-16，spec: seed_paper_weight_spec.md）:
+- 三档权重: normal（普通参考）/ core（核心文献，默认）/ anchor（立场锚定，本期降级 core）
+- manifest.json: default_weight + 单篇覆盖；无 manifest 默认 core
+- scan_folder() 自动注入 weight + seed_profile
+- merge_with_search_results() 按档位分支去重
+
 依赖: pip install PyMuPDF requests
 """
 
@@ -28,6 +34,9 @@ DOI_PATTERN = re.compile(
 
 CROSSREF_API = "https://api.crossref.org/works/{doi}"
 
+# 合法权重档位（spec §0）
+VALID_WEIGHTS = ("normal", "core", "anchor")
+
 
 class SeedPaperImporter:
     """种子论文导入器：扫描文件夹 → 解析PDF → 提取元数据 → 合并去重"""
@@ -45,6 +54,8 @@ class SeedPaperImporter:
                 - source: "user_seed"
                 - grade: "B" (无 DOI) 或按期刊分级
                 - full_text_excerpt: 前3页文本摘录
+                - weight: "normal" | "core"（anchor 本期降级 core）
+                - seed_profile: manifest 中的完整意图 profile（无 manifest 时为 {}）
         """
         if not self.seed_folder.exists():
             logger.info(f"种子论文文件夹不存在: {self.seed_folder}，跳过")
@@ -68,7 +79,66 @@ class SeedPaperImporter:
             except Exception as e:
                 logger.error(f"  ❌ {pdf_path.name}: {e}")
 
+        # === 权重系统：manifest 注入（spec §3.1）===
+        self._inject_weights(papers)
         return papers
+
+    def _load_manifest(self) -> dict:
+        """读取 seed_papers/manifest.json；不存在或解析失败返回 {}"""
+        mpath = self.seed_folder / "manifest.json"
+        if not mpath.exists():
+            return {}
+        try:
+            with open(mpath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                logger.warning("manifest.json 顶层不是对象，按默认处理")
+                return {}
+            return data
+        except Exception as e:
+            logger.warning(f"manifest.json 读取失败，按默认处理: {e}")
+            return {}
+
+    def _inject_weights(self, papers: list[dict]) -> None:
+        """
+        按 manifest 给每篇论文注入 weight + seed_profile。
+
+        解析优先级: paper.weight → default_weight → "core"（spec §2）
+        anchor 本期降级 core（spec §0 决策8），标记 _anchor_downgraded。
+        manifest 中列出但文件不存在的条目: 忽略 + warning。
+        """
+        manifest = self._load_manifest()
+        default_w = manifest.get("default_weight") or "core"
+        if default_w not in VALID_WEIGHTS:
+            logger.warning(f"manifest default_weight 非法值 '{default_w}'，回退 core")
+            default_w = "core"
+
+        profiles = {}
+        for p in manifest.get("papers", []):
+            if isinstance(p, dict) and p.get("file"):
+                profiles[p["file"]] = p
+
+        seen = set()
+        for paper in papers:
+            fname = paper.get("file_name", "")
+            seen.add(fname)
+            prof = profiles.get(fname, {})
+            w = prof.get("weight") or default_w
+            if w not in VALID_WEIGHTS:
+                logger.warning(f"{fname}: 非法 weight '{w}'，回退 core")
+                w = "core"
+            if w == "anchor":
+                # spec §0 决策8：anchor 本期未实现，降级 core
+                paper["_anchor_downgraded"] = True
+                logger.info(f"[seed] anchor 档本期未实现，降级 core: {fname}")
+                w = "core"
+            paper["weight"] = w
+            paper["seed_profile"] = prof
+
+        # manifest 列出但文件夹里不存在的 PDF
+        for fname in profiles:
+            if fname not in seen:
+                logger.warning(f"[seed] manifest 列出但未找到文件: {fname}")
 
     def parse_pdf(self, pdf_path: Path) -> Optional[dict]:
         """
@@ -139,12 +209,15 @@ class SeedPaperImporter:
         search_papers: list[dict],
     ) -> list[dict]:
         """
-        合并种子论文与搜索结果，按 DOI 去重。
+        合并种子论文与搜索结果，按档位分支去重（spec §3.2）。
 
-        去重策略:
-        - 有 DOI 且重复 → 保留搜索版（有完整期刊分级/引用数）
-        - 无 DOI → 按 content_hash 去重
-        - 种子论文标记 source='user_seed'，辩论时优先引用
+        normal 档（普通参考）:
+        - DOI/hash 撞 → 跳过种子版
+        - 不撞 → append 末尾
+
+        core 档（核心文献）:
+        - DOI 撞 → 保留搜索版元数据，但继承种子身份（source/weight/seed_profile）
+        - 不撞 → insert 到最前
         """
         if not seed_papers:
             return search_papers
@@ -159,19 +232,33 @@ class SeedPaperImporter:
         for paper in seed_papers:
             doi = paper.get("doi", "").lower()
             content_hash = paper.get("content_hash", "")
+            weight = paper.get("weight", "core")
 
-            # DOI 去重
-            if doi and doi in search_dois:
-                logger.info(f"种子论文 DOI 重复，跳过: {paper.get('title', '')[:50]}")
-                continue
+            if weight == "normal":
+                # 普通参考：维持原去重逻辑，append 末尾
+                if doi and doi in search_dois:
+                    logger.info(f"种子论文[normal] DOI 重复，跳过: {paper.get('title', '')[:50]}")
+                    continue
+                if content_hash and content_hash in search_hashes:
+                    logger.info(f"种子论文[normal] 内容重复，跳过: {paper.get('title', '')[:50]}")
+                    continue
+                merged.append(paper)
+                added_count += 1
 
-            # content_hash 去重
-            if content_hash and content_hash in search_hashes:
-                logger.info(f"种子论文内容重复，跳过: {paper.get('title', '')[:50]}")
-                continue
-
-            merged.append(paper)
-            added_count += 1
+            else:
+                # 核心文献：DOI 撞 → 搜索版继承种子身份
+                if doi and doi in search_dois:
+                    for sp in merged:
+                        if (sp.get("doi") or "").lower() == doi:
+                            sp["source"] = "user_seed"
+                            sp["weight"] = "core"
+                            sp["seed_profile"] = paper.get("seed_profile", {})
+                            break
+                    logger.info(f"种子论文[core] DOI 撞搜索，元数据合并+继承身份: {doi}")
+                    continue
+                # 不撞 → 插到最前
+                merged.insert(0, paper)
+                added_count += 1
 
         logger.info(f"种子论文合并完成: {added_count} 篇新增, 总计 {len(merged)} 篇")
         return merged
@@ -238,19 +325,28 @@ class SeedPaperImporter:
     def _extract_title(self, text: str) -> str:
         """
         从首页文本提取标题（启发式）。
-        策略：取前几行非空文本中最长的一行作为标题候选。
+        策略：取前几行非空文本中最长的一行作为标题候选，
+        排除封面噪声（学号/单位代码/作者/指导等中文封面 + 英文元数据关键词）。
         """
         lines = text.split("\n")
         candidates = []
-        for line in lines[:20]:  # 只看前20行
+        noise_kw = [
+            # 英文元数据关键词
+            "abstract", "introduction", "keywords", "received", "accepted",
+            "published", "doi:", "http", "vol.", "no.", "journal", "proceedings",
+            "copyright", "©",
+            # 中文学位论文封面噪声
+            "单位代码", "论文作者", "指导教师", "学科专业", "研究方向",
+            "提交论文", "答辩", "学位授予", "硕士学位", "博士学位",
+            "中 国", "重庆", "southwest", "master", "thesis", "author name",
+            "supervisor", "june", "student", "college", "姓名",
+        ]
+        # 正则噪声：学号行（学+任意空白+号）、连续长数字（学号/编号）
+        noise_re = re.compile(r'学\s*号|\d{8,}')
+        for line in lines[:30]:  # 封面页可能较多行，扩展到前30行
             line = line.strip()
-            if len(line) > 15 and len(line) < 300:  # 合理的标题长度
-                # 排除常见非标题行
-                if not any(kw in line.lower() for kw in [
-                    "abstract", "introduction", "keywords", "received",
-                    "accepted", "published", "doi:", "http", "vol.", "no.",
-                    "journal", "proceedings", "copyright", "©"
-                ]):
+            if len(line) > 10 and len(line) < 300:  # 中文标题可能较短，下限降到10
+                if not any(kw in line.lower() for kw in noise_kw) and not noise_re.search(line):
                     candidates.append(line)
 
         if candidates:
@@ -304,7 +400,7 @@ def import_seed_papers(folder: str = "seed_papers") -> list[dict]:
         folder: 种子论文文件夹路径
 
     Returns:
-        list[dict]: 论文元数据列表
+        list[dict]: 论文元数据列表（含 weight + seed_profile）
     """
     importer = SeedPaperImporter(folder)
     return importer.scan_folder()
@@ -329,10 +425,35 @@ def merge_papers(seed_folder: str = "seed_papers", search_papers: list = None) -
     return importer.merge_with_search_results(seed_papers, search_papers)
 
 
+def write_manifest(seed_folder: str, data: dict) -> str:
+    """
+    写入 seed_papers/manifest.json（UI 访谈模块使用）。
+
+    Args:
+        seed_folder: 种子论文文件夹路径
+        data: manifest 数据（自动补 version/updated_at）
+
+    Returns:
+        str: 写入的文件路径
+    """
+    from datetime import datetime, timezone, timedelta
+    folder = Path(seed_folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    data = dict(data)
+    data.setdefault("version", 1)
+    data["updated_at"] = datetime.now(
+        timezone(timedelta(hours=8))).isoformat(timespec="seconds")
+    mpath = folder / "manifest.json"
+    with open(mpath, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    logger.info(f"manifest.json 已写入: {mpath}")
+    return str(mpath)
+
+
 if __name__ == "__main__":
     # 测试
     logging.basicConfig(level=logging.INFO)
     papers = import_seed_papers("seed_papers")
     print(f"\n导入 {len(papers)} 篇种子论文:")
     for p in papers:
-        print(f"  - {p['title'][:60]} ({p['year']}) DOI={p.get('doi', 'N/A')}")
+        print(f"  - [{p.get('weight', '?')}] {p['title'][:60]} ({p['year']}) DOI={p.get('doi', 'N/A')}")
