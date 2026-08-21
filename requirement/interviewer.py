@@ -444,7 +444,9 @@ Output the updated complete requirement document JSON. Output only JSON, no othe
         try:
             updated = json.loads(response)
             for key, value in updated.items():
-                if key in RequirementDocument.__dataclass_fields__:
+                # `domain` is the template name set by domain detection (e.g. "学术调研"),
+                # not free-form user text; let the LLM overwrite everything else but keep it.
+                if key in RequirementDocument.__dataclass_fields__ and key != "domain":
                     setattr(self.doc, key, value)
         except json.JSONDecodeError:
             pass  # LLM output format incorrect, keep as-is
