@@ -17,21 +17,28 @@ load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 import run_pipeline as v1
 import run_pipeline_v2 as v2
 
-TOPIC = "用能权交易政策对工业企业绿色转型的影响"
-OUTPUT_DIR = os.path.join(
+_TOPIC = "用能权交易政策对工业企业绿色转型的影响"
+_DEFAULT_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     "v2_run_output", "20260821_用能权交易政策对工业企业绿色转型的影响",
 )
 
 
 def main() -> int:
-    v1.TOPIC = TOPIC
-    v1.OUTPUT_LANG = "zh"
-    v1.OUTPUT_DIR = OUTPUT_DIR
+    import argparse
+    ap = argparse.ArgumentParser(description="Re-run Phase 6-7 (report) from saved artifacts")
+    ap.add_argument("--output-dir", default=_DEFAULT_DIR, help="run output dir")
+    ap.add_argument("--topic", default=_TOPIC)
+    ap.add_argument("--lang", default="zh")
+    args = ap.parse_args()
 
-    config = v2._load_config(OUTPUT_DIR)
-    papers = v2._load_papers(OUTPUT_DIR)
-    preprints = v2._load_preprints(OUTPUT_DIR)
+    v1.TOPIC = args.topic
+    v1.OUTPUT_LANG = args.lang if args.lang in ("zh", "en") else "zh"
+    v1.OUTPUT_DIR = args.output_dir
+
+    config = v2._load_config(v1.OUTPUT_DIR)
+    papers = v2._load_papers(v1.OUTPUT_DIR)
+    preprints = v2._load_preprints(v1.OUTPUT_DIR)
     if config is None or papers is None:
         print("ERROR: missing config/papers")
         return 1
@@ -40,7 +47,7 @@ def main() -> int:
     print(f"papers after seed merge: {len(papers)}")
 
     dept_outputs = {}
-    for fp in sorted(glob.glob(os.path.join(OUTPUT_DIR, "phase5_dept_*.json"))):
+    for fp in sorted(glob.glob(os.path.join(v1.OUTPUT_DIR, "phase5_dept_*.json"))):
         key = os.path.basename(fp)[len("phase5_dept_"):-len(".json")]
         try:
             with open(fp, encoding="utf-8") as f:

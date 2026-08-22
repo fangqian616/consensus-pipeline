@@ -86,6 +86,15 @@ class ReportGenerator:
             debate_outputs,
         )
 
+        # v5.2: 程序部(代码)+教程部产出并入交付报告正文（此前仅在 internal_doc，导致交付报告缺代码/教程）
+        _extra = []
+        if programming_output:
+            _extra.append("## 程序部产出（技术选型与代码骨架）\n\n" + programming_output.strip())
+        if tutorial_output:
+            _extra.append("## 教程部产出\n\n" + tutorial_output.strip())
+        if _extra:
+            final_content = final_content.rstrip() + "\n\n---\n\n" + "\n\n".join(_extra) + "\n"
+
         # AI refinement to remove fluff (only needed in template mode; review mode is written by AI directly)
         # if self.llm_call_fn:
         #     final_content = self._ai_refine(final_content, topic)
