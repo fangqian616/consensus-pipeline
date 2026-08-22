@@ -1012,43 +1012,73 @@ class ReportGenerator:
 
     def _llm_call_long(self, system_prompt: str, user_prompt: str, temperature: float = 0.25) -> str:
         """Long output LLM call (review report needs 8K+ tokens), supports segmented continuation"""
+        import os
         import requests
-        # Get API config from llm_call_fn environment
-        # Try direct call with larger max_tokens
+        # 优先直接调 API 用更大 max_tokens 一次写完，避开 llm_call_fn 的 8192 截断
+        api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+        model = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro")
+        if api_key:
+            try:
+                resp = requests.post(
+                    "https://api.deepseek.com/v1/chat/completions",
+                    headers={"Content-Type": "application/json",
+                             "Authorization": f"Bearer {api_key}"},
+                    json={"model": model,
+                          "messages": [
+                              {"role": "system", "content": system_prompt},
+                              {"role": "user", "content": user_prompt},
+                          ],
+                          "temperature": temperature, "max_tokens": 16384},
+                    timeout=600,
+                )
+                resp.raise_for_status()
+                result = resp.json()["choices"][0]["message"]["content"]
+                if result and len(result) > 500:
+                    if self._report_body_complete(result):
+                        return result
+                    return self._complete_missing_section(result, temperature)
+            except Exception:
+                pass  # 落到下面的分段续写
+
+        # Fallback: 分段续写（复用 llm_call_fn，8192 token）
         try:
-            # If llm_call_fn is run_pipeline.llm_call, we cannot directly change max_tokens
-            # Instead: segmented request — write first half, then continue second half
             result = self.llm_call_fn(system_prompt, user_prompt, temperature=temperature)
             if not result or len(result) < 500:
                 return result or ""
-            
-            # Check if truncated (incomplete ending)
-            last_line = result.strip().split("\n")[-1] if result.strip() else ""
-            incomplete_markers = [
-                not result.rstrip().endswith(("。", ".", "】", ")", "\"", "》", "```")),
-                result.rstrip().endswith(("，", "、", "因为", "但是", "而且", "其", "在")),
-            ]
-            # If output looks complete (has references section), return directly
-            if "参考文献" in result or "五、" in result or "## 五" in result:
+            if self._report_body_complete(result):
                 return result
-            
-            # Otherwise continue writing
-            continue_prompt = f"""前文到此被截断了。请从截断处继续撰写，不要重复已有内容，直接接着写：
-
-{result[-200:]}
-
----
-请从上面截断处继续，完成剩余章节（核心发现与争议、研究空白与前沿方向、参考文献）。
-
-【关键规则】续写部分的引用[N]必须严格对应论文清单中的论文，且每个[N]必须紧跟该论文的具体描述（方法名、核心结论、量化指标等），严禁使用"参见[N]"占位。如果对该论文内容不确定，不要引用该论文。对比表格单元格禁止填写"参见[N]"。"""
-
-            continuation = self.llm_call_fn(system_prompt, continue_prompt, temperature=temperature)
-            if continuation and len(continuation) > 100:
-                # Concatenate: remove overlapping parts
-                return result + "\n\n" + continuation
-            return result
+            return self._complete_missing_section(result, temperature)
         except Exception:
             return ""
+
+    @staticmethod
+    def _report_body_complete(text: str) -> bool:
+        """正文完整性：核心发现 + 参考文献 都在才算完整（只判参考文献会漏掉被截断的正文）。"""
+        has_findings = ("核心发现" in text) or ("Core Findings" in text)
+        has_refs = ("参考文献" in text) or ("References" in text)
+        return has_findings and has_refs
+
+    def _complete_missing_section(self, result: str, temperature: float) -> str:
+        """补写缺失的"核心发现与争议"章节，插到参考文献前（或追加末尾）。"""
+        findings_prompt = """你的学术报告缺少「核心发现与争议」章节（正文被截断或跳过）。请补写该章节（Markdown），要求：
+1. 提炼 4-6 条核心发现，每条配至少 1 条反面证据/质疑
+2. 每条标注置信度 🟢高 / 🟡中 / 🔴低
+3. 引用[N]必须严格对应论文清单中的论文，紧跟该论文的具体描述（方法名/核心结论/量化指标），严禁"参见[N]"占位；不确定就不引用
+直接输出「## 三、核心发现与争议」章节全文。"""
+        try:
+            findings = self.llm_call_fn(
+                "你是学术报告撰写专家，补写报告缺失的核心发现章节。", findings_prompt,
+                temperature=temperature)
+        except Exception:
+            return result
+        if not findings or len(findings) < 100:
+            return result
+        idx = result.find("## 参考文献")
+        if idx == -1:
+            idx = result.find("## References")
+        if idx > 0:
+            return result[:idx] + findings.strip() + "\n\n" + result[idx:]
+        return result + "\n\n" + findings.strip()
 
     def _ai_refine(self, draft: str, topic: str) -> str:
         """Use LLM to refine report: remove fluff, increase info density, keep all sections"""
