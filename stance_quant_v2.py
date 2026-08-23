@@ -506,6 +506,96 @@ def round_cv(stance_by_debater: dict[str, dict[str, int]], arg_ids: list[str]) -
 
 
 # ─────────────────────────────────────────────
+# §6.5 一致性度量（Krippendorff's α / Kendall's W）——影子对照指标
+# ─────────────────────────────────────────────
+
+
+def krippendorff_alpha(stance_by_debater: dict, arg_ids: list) -> Optional[float]:
+    """Krippendorff's alpha（interval 度量，平方差）。1=完全一致，0=随机一致，<0=系统性对立。"""
+    from collections import Counter
+    from itertools import combinations
+    debaters = list(stance_by_debater.keys())
+    rows = []
+    for aid in arg_ids:
+        vals = [stance_by_debater[d].get(aid) for d in debaters]
+        if any(v is None for v in vals):
+            return None
+        rows.append(vals)
+    if len(rows) < 1 or len(debaters) < 2:
+        return None
+
+    o = Counter()
+    for row in rows:
+        for a, b in combinations(range(len(row)), 2):
+            va, vb = row[a], row[b]
+            o[(va, vb)] += 1
+            o[(vb, va)] += 1
+    total = sum(o.values())
+    if total == 0:
+        return None
+    Do = sum(cnt * (c - k) ** 2 for (c, k), cnt in o.items()) / total
+
+    all_vals = [v for row in rows for v in row]
+    n = Counter(all_vals)
+    total_ratings = sum(n.values())
+    values = sorted(set(all_vals))
+    De = sum((n[c] / total_ratings) * (n[k] / total_ratings) * (c - k) ** 2
+             for c in values for k in values)
+    if De == 0:
+        return 1.0 if Do == 0 else 0.0
+    return 1.0 - Do / De
+
+
+def kendall_w(stance_by_debater: dict, arg_ids: list) -> Optional[float]:
+    """Kendall's W 协调系数（0-1，排序一致，带并列秩校正）。"""
+    from collections import Counter
+    debaters = list(stance_by_debater.keys())
+    matrix = []
+    for d in debaters:
+        vals = [stance_by_debater[d].get(aid) for aid in arg_ids]
+        if any(v is None for v in vals):
+            return None
+        matrix.append(vals)
+    K, N = len(matrix), len(arg_ids)
+    if K < 2 or N < 2:
+        return None
+
+    def _avg_rank(values):
+        order = sorted(range(len(values)), key=lambda i: values[i])
+        ranks = [0.0] * len(values)
+        i = 0
+        while i < len(order):
+            j = i
+            while j + 1 < len(order) and values[order[j + 1]] == values[order[i]]:
+                j += 1
+            avg = (i + j) / 2 + 1
+            for k in range(i, j + 1):
+                ranks[order[k]] = avg
+            i = j + 1
+        return ranks
+
+    ranked = [_avg_rank(row) for row in matrix]
+    R = [sum(ranked[j][i] for j in range(K)) for i in range(N)]
+    Rbar = K * (N + 1) / 2
+    S = sum((Ri - Rbar) ** 2 for Ri in R)
+    T = 0
+    for row in matrix:
+        for t in Counter(row).values():
+            T += t ** 3 - t
+    denom = K ** 2 * (N ** 3 - N) - K * T
+    if denom <= 0:
+        all_same = len({v for row in matrix for v in row}) == 1
+        return 1.0 if all_same else None
+    return max(0.0, min(1.0, 12 * S / denom))
+
+
+def mean_stance(stance_by_debater: dict, arg_ids: list) -> Optional[float]:
+    """轮级平均表态分（非中立守卫用：离 3 足够远才是实质收敛）。"""
+    vals = [s.get(aid) for s in stance_by_debater.values() for aid in arg_ids if s.get(aid) is not None]
+    return sum(vals) / len(vals) if vals else None
+
+
+# ─────────────────────────────────────────────
 # §7 JSONL 日志写入
 # ─────────────────────────────────────────────
 
@@ -650,6 +740,7 @@ class StanceTracker:
         self.arguments: list[dict] = []
         self.arg_ids: list[str] = []
         self.cv_history: list[Optional[float]] = []
+        self.alpha_history: list[Optional[float]] = []  # 影子 α 历史
         self.per_arg_history: list[dict] = []  # v2.1：每轮 cv_per_argument，供轨道2b
         self.round_fail_rates: list[float] = []  # 每轮解析失败率（供失败率门）
         self.current_round_stances: dict[str, dict[str, int]] = {}
@@ -693,6 +784,56 @@ class StanceTracker:
             "completion_tokens": completion_tokens,
         })
 
+    def ask_stance(self, debater_id: str, speech_text: str, llm_call_fn) -> dict:
+        """独立表态采集：单独调 LLM 只问表态 JSON（短输出，不会被长发言截断）。
+
+        替代"表态块追加在发言末尾"的老路径——代码/教程等长输出部门
+        表态块会被 max_tokens 截断导致空表态。这里单独一问，稳。
+        """
+        if not self.arg_ids or not llm_call_fn:
+            return {}
+        arg_list = "\n".join(f"{a['id']}: {a['text']}" for a in self.arguments)
+        prompt = (
+            "你是本场辩论的一名辩手。以下是核心论点清单和你本轮发言。"
+            "请只输出你对每条论点的表态 JSON，不要输出任何其他内容。\n\n"
+            f"核心论点清单：\n{arg_list}\n\n"
+            f"你本轮发言（节选）：\n{speech_text[:1500]}\n\n"
+            "评分标尺（Likert 1-5，整数）：1=强烈反对 2=反对 3=中立/证据不足 4=支持 5=强烈支持\n\n"
+            '输出格式（严格 JSON，不要任何其他内容）：\n{"stance": {"P1": 3, "P2": 4}}\n'
+        )
+        try:
+            raw = llm_call_fn(prompt)
+        except Exception as e:
+            print(f"[shadow_cv] ask_stance LLM fail: {e}")
+            return {}
+        parsed = parse_stance(raw or "", self.arg_ids)
+        # 重试一次：解析失败时用更严格提示再问，降低空表态率
+        if not parsed["stance"]:
+            retry_prompt = (
+                "请只输出一行 JSON，不要任何解释、不要代码块围栏、不要多余文字。\n"
+                f"论点 ID 列表：{self.arg_ids}\n"
+                '格式示例：{"stance": {"P1": 3, "P2": 4}}\n'
+                "现在请对每个论点打分（1-5 整数）并输出 JSON。"
+            )
+            try:
+                raw2 = llm_call_fn(retry_prompt)
+                parsed = parse_stance(raw2 or "", self.arg_ids)
+            except Exception:
+                pass
+        self.current_round_stances[debater_id] = parsed["stance"]
+        write_stance_log(self.log_path, {
+            "event": "round_stance",
+            "run_id": self.run_id,
+            "debater": debater_id,
+            "stance": parsed["stance"],
+            "parse_ok": parsed["ok"],
+            "missing": parsed["missing"],
+            "fixes": parsed["fixes"],
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+        })
+        return parsed["stance"]
+
     def finish_round(self, round_num: int, fail_rate: float = None) -> dict:
         """
         一轮收齐后调用：计算CV + 影子判定 + 写日志。
@@ -707,6 +848,12 @@ class StanceTracker:
         if fail_rate is not None:
             self.round_fail_rates.append(fail_rate)
 
+        # 影子一致性指标（α / W / 平均分）——只记录，不参与 CV 主判定
+        alpha = krippendorff_alpha(self.current_round_stances, self.arg_ids)
+        w = kendall_w(self.current_round_stances, self.arg_ids)
+        mu = mean_stance(self.current_round_stances, self.arg_ids)
+        self.alpha_history.append(alpha)
+
         # 影子判定（v2.1：传入 per_arg_history 启用轨道2b 高位僵持；传入 fail_rate 启用失败率门）
         latest_fail_rate = self.round_fail_rates[-1] if self.round_fail_rates else None
         should_stop, reason = check_termination(
@@ -720,6 +867,9 @@ class StanceTracker:
             "round": round_num,
             "cv_overall": cv_result["overall"],
             "cv_per_argument": cv_result["per_argument"],
+            "alpha": alpha,
+            "kendall_w": w,
+            "mean_stance": mu,
             "termination_shadow": {
                 "should_stop": should_stop,
                 "reason": reason,
@@ -730,6 +880,9 @@ class StanceTracker:
             "round": round_num,
             "overall": cv_result["overall"],
             "per_argument": cv_result["per_argument"],
+            "alpha": alpha,
+            "kendall_w": w,
+            "mean_stance": mu,
             "cv_history": list(self.cv_history),
             "termination": (should_stop, reason),
         }

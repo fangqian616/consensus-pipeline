@@ -1198,25 +1198,18 @@ Previous arguments from other debaters:
 
 This is Round {round_num}. Respond to other debaters—what do you agree with? Disagree with? How would you trade off between your approach and theirs? If fusion is possible, how?"""
             
-            # v2 shadow CV: R2起注入表态块（不影响轮次控制，只采集表态）
-            if _shadow_tracker is not None and round_num >= 2 and _shadow_tracker.arg_ids:
-                try:
-                    prompt = prompt + "\n\n" + _shadow_tracker.get_stance_block()
-                except Exception as _e:
-                    print(f"[shadow_cv] stance block inject failed: {_e}")
-
             messages = [{"role": "user", "content": prompt}]
             response = call_api(messages, api_url, api_key, model, temperature=0.7, stats=stats)
             
             if response and not response.startswith("ERROR:"):
                 arg_text = f"[{debater['zh_name'] if is_zh else debater['en_name']} 第{round_num}轮]: {response}"
                 all_arguments.append(arg_text)
-                # v2 shadow CV: 记录辩手表态（R2起）
+                # v2 shadow CV: 独立表态采集（R2起，单独调 LLM，避免长发言截断表态块）
                 if _shadow_tracker is not None and round_num >= 2 and _shadow_tracker.arg_ids:
                     try:
-                        _shadow_tracker.record_debater_stance(debater_key, response)
+                        _shadow_tracker.ask_stance(debater_key, response, _shadow_llm)
                     except Exception as _e:
-                        print(f"[shadow_cv] record stance failed: {_e}")
+                        print(f"[shadow_cv] ask stance failed: {_e}")
                 debate_log.append({
                     "round": round_num,
                     "debater": debater_key,
