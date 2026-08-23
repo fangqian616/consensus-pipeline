@@ -1,0 +1,503 @@
+# 🧠 Consensus Pipeline
+
+<p align="center">
+  <img src="banner.png" alt="Consensus Pipeline" width="100%">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
+  <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit" alt="Streamlit">
+  <img src="https://img.shields.io/badge/Latest-v0.12.18-brightgreen" alt="Version">
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
+</p>
+
+> **Multi-agent debate framework for academic research.**
+> Instead of one AI writing a literature review for you — an AI team interviews you, debates each claim, reaches consensus with per-claim confidence scores, and verifies every citation against the source abstracts.
+
+📖 [中文文档](README_CN.md) · 🌐 [Try Online](https://consensus-pipeline.streamlit.app) · 📦 [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases)
+
+---
+
+## ❓ Why Not Just Ask ChatGPT?
+
+A single LLM produces confident-sounding answers with no cross-validation — hallucinations slip through, conflicting perspectives get flattened, and you can't tell which conclusions are solid vs. speculative.
+
+Consensus Pipeline replaces one-shot generation with **structured multi-agent debate as a quality gate**: every claim is challenged by independent "departments," contradictions are surfaced explicitly, and final conclusions carry **confidence annotations** (e.g., "42/77 papers, high confidence").
+
+Think of it as built-in peer review — not a single author, but an adversarial committee.
+
+---
+
+## 📸 What It Looks Like
+
+### Step 1: Requirement Interview
+The pipeline starts by interviewing you — an AI agent asks clarifying questions to understand your research scope, constraints, and goals.
+
+<img src="examples/01_requirement_interview.png" alt="Requirement Interview" width="80%">
+
+### Step 2: Smart Department Configuration
+Based on your topic, the AI auto-generates 10+ specialized debate departments with multiple debaters per department. Each debater argues from a different methodological perspective.
+
+<img src="examples/04_department_config.png" alt="Department Configuration" width="80%">
+
+### Step 3: Multi-Round Debate
+Watch debaters argue in real-time. Each round, debaters present their position, challenge others' assumptions, and refine their arguments. The pipeline runs 2-3 rounds per department before reaching consensus.
+
+<img src="examples/03_debate_content.png" alt="Debate Content" width="80%">
+
+### Step 4: Structured Output
+Debate results are structured into JSON with clear roles, positions, and consensus points — ready for report generation.
+
+<img src="examples/02_structured_output.png" alt="Structured Output" width="80%">
+
+### Step 5: Report with Confidence Annotations
+The final report includes per-claim confidence scores, methodology comparison matrices, and verified citations. Every conclusion tells you how many papers support it.
+
+Full example report (148 papers, energy economics): see `examples/final_report.md`
+
+### Bonus: Auto-Generated Code & References
+The pipeline also generates runnable Python code for key methods and compiles a verified reference list.
+
+<p float="left">
+  <img src="examples/06_code_output.png" alt="Code Output" width="45%">
+  <img src="examples/07_references.png" alt="References" width="45%">
+</p>
+
+---
+
+## 🎯 What It Does
+
+Consensus Pipeline takes a research topic and produces a structured literature review through multi-agent debate.
+
+**The pipeline in one sentence:** Search papers → 3-layer QC filter → 10 departments debate each claim → cross-department validation → generate report with confidence scores.
+
+**Key difference from tools like Elicit/Consensus:** Those tools extract and summarize. This tool *debates*. Each finding has to survive adversarial challenge from multiple AI agents before it makes it into the report.
+
+### What actually works (v0.12.18):
+- ✅ Multi-source paper search (OpenAlex + Semantic Scholar + arXiv)
+- ✅ 3-layer QC: hard filter → LLM classify → importance tagging (219 → 77 papers, ~65% exclusion)
+- ✅ 10-11 debate departments, each with 2-4 debaters arguing from different perspectives
+- ✅ Multi-round debate (2-3 rounds per department)
+- ✅ Cross-department validation (one department checks another's work)
+- ✅ Per-claim confidence annotation (e.g., "42/77 papers, high confidence")
+- ✅ NLI citation verification — per-claim verdicts (✅/⚠️/❌), with unverifiable claims (📖 needs-fulltext / 📭 title-only) explicitly excluded from the confidence score, not silently counted
+- ✅ Auto-generated runnable code for research methods
+- ✅ PDF/DOCX export
+- ✅ Bilingual output (`--lang en` or `--lang zh`)
+- ✅ Streamlit UI with real-time debate monitoring
+
+### What's still rough:
+- ⚠️ Some UI labels are bilingual (Chinese/English mix) in English mode
+- ⚠️ No GPU needed, but a full run takes 10-30 minutes and ~$0.05-0.10 in API costs
+- ⚠️ Cross-department pairing logic is basic (two-layer fallback, not optimized)
+
+---
+
+## 🏗️ How It Works
+
+```
+Research Topic
+     │
+     ▼
+┌─────────────────────────┐
+│ Phase 0: Requirement    │  ← AI agent interviews you about scope & goals
+│ Interview               │
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Phase 1: Smart Config   │  ← AI generates debate departments & debaters
+│ (auto or manual)        │     based on your topic — zero hardcoding
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Phase 2: Paper Search   │  ← OpenAlex (primary) + Semantic Scholar + arXiv
+│ & Retrieval             │     Deduplication, abstract backfill
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Phase 3: QC Department  │  ← 3-layer sieve:
+│ Quality Control         │     hard_filter → LLM_classify → tag_layer
+│                         │     219 papers → 77 relevant (core/method/background)
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Phase 4: Department     │  ← 10+ research departments debate
+│ Debate (multi-round)    │     Each dept: 2-4 debaters → 2-3 rounds → consensus
+│                         │     Debaters argue from different perspectives
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Phase 5: Cross-Dept     │  ← Departments check each other's conclusions
+│ Validation              │     Catches blind spots & groupthink
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Phase 6: Report         │  ← Literature review with confidence annotations
+│ Generation              │     Citation validation, code generation, PDF/DOCX export
+└────────────┬────────────┘
+             │
+             ▼
+┌─────────────────────────┐
+│ Phase 7: Citation       │  ← NLI verifier checks every claim against
+│ Verification            │     source abstracts (see below)
+└─────────────────────────┘
+```
+
+### 10 Research Departments
+
+| Department | What They Debate |
+|-----------|-----------------|
+| Literature Search | Which databases to query, what keywords to use, how broad vs. precise |
+| Metadata Inspector | DOI verification, metadata completeness, source reliability |
+| Citation Network | Citation analysis, impact metrics, influence mapping |
+| Methodology Review | 7-dimension evaluation: accuracy, efficiency, interpretability, etc. |
+| Data Validation | Data source quality, reproducibility, potential biases |
+| Counter-Evidence | Anti-mainstream findings, controversy identification |
+| Topic Clustering | Thematic grouping, trend detection, gap identification |
+| Visualization | Chart analysis, distribution patterns, data representation |
+| Programming | Which tools/methods to recommend, runnable code generation |
+| Tutorial | How to use research tools, methodological guidance |
+
+### Confidence Annotation
+
+Every conclusion in the report carries a confidence tag:
+
+> Deep learning methods dominate short-term energy load forecasting **(42/77 papers, high confidence)**
+>
+> Graph neural networks show emerging potential in energy network optimization **(3/77 papers, low confidence — trend not established)**
+
+No more unsupported claims.
+
+### Citation Verification Report (NLI)
+
+After the report is generated, a dedicated verifier checks **every claim against the retrieved abstracts** using natural language inference — no claim ships unexamined.
+
+Each claim gets an explicit verdict:
+- ✅ **Verified** — the abstract directly supports the claim
+- ⚠️ **Partially verified** — only part of the claim is supported
+- ❌ **Contradicted** — the abstract says otherwise
+- ❓ **Unverified** — evidence is insufficient (counted in the score)
+
+Claims that *cannot* be judged from abstracts alone are **honestly separated, not silently counted**:
+- 📖 **Needs full-text** — the abstract doesn't cover this claim (excluded from scoring)
+- 📭 **Title-only** — no abstract available (excluded from scoring)
+
+The overall confidence score therefore reflects only claims the verifier could actually judge. Author metadata is injected during verification, so the checker first confirms *"this is the right paper"* before judging the content — catching mismatched citations that merely look plausible.
+
+### QC Department (3-Layer Filter)
+
+The biggest quality gate. Three layers ensure zero pollution:
+- **Layer 1 — Hard Filter**: Remove obviously off-topic papers via LLM-generated exclusion signals
+- **Layer 2 — LLM Classify**: LLM judges each paper's domain membership
+- **Layer 3 — Importance Tagging**: Classify into core / method / background tiers
+
+Result on energy economics: 219 → 77 papers, 64.8% exclusion rate.
+
+### Dynamic Domain Config
+
+No hardcoded keywords. The LLM generates everything based on your topic — exclusion signals, query rotation, tier definitions. Change from "ML in Energy Economics" to "LLM in Healthcare"? Zero code changes.
+
+---
+
+## 📖 Usage Tutorial
+
+Two ways to run Consensus Pipeline: **Streamlit Web UI** (interactive, visual) or **Direct CLI** (headless, scriptable). Both produce the same output — pick based on your workflow.
+
+> 🌐 **No install?** Try the live demo at [consensus-pipeline.streamlit.app](https://consensus-pipeline.streamlit.app) — bring your own API key.
+
+---
+
+### 🖥️ Option A: Streamlit Web UI
+
+Best for: exploring topics interactively, watching debates in real-time, tweaking department configs on the fly.
+
+#### Step 1: Install & Launch
+
+```bash
+git clone https://github.com/fangqian616/consensus-pipeline.git
+cd consensus-pipeline
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+Your browser opens to `http://localhost:8501`. The sidebar is your control panel — everything starts here.
+
+#### Step 2: Configure API Key & Language
+
+In the left sidebar:
+
+1. **API Key** — Paste your DeepSeek API key (or any OpenAI-compatible key). [Get one here](https://platform.deepseek.com/). The key stays in your session only, never saved to disk.
+2. **Language** — Toggle between 🇨🇳 中文 and 🇬🇧 English. This controls ALL output: debate content, UI labels, and the final report.
+3. **Model** — Defaults to `deepseek-chat`. You can change the API endpoint and model name if using a different provider.
+
+<img src="examples/01_requirement_interview.png" alt="Sidebar Config" width="60%">
+
+#### Step 3: Choose Your Pipeline Mode
+
+The app supports two modes — select the one that matches your goal:
+
+| Mode | Tab | What It Does |
+|------|-----|-------------|
+| **Academic Research** | `📚 Academic` | Literature search → multi-agent debate → literature review with confidence scores |
+| **Creative / Animation** | `🎬 Animation` | Script writing → storyboard → asset generation (for video projects) |
+
+> 💡 For academic literature reviews, use the **Academic** tab. This tutorial focuses on the academic pipeline.
+
+#### Step 4: Start the Academic Pipeline
+
+1. Click the **📚 Academic** tab.
+2. Enter your research topic. Be specific — the AI interviewer will ask follow-up questions to narrow scope. Example topics:
+   - `"Machine learning in carbon price forecasting"`
+   - `"Causal inference methods for energy policy evaluation"`
+   - `"The impact of carbon markets on electricity prices: a systematic review"`
+3. The AI interviewer asks clarifying questions about your scope, constraints, and goals. Answer them — this shapes the entire pipeline.
+4. Review the **auto-generated department config**. The AI creates 10+ debate departments with specialized debaters based on your topic. You can edit, add, or remove departments before starting.
+
+#### Step 5: Watch the Debate
+
+Once you confirm the config, the pipeline runs automatically:
+
+1. **Paper Search** (1-2 min) — Multi-source retrieval from OpenAlex, Semantic Scholar, and arXiv.
+2. **QC Filter** (1-2 min) — 3-layer quality sieve: hard filter → LLM classify → importance tagging. ~65% of papers get excluded.
+3. **Department Debate** (5-20 min) — 10+ departments debate in real-time. Each department runs 2-3 rounds. You can watch the debate unfold in the Streamlit UI.
+4. **Cross-Department Validation** (2-5 min) — Departments check each other's conclusions.
+5. **Report Generation** (1-2 min) — Final literature review with confidence annotations, verified citations, and runnable code.
+
+#### Step 6: Download Results
+
+When the pipeline finishes, you get:
+
+- **📄 Literature Review** (PDF/DOCX) — with per-claim confidence scores
+- **💻 Generated Code** — runnable Python scripts for key methods discussed
+- **📊 Debate Logs** — full debate transcripts for audit
+
+---
+
+### ⌨️ Option B: Direct CLI (Headless)
+
+Best for: batch processing, scripting, CI/CD, or when you don't need the visual UI.
+
+#### Step 1: Install Dependencies
+
+```bash
+git clone https://github.com/fangqian616/consensus-pipeline.git
+cd consensus-pipeline
+pip install -r requirements.txt
+```
+
+#### Step 2: Set API Key
+
+```bash
+# Linux/macOS
+export DEEPSEEK_API_KEY="sk-your-key-here"
+
+# Windows (PowerShell)
+$env:DEEPSEEK_API_KEY="sk-your-key-here"
+
+# Windows (CMD)
+set DEEPSEEK_API_KEY=sk-your-key-here
+```
+
+> 💡 You can also create a `.env` file in the project root: `DEEPSEEK_API_KEY=sk-your-key-here`
+
+#### Step 3: Run the Pipeline
+
+**Basic usage — English output:**
+
+```bash
+python run_pipeline.py --topic "Machine Learning in Energy Economics" --lang en
+```
+
+**Chinese output (default):**
+
+```bash
+python run_pipeline.py --topic "碳市场价格预测与能源转型关联机制研究"
+```
+
+**Full parameter reference:**
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `--topic` | ✅ Yes | — | Research topic (any language) |
+| `--lang` | No | `zh` | Output language: `zh` (Chinese) or `en` (English) |
+
+#### Step 4: Find Your Output
+
+All output files are saved to the `output/` directory:
+
+```
+output/
+├── report_<topic>_<timestamp>.docx    # Word report with confidence annotations
+├── report_<topic>_<timestamp>.pdf     # PDF version
+├── code_<topic>_<timestamp>.py        # Generated runnable code
+└── debate_logs/                       # Full debate transcripts
+```
+
+#### Step 5: Custom API Endpoint (Optional)
+
+Using a different model provider? Set the endpoint and model:
+
+```bash
+export DEEPSEEK_API_KEY="your-key"
+export DEEPSEEK_API_BASE="https://api.openai.com/v1"
+export DEEPSEEK_MODEL="gpt-4o"
+
+python run_pipeline.py --topic "Your Topic" --lang en
+```
+
+Any OpenAI-compatible API works — DeepSeek, OpenAI, local models via Ollama/vLLM, etc.
+
+---
+
+### 🔄 Which Should I Use?
+
+| Scenario | Streamlit | CLI |
+|----------|-----------|-----|
+| First time exploring the tool | ✅ Recommended | — |
+| Want to watch debates in real-time | ✅ | — |
+| Need to tweak department config | ✅ | — |
+| Batch processing multiple topics | — | ✅ |
+| Scripting / automation | — | ✅ |
+| Running on a headless server | — | ✅ |
+| CI/CD pipeline integration | — | ✅ |
+
+---
+
+## 📋 Prerequisites
+
+| Requirement | Details |
+|-------------|---------|
+| Python 3.9+ | 3.11+ recommended |
+| DeepSeek API Key | [Register](https://platform.deepseek.com/) — ~$0.05-0.10 per full run |
+| Internet | Access to DeepSeek API (custom endpoints supported) |
+
+> 💡 No GPU needed. No database needed. Paper retrieval uses free open APIs (arXiv / Semantic Scholar / OpenAlex).
+
+---
+
+## ⚙️ Configuration
+
+### API Keys
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DEEPSEEK_API_KEY` | ✅ Yes | API key for LLM calls |
+| `EASYSCHOLAR_SECRET_KEY` | No | Enhanced journal ranking (optional, falls back to 209-journal local registry) |
+
+### Supported Models
+
+| Provider | API URL | Tested With |
+|----------|--------|-------------|
+| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` (primary) |
+| OpenAI | `https://api.openai.com/v1` | `gpt-4o` (compatible) |
+| Custom | Any OpenAI-compatible endpoint | Any model |
+
+Set API key and model in the Streamlit sidebar, or via environment variables.
+
+---
+
+## 📁 Project Structure
+
+```
+consensus-pipeline/
+├── app.py                       # Streamlit main app
+├── router.py                    # AI Router — smart department config
+├── debate_engine.py             # Core debate engine
+├── config_manager.py            # Config persistence & presets
+├── run_pipeline.py              # CLI runner for headless execution
+├── quality_controller.py        # QC department (3-layer filter)
+├── domain_config_generator.py   # Dynamic domain config
+├── docx_exporter.py             # Word export
+├── pdf_exporter.py              # PDF export
+├── academic/                    # Academic research module
+│   ├── search_engine.py         # Multi-source paper search
+│   ├── journal_classifier.py    # Journal quality sieve
+│   ├── journal_registry.py      # 209-journal local registry
+│   ├── cross_validator.py       # Cross-validation & topic clustering
+│   ├── report_generator.py      # Report generation with confidence
+│   ├── report_visualizer.py     # Report charts
+│   └── visualizer.py            # Academic charts (trends, distributions)
+├── requirement/                 # Requirement & verification module
+│   ├── interviewer.py           # AI interview agent
+│   ├── structurer.py            # Scope & constraint extraction
+│   ├── discussion_group.py      # Multi-angle requirement discussion
+│   ├── config_recommender.py    # Department config recommendation
+│   ├── citation_verifier.py     # NLI citation verification
+│   └── fact_checker.py          # Key-conclusion fact checking
+├── templates/                   # Debate prompt templates
+├── presets/                     # Built-in presets
+├── docs/                        # Quickstart & preset guides
+├── examples/                    # Screenshots & example outputs
+└── user_profiles/               # Interview profiles
+```
+
+---
+
+## 🗺️ Roadmap
+
+| Priority | Feature | Status |
+|----------|---------|--------|
+| P0 | Fix UI labels bilingual in EN mode | In progress |
+| P1 | Semantic citation verification | ✅ Shipped in v0.12 (NLI-based) |
+| P1 | Sub-topic query splitting | Planned |
+| P1 | Publication bias detection (funnel plot) | Planned |
+| P2 | Cross-language retrieval (CNKI + bilingual alignment) | Planned |
+| P2 | Incremental update capability | Planned |
+| P2 | Evaluation metrics for debate quality | Planned |
+
+---
+
+## ❓ FAQ
+
+**Q: How long does a full run take?**
+A: 10-30 minutes depending on topic and paper count. The debate phase is the bottleneck — more departments = more API calls.
+
+**Q: How much does it cost?**
+A: With DeepSeek pricing, a full run (148 papers, 10 departments, 2-3 rounds each) costs ~$0.05-0.10.
+
+**Q: Which models are supported?**
+A: Any OpenAI-compatible API. Tested primarily with DeepSeek. Should work with local models via custom endpoints — haven't tested yet.
+
+**Q: What languages does the output support?**
+A: Academic pipeline: Chinese (`--lang zh`, default) and English (`--lang en`). Some UI labels are still bilingual in English mode — working on it.
+
+**Q: Can I customize the departments?**
+A: Yes. The AI auto-generates departments based on your topic, and you can edit/add/remove them in the Streamlit UI before starting the debate.
+
+**Q: How is this different from Elicit or Consensus.app?**
+A: Those tools extract and summarize. This tool debates — each finding has to survive adversarial challenge from multiple AI agents before it makes it into the report. The trade-off: slower and more expensive, but catches contradictions that single-pass summarization misses.
+
+**Q: Is the debate actually worth it?**
+A: Yes, clearly. I ran both modes. Without debate, the report just summarizes what papers claim. With debate, agents from different perspectives challenge each other — and those challenges make it into the report. Example: the "accuracy" agent reported decomposition methods achieve 10-40% error reduction. The "methodology rigor" agent flagged widespread data leakage in those same papers. Both perspectives are in the final report. Without debate, only the accuracy claim would've survived. What I can't quantify yet is *how much* better the overall report is — working on evaluation metrics.
+
+---
+
+## 🤝 Contributing
+
+PRs welcome! Especially:
+- 🐛 Bug fixes
+- 📝 Documentation improvements
+- 🎭 New debater perspectives
+- 📊 Evaluation benchmarks for multi-agent debate quality
+
+---
+
+## 📄 License
+
+MIT License
+
+---
+
+> This is a student project, actively developed and tested. Feedback, bug reports, and "have you tried X?" suggestions are all welcome.
+
+---
+
+If Consensus Pipeline helps your research, a ⭐ on GitHub means a lot — it helps others find the project.
+
+
