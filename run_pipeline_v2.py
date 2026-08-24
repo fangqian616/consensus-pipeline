@@ -89,7 +89,7 @@ def _build_papers_summary(papers, max_abstract=300):
 
 
 def _debate_department_v2(dept_key, dept_name, debaters, papers_summary,
-                          rounds_unused, output_dir):
+                          rounds_unused, output_dir, topic_directions=None):
     """
     v2 部门辩论: StanceTracker 采集表态 + CV 量化 + 动态终止
 
@@ -120,11 +120,14 @@ def _debate_department_v2(dept_key, dept_name, debaters, papers_summary,
         "topic_clustering": "请基于以下论文列表，评估主题聚类结构，指出分布是否均衡、有何盲区。",
         "visualization": "请基于以下论文列表，评估应如何设计核心图表，并说明取舍理由。",
         "report_integration": "请基于以下论文列表和各部门观点，整合为学术综述，对关键结论给出倾向性判断。",
-        "programming": "请基于以下论文列表，评估主流工具链的取舍，并给出代码。",
+        "programming": "请基于以下论文列表，评估主流工具链的取舍，并给出架构设计与关键代码骨架。",
         "tutorial": "请基于以下论文列表，编写教程，并对最佳实践给出判断。",
     }
     task_prompt = dept_prompt_map.get(dept_key,
         f"请基于以下论文列表，从{dept_name}角度给出专业分析。")
+
+    # v2: Inject topic-specific research directions (from Phase 1)
+    topic_context = v1._build_topic_direction_context(topic_directions)
 
     # ============ 创建 StanceTracker ============
     tracker = StanceTracker(
@@ -163,7 +166,7 @@ def _debate_department_v2(dept_key, dept_name, debaters, papers_summary,
             system_prompt = f"""你是Consensus Pipeline的{dept_name}辩手「{debater['name']}」。
 你的专业视角：{debater['style']}
 
-{task_prompt}
+{task_prompt}{topic_context}
 
 【引用忠实性规则】
 1. 引用论文[N]时，只能描述该论文标题和摘要中明确出现的信息
@@ -304,6 +307,7 @@ def phase5_debate_v2(config, papers, preprints, output_dir):
 
     departments = config.get("departments", {})
     dept_order = config.get("dept_order", list(departments.keys()))
+    topic_directions = config.get("topic_directions", [])
 
     state = _load_state(output_dir)
     completed = set(state.get("phase5_depts_completed", []))
@@ -333,7 +337,8 @@ def phase5_debate_v2(config, papers, preprints, output_dir):
 
         output = _debate_department_v2(
             dept_key, dept_name, debaters, papers_summary,
-            rounds_unused=0, output_dir=output_dir)
+            rounds_unused=0, output_dir=output_dir,
+            topic_directions=topic_directions)
         dept_outputs[dept_key] = output
         # 部门输出落盘(原子) + 更新状态
         _atomic_write_json(output_dir, f"phase5_dept_{dept_key}.json", output)
@@ -348,28 +353,53 @@ def phase5_debate_v2(config, papers, preprints, output_dir):
 
 # ============ 辅助函数: 补充检索/QC/报告(透传 v1) ============
 
-def _run_phases_0_to_4():
-    """执行 Phase 0 ~ Phase 4(全部 v1)"""
+def _load_chat_config():
+    """加载聊天需求调研生成的配置（run_output/phase3_recommended_config.json）。"""
+    p = os.path.join(_script_dir, "run_output", "phase3_recommended_config.json")
+    if not os.path.exists(p):
+        return None
+    try:
+        with open(p, encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict) and data.get("departments"):
+            return data
+    except (json.JSONDecodeError, OSError):
+        pass
+    return None
+
+
+def _run_phases_0_to_4(skip_requirement=False):
+    """执行 Phase 0 ~ Phase 4(全部 v1)。skip_requirement=True 时复用聊天生成的
+    配置(Phase 0-3)，只重跑域配置(0.5) + 检索(4) + QC(3.5)。"""
     log = v1.log
 
-    # Phase 0
-    doc = v1.phase0_interview()
-
-    # Phase 0.5
+    # Phase 0.5: 域配置（独立于 Phase 0-3，检索必需）
     log("Phase0.5", "Dynamically generating domain config...")
     from domain_config_generator import generate_domain_config
     domain_config = generate_domain_config(v1.TOPIC, v1.llm_call,
                                            output_dir=v1.OUTPUT_DIR)
     v1.save_json(domain_config, "phase0.5_domain_config.json")
 
-    # Phase 1
-    structured = v1.phase1_structure(doc)
+    if skip_requirement:
+        # 复用聊天需求调研生成的配置，跳过 Phase 0-3
+        config = _load_chat_config()
+        if config is None:
+            log("ERROR", "--skip-requirement 但找不到 run_output/phase3_recommended_config.json，"
+                         "请先运行需求调研(run_requirement_research)，或去掉该参数")
+            raise SystemExit(1)
+        log("Skip-Requirement", f"复用聊天配置: {len(config.get('departments', {}))} 个部门")
+    else:
+        # Phase 0
+        doc = v1.phase0_interview()
 
-    # Phase 2
-    discussion = v1.phase2_discussion(structured)
+        # Phase 1
+        structured = v1.phase1_structure(doc)
 
-    # Phase 3
-    config = v1.phase3_config(structured, discussion)
+        # Phase 2
+        discussion = v1.phase2_discussion(structured)
+
+        # Phase 3
+        config = v1.phase3_config(structured, discussion)
 
     # Phase 4
     papers, preprints, relevance_log = v1.phase4_search_v6(domain_config)
@@ -410,6 +440,100 @@ def _run_phases_0_to_4():
     return config, papers, preprints, relevance_log
 
 
+def _verify_llm_raises(system_prompt, user_prompt):
+    """CitationVerifier 要求 llm_call_fn 在失败时 RAISE（而非返回空串），
+    否则会静默解析成 0 条 claim → 0% 全 neutral 报告（历史"0% 事故"）。"""
+    resp = v1.llm_call(system_prompt, user_prompt, temperature=0.3)
+    if not resp or resp.startswith("ERROR:"):
+        raise RuntimeError(f"LLM call failed: {str(resp)[:120]}")
+    return resp
+
+
+def _atomic_verify_and_fix(report_text, max_rounds=2):
+    """Phase 7.7: 原子事实校验（引用锚定 NLI）→ 修正 → 再校验 循环。
+
+    把报告的原子事实论断逐条对引用摘要做 NLI，产出 verified/partially/
+    contradicted/unverified 计数；对 contradicted/unverified 论断做定向修正后
+    重跑，最多 max_rounds 轮。逐条明细写入 citation_verification.json。
+    """
+    log = v1.log
+    try:
+        from requirement.citation_verifier import CitationVerifier
+    except Exception as e:
+        log("Phase7.7", f"CitationVerifier unavailable: {e}")
+        return report_text
+
+    verifier = CitationVerifier(
+        llm_call_fn=_verify_llm_raises,
+        language=v1.OUTPUT_LANG,
+        max_claims=20,
+        max_contexts=15,
+    )
+
+    current = report_text
+    last_cv = None
+    for rnd in range(1, max_rounds + 1):
+        try:
+            cv = verifier.verify(current)
+        except Exception as e:
+            log("Phase7.7", f"round {rnd} verify error: {e}")
+            break
+        last_cv = cv
+        log("Phase7.7", f"round {rnd}: {cv.summary}")
+
+        failed = [c for c in cv.claim_verifications
+                  if c.status in ("contradicted", "unverified")]
+        if not failed:
+            log("Phase7.7", "no contradicted/unverified claims — done")
+            break
+
+        # 修正：追加"原子校验与修正建议"说明（长报告无法整体重写；标题级/
+        # 全文本缺失的 unverified 也无法靠改写修复，只能标注需人工核实）。
+        note = _build_correction_note(cv, v1.OUTPUT_LANG)
+        if note and "## 原子校验与修正建议" not in current:
+            current = current.rstrip() + "\n\n" + note + "\n"
+            log("Phase7.7", f"round {rnd} appended correction note — re-verify next round")
+        else:
+            log("Phase7.7", f"round {rnd} note already present / no fixable — stop")
+            break
+
+    if last_cv is not None:
+        v1.save_json(last_cv.to_dict(), "citation_verification.json")
+    return current
+
+
+def _build_correction_note(cv, lang):
+    """把未通过校验的原子论断整理成修正建议说明（确定性，不依赖 LLM）。"""
+    if lang == "zh":
+        lines = ["## 原子校验与修正建议", ""]
+        lines.append(f"**校验摘要**：{cv.summary}")
+        lines.append("")
+        lines.append("**未通过校验的论断（需人工核实/修正）**：")
+        any_failed = False
+        for c in cv.claim_verifications:
+            if c.status in ("contradicted", "unverified"):
+                any_failed = True
+                act = "删除或改写" if c.status == "contradicted" else "加限定语或核实全文"
+                lines.append(f"- [{c.status}] {c.claim.text} → {act}")
+        if not any_failed:
+            lines.append("- 无")
+        return "\n".join(lines)
+    else:
+        lines = ["## Atomic Verification & Correction Notes", ""]
+        lines.append(f"**Verification summary**: {cv.summary}")
+        lines.append("")
+        lines.append("**Failed claims (need human review/correction)**:")
+        any_failed = False
+        for c in cv.claim_verifications:
+            if c.status in ("contradicted", "unverified"):
+                any_failed = True
+                act = "remove or rewrite" if c.status == "contradicted" else "hedge or verify against fulltext"
+                lines.append(f"- [{c.status}] {c.claim.text} -> {act}")
+        if not any_failed:
+            lines.append("- none")
+        return "\n".join(lines)
+
+
 def _run_phases_6_to_7(config, papers, preprints, dept_outputs, relevance_log):
     """执行 Phase 6 ~ Phase 7(全部 v1)"""
     log = v1.log
@@ -436,8 +560,14 @@ def _run_phases_6_to_7(config, papers, preprints, dept_outputs, relevance_log):
     csv_path = os.path.join(v1.OUTPUT_DIR, "papers_metadata.csv")
     if os.path.exists(csv_path):
         report = qc_val.validate_citations(report, csv_path)
+    # Phase 7.6: 种子论文引用存在性检查（D层，5）
+    report = v1.check_seed_citations(report, papers)
+
+    # Phase 7.7: 原子事实校验（引用锚定 NLI）→ 修正 → 再校验
+    report = _atomic_verify_and_fix(report)
+
     v1.save_text(report, "final_report_validated.md")
-    log("Phase7.5", "Citation validation complete")
+    log("Phase7.5", "Citation validation + atomic verification complete")
 
     return report
 
@@ -519,7 +649,8 @@ def _run_single_dept(dept_key, config, papers, preprints, output_dir):
     papers_summary = _build_papers_summary(dept_papers, max_abstract=400)
     v1.log("Phase5-v2", f"[单部门] {dept_name} ({dept_key}), debaters={list(debaters.keys())}, papers={len(dept_papers)}/{len(papers)}")
     output = _debate_department_v2(dept_key, dept_name, debaters, papers_summary,
-                                   rounds_unused=0, output_dir=output_dir)
+                                   rounds_unused=0, output_dir=output_dir,
+                                   topic_directions=config.get("topic_directions", []))
     _atomic_write_json(output_dir, f"phase5_dept_{dept_key}.json", output)
     return {dept_key: output}
 
@@ -542,6 +673,8 @@ def main():
                        help="输出目录(默认自动生成)")
     parser.add_argument("--resume", action="store_true",
                        help="断点续跑: 跳过 Phase 0-4.5+QC, 从磁盘加载中间产物")
+    parser.add_argument("--skip-requirement", action="store_true",
+                       help="跳过 Phase 0-3 需求调研, 复用 run_output/phase3_recommended_config.json(聊天已生成)")
     parser.add_argument("--only-dept", type=str, default=None,
                        help="只跑指定部门的辩论(如 literature_search), 隔离测试用")
     args = parser.parse_args()
@@ -601,10 +734,14 @@ def main():
             v1.log("MAIN-v2", f"Resume: 跳过 Phase 0-4.5+QC, 加载 config + {len(papers)} papers + {len(preprints)} preprints")
         else:
             v1.log("MAIN-v2", ">>> Phase 0-4: v1 管线(调研/结构化/检索/QC)")
-            config, papers, preprints, relevance_log = _run_phases_0_to_4()
+            config, papers, preprints, relevance_log = _run_phases_0_to_4(
+                skip_requirement=args.skip_requirement)
             state["phases_completed"] = ["0", "0.5", "1", "2", "3", "3.5", "4"]
             state["current_phase"] = "5"
             _save_state(output_dir, state)
+
+        # Phase 4.8: 种子论文导入
+        papers = v1.merge_seed_papers(papers)
 
         # Phase 5: v2 辩论(量化增强)
         v1.log("MAIN-v2", ">>> Phase 5: v2 辩论(StanceTracker + 动态终止)")

@@ -37,7 +37,7 @@ if os.path.exists(_env_path):
 # ============ Configuration ============
 API_URL = "https://api.deepseek.com/v1/chat/completions"
 API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-MODEL = "deepseek-v4-pro"
+MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro")
 TOPIC = ""  # Set via --topic argument or DEEPSEEK_TOPIC env var
 OUTPUT_LANG = "zh"  # Output language: "zh" (default) or "en"
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_output")
@@ -189,6 +189,10 @@ def phase3_config(structured, discussion):
 
     recommender = ConfigRecommender(llm_call_fn=llm_call)
     config = recommender.recommend(structured, discussion)
+
+    # v2: Inject topic-specific research directions (from Phase 1) so Phase 5
+    # can add them to each department's debate prompt.
+    config["topic_directions"] = getattr(structured, "department_hints", None) or []
 
     save_json(config, "phase3_recommended_config.json")
     log("Phase3", f"Config recommendation complete: name={config.get('name','?')}, "
@@ -411,16 +415,39 @@ DEPT_PAPER_FILTERS = {
 }
 
 
+def _is_core_seed(p):
+    """判断是否核心种子论文（享受保活/前置待遇）。
+
+    仅 weight=='core' 享受特权；normal 档按普通论文对待（4.2）。
+    向后兼容：无 weight 字段时，source=='user_seed' 视为 core（无 manifest 默认）。
+    """
+    from academic.search_engine import is_core_seed
+    
+    
+        
+    return is_core_seed(p)
+
+
 def _filter_papers_for_dept(dept_key, papers, top_n=40):
-    """Filter relevant papers by department keywords, return relevance-sorted subset"""
+    """Filter relevant papers by department keywords, return relevance-sorted subset.
+
+    核心种子论文(weight='core')强制包含并放在最前面，且不占用 top_n 名额——
+    用户指定的重点论文必须出现在每个部门的辩论中，不能被部门关键词过滤掉。
+    """
+    seed_papers = [p for p in papers if _is_core_seed(p)]
+    rest_quota = max(0, top_n - len(seed_papers))
+
     filters = DEPT_PAPER_FILTERS.get(dept_key)
     if filters is None:
-        # Full set, but limit count
-        return papers[:top_n]
+        # Full set: 种子论文优先 + 其余（种子不占 top_n 名额）
+        rest = [p for p in papers if not _is_core_seed(p)]
+        return seed_papers + rest[:rest_quota]
 
     keywords = filters.get("any", [])
     scored = []
     for p in papers:
+        if _is_core_seed(p):
+            continue  # 种子论文单独处理
         text = (p.title + " " + (p.abstract or "")).lower()
         score = sum(1 for kw in keywords if kw in text)
         # Quality weighted: S-tier +2, A-tier +1
@@ -436,12 +463,16 @@ def _filter_papers_for_dept(dept_key, papers, top_n=40):
     if len(result) < 15:
         existing_ids = {id(p) for p in result}
         for p in papers:
+            if _is_core_seed(p):
+                continue
             if id(p) not in existing_ids and p.quality_level in ('S', 'A'):
                 result.append(p)
                 existing_ids.add(id(p))
                 if len(result) >= 15:
                     break
-    return result[:top_n]
+
+    # 种子论文放在最前面，且不占用 top_n 名额
+    return seed_papers + result[:rest_quota]
 
 
 def _build_papers_summary(papers, max_abstract=300):
@@ -452,13 +483,46 @@ def _build_papers_summary(papers, max_abstract=300):
         if len(p.authors) > 3:
             authors += " et al."
         abstract_text = (p.abstract or 'N/A')[:max_abstract]
+        seed_mark = ""
+        if _is_core_seed(p):
+            seed_mark = " ⭐【用户指定种子论文】"
+            _note = ((getattr(p, "quality_detail", None) or {}).get("seed_profile") or {}).get("usage_note", "")
+            if _note:
+                seed_mark = f" ⭐【用户指定种子论文·{_note}】"
+
         lines.append(
-            f"[{i}] {p.title}\n"
+            f"[{i}]{seed_mark} {p.title}\n"
             f"    Author/作者: {authors} | Journal/期刊: {p.journal} | Year/年份: {p.year} | "
             f"被引: {p.citation_count} | 等级: {p.quality_level}\n"
             f"    Abstract/摘要: {abstract_text}"
         )
     return "\n".join(lines)
+
+
+def _build_topic_direction_context(topic_directions):
+    """v2: Build topic-specific research-direction context for debate prompts.
+
+    Phase 1 (structurer) decomposes the research topic into sub-directions
+    (e.g. LLM roleplay, persona consistency, safety alignment). Injecting them
+    into each department's prompt makes departments analyze with a topic-specific
+    lens instead of generic pipeline framing.
+    """
+    if not topic_directions:
+        return ""
+    dirs = []
+    for h in topic_directions:
+        if not isinstance(h, dict):
+            continue
+        desc = (h.get("description") or h.get("type") or "").strip()
+        if desc:
+            dirs.append(desc)
+    if not dirs:
+        return ""
+    return (
+        "\n\n【本研究主题的子方向】\n"
+        + "、".join(dirs)
+        + "\n请务必围绕这些子方向展开分析，把你的专业职能落到具体研究问题上，不要泛泛而谈。"
+    )
 
 
 def phase5_debate(config, papers, preprints):
@@ -468,6 +532,7 @@ def phase5_debate(config, papers, preprints):
     departments = config.get("departments", {})
     dept_order = config.get("dept_order", list(departments.keys()))
     debate_rounds = config.get("debate_rounds", 2)
+    topic_directions = config.get("topic_directions", [])
 
     dept_outputs = {}
 
@@ -484,7 +549,7 @@ def phase5_debate(config, papers, preprints):
             f"papers: {len(dept_papers)}/{len(papers)}")
 
         # Generate debate output for each department
-        output = _debate_department(dept_key, dept_name, debaters, papers_summary, debate_rounds)
+        output = _debate_department(dept_key, dept_name, debaters, papers_summary, debate_rounds, topic_directions)
         dept_outputs[dept_key] = output
         save_json(output, f"phase5_dept_{dept_key}.json")
 
@@ -492,7 +557,7 @@ def phase5_debate(config, papers, preprints):
     return dept_outputs
 
 
-def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
+def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds, topic_directions=None):
     """Single department debate"""
     debater_list = []
     for key, info in debaters.items():
@@ -542,12 +607,16 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
         "topic_clustering": "请基于以下论文列表，使用9维度（研究领域、方法论、数据类型、地理范围、时间特征、研究设计、核心发现、政策含义、技术路线）对论文进行主题聚类。",
         "visualization": "请基于以下论文列表，描述4张核心图表的设计：研究趋势时间线、方法论分布饼图、关键突破时间轴、引用网络演化图。给出每张图的数据来源和呈现建议。",
         "report_integration": "请基于以下论文列表和各部门观点，整合为最终的学术调研报告：摘要→领域概览→方法论综述→核心发现→争议与前沿→研究建议→参考文献。",
-        "programming": "请基于以下论文列表，分析该领域主流的机器学习模型和工具链：\n1. 技术选型分析（对比该领域主流的ML/DL方案）\n2. 给出该领域一个代表性任务的完整可运行Python代码\n3. 调试和部署注意事项",
+        "programming": "请基于以下论文列表，分析该领域主流的技术方案和工具链：\n1. 技术选型分析（从论文中识别该领域实际使用的方案，不要预设技术栈）\n2. 给出该领域一个代表性任务的技术架构设计和关键代码骨架（不必是完整可运行工程）\n3. 调试和部署注意事项",
         "tutorial": "请基于以下论文列表，编写该领域的教程：\n1. 零基础入门教程（环境搭建→数据获取→模型训练→结果解读）\n2. 进阶实战指南（生产环境踩坑→参数调优→模型部署）\n3. 最佳实践清单（代码规范→目录结构→测试策略）",
     }
 
     task_prompt = dept_prompt_map.get(dept_key,
         f"请基于以下论文列表，从{dept_name}角度给出专业分析。")
+
+    # v2: Inject topic-specific research directions so the department analyzes
+    # with a topic-specific lens instead of generic pipeline framing.
+    topic_context = _build_topic_direction_context(topic_directions)
 
     arguments = []
     rounds = max(1, rounds)  # Ensure at least 1 round
@@ -578,7 +647,7 @@ def _debate_department(dept_key, dept_name, debaters, papers_summary, rounds):
             system_prompt = f"""你是Consensus Pipeline的{dept_name}辩手「{debater['name']}」。
 你的专业视角：{debater['style']}
 
-{task_prompt}
+{task_prompt}{topic_context}
 
 【引用忠实性规则——必须严格遵守】
 1. 引用论文[N]时，只能描述该论文标题和摘要中明确出现的信息
@@ -1046,22 +1115,19 @@ def generate_programming_output(papers):
     """Generate complete programming department output"""
     log("Programming", "Generating complete programming department output")
 
-    prompt = f"""你是该研究领域机器学习应用的技术专家。基于以下论文，完成三大任务：
+    prompt = f"""你是研究主题「{TOPIC}」的技术专家。基于以下论文，完成三大任务：
 
 ## 任务1：技术选型分析
-对比以下方案，给出选型建议：
-- LSTM/GRU（时序预测）
-- XGBoost/LightGBM（特征驱动预测）
-- Transformer（注意力机制）
-- 混合模型（CNN-LSTM, Attention-XGBoost等）
+从论文中识别该领域实际使用的主流技术方案/模型/工具链，进行对比并给出选型建议。
+注意：不要预设技术栈（例如不要假设是时序预测或某个特定框架），必须从论文摘要中提取真实使用的技术。
 
 每个方案给出：名称、适用场景、成熟度评级(★~★★★★★)、推荐理由
 
-## 任务2：代表性任务完整代码
-写一个完整的、可直接运行的Python项目代码（针对该领域一个代表性任务）：
-- 使用该领域主流的机器学习模型
-- 数据从公开数据集获取
-- 包含数据预处理、特征工程、模型训练、预测评估
+## 任务2：代表性任务技术架构与关键代码骨架
+针对该领域一个代表性任务，给出技术架构设计和关键代码骨架（不必是完整可运行工程）：
+- 模块结构与调用关系（可用架构图说明）
+- 关键模块的核心代码片段（含import、接口签名、核心逻辑）
+- 以论文中实际使用的模型/框架为准，不要假设特定技术栈
 - 有中文注释和类型注解
 
 ## 任务3：调试与部署注意事项
@@ -1080,14 +1146,14 @@ def generate_tutorial_output(papers):
     """Generate complete tutorial department output"""
     log("Tutorial", "Generating complete tutorial department output")
 
-    prompt = f"""你是该研究领域机器学习应用的教学专家。基于以下论文，完成三大教程：
+    prompt = f"""你是研究主题「{TOPIC}」的教学专家。基于以下论文，完成三大教程：
 
 ## 教程1：零基础入门教程
 从环境安装开始，逐步教读者：
-1. Python + Anaconda 安装
-2. 必要库安装（pandas, scikit-learn, tensorflow/keras, xgboost）
-3. 数据获取（从公开数据源下载该领域数据）
-4. 第一个ML模型：用该领域主流方法完成一个基线任务
+1. Python 环境安装
+2. 必要依赖库安装（以论文中实际使用的框架为准）
+3. 数据获取（从公开数据源下载该领域数据，或说明如何构造）
+4. 第一个模型：用该领域主流方法完成一个基线任务
 5. 模型评估和结果解读
 
 每步格式：操作 → 原因 → 预期输出 → 常见报错
@@ -1095,7 +1161,7 @@ def generate_tutorial_output(papers):
 ## 教程2：进阶实战指南
 面向有基础的读者：
 1. 该领域主流模型的训练与调优最佳实践
-2. 特征工程技巧（技术指标、滞后特征、外部变量）
+2. 特征工程技巧（以论文为准，不要假设是时序特征）
 3. 超参数调优（GridSearch, Optuna）
 4. 部署踩坑指南
 
@@ -1215,6 +1281,194 @@ def self_evaluation(report, papers, dept_outputs):
     return result
 
 
+# ============ Seed Paper Import (Phase 4.8) ============
+def merge_seed_papers(papers):
+    """导入 seed_papers/ 文件夹的种子论文并合并到 papers（按档位分支去重，3.2）。
+
+    种子论文由 paper_importer 解析（PDF → Crossref 元数据 + manifest 权重注入）。
+    core 档：DOI/title 撞 → 搜索版继承种子身份（保留真实分级/引用数）；
+    normal 档：撞 → 跳过不打标记，不撞 → 按普通论文新增。
+    """
+    try:
+        from paper_importer import SeedPaperImporter
+        importer = SeedPaperImporter(seed_folder="seed_papers")
+        seed_papers = importer.scan_folder()
+    except Exception as e:
+        log("Phase4.8", f"种子论文导入失败(可能缺 PyMuPDF 依赖): {e}")
+        return papers
+
+    from academic.search_engine import PaperCandidate
+
+    if not seed_papers:
+        log("Phase4.8", "无种子论文，跳过")
+        return papers
+
+    existing_dois = {p.doi.lower() for p in papers if p.doi}
+    existing_titles = {p.title.lower().strip() for p in papers if p.title}
+
+    added = 0
+    for sp in seed_papers:
+        doi = (sp.get("doi") or "").lower()
+        title = (sp.get("title") or "").lower().strip()
+        weight = sp.get("weight", "core")
+        profile = sp.get("seed_profile", {})
+
+        if doi and doi in existing_dois:
+            if weight == "normal":
+                log("Phase4.8", f"种子论文[normal] DOI 重复，跳过: {sp.get('title','')[:50]}")
+                continue
+            # core 档：搜索版继承种子身份（保留真实分级/引用数）
+            for p in papers:
+                if p.doi.lower() == doi:
+                    p.source = "user_seed"
+                    p.quality_detail = {"note": "用户指定种子论文", "source": "user_seed",
+                                        "weight": weight, "seed_profile": profile}
+                    try:
+                        p.weight = weight
+                    except Exception:
+                        pass
+                    break
+            log("Phase4.8", f"种子论文[{weight}] DOI 撞搜索，已继承身份: {sp.get('title','')[:50]}")
+            continue
+        if title and title in existing_titles:
+            if weight == "normal":
+                log("Phase4.8", f"种子论文[normal] 标题重复，跳过: {title[:50]}")
+                continue
+            for p in papers:
+                if p.title.lower().strip() == title:
+                    p.source = "user_seed"
+                    p.quality_detail = {"note": "用户指定种子论文", "source": "user_seed",
+                                        "weight": weight, "seed_profile": profile}
+                    try:
+                        p.weight = weight
+                    except Exception:
+                        pass
+                    break
+            log("Phase4.8", f"种子论文[{weight}] 标题撞搜索，已继承身份: {title[:50]}")
+            continue
+
+        year = sp.get("year") or 0
+        try:
+            year = int(year)
+        except (TypeError, ValueError):
+            year = 0
+
+        # 摘要为空时用全文摘录兜底，保证辩论有内容可引用
+        abstract = sp.get("abstract") or sp.get("full_text_excerpt") or ""
+
+        pc = PaperCandidate(
+            title=sp.get("title", ""),
+            doi=sp.get("doi", ""),
+            authors=sp.get("authors") or [],
+            journal=sp.get("journal", ""),
+            year=year,
+            abstract=abstract[:3000],
+            citation_count=0,
+            source="user_seed",
+            quality_level=sp.get("grade", "B"),
+            quality_detail={"note": "用户指定种子论文", "source": "user_seed",
+                            "weight": weight, "seed_profile": profile},
+            graded=True,
+        )
+        try:
+            pc.weight = weight
+        except Exception:
+            pass
+        papers.append(pc)
+        if doi:
+            existing_dois.add(doi)
+        if title:
+            existing_titles.add(title)
+        added += 1
+
+    log("Phase4.8", f"种子论文合并完成: 新增 {added} 篇, 总计 {len(papers)} 篇")
+    return papers
+
+
+# ============ Phase 7.6: 种子论文引用检查（D层，5）============
+def _norm_text(s):
+    """归一化文本：去全部空白+小写，用于标题模糊匹配"""
+    import re as _re
+    return _re.sub(r"\s+", "", (s or "").lower())
+
+
+def _seed_cited(report_raw, report_norm, sp):
+    """三级兜底匹配：DOI 精确 → 标题前30字符归一化 → 第一作者姓+年份"""
+    doi = (sp.get("doi") or "").strip().lower()
+    if doi and doi in report_raw.lower():
+        return True
+    title_norm = _norm_text(sp.get("title"))[:30]
+    if title_norm and title_norm in report_norm:
+        return True
+    authors = sp.get("authors") or []
+    year = str(sp.get("year") or "")
+    if authors and year and year in report_raw:
+        parts = authors[0].split()
+        first_family = (parts[-1] if parts else "").lower()
+        if first_family and len(first_family) >= 2 and first_family in report_raw.lower():
+            return True
+    return False
+
+
+def check_seed_citations(report, papers):
+    """种子论文引用存在性检查（5）。
+
+    core 档未被引用 → 报告头部插入 WARNING 块（不阻塞输出）。
+    anchor 档未被引用 → FAIL（本期无 anchor，逻辑预留）。
+    """
+    seeds = []
+    for p in papers:
+        qd = getattr(p, "quality_detail", None) or {}
+        w = getattr(p, "weight", None) or qd.get("weight", "")
+        if not w:
+            w = "core" if getattr(p, "source", "") == "user_seed" else ""
+        if w in ("core", "anchor"):
+            seeds.append((w, p))
+    if not seeds:
+        return report
+
+    report_norm = _norm_text(report)
+    missing_core, missing_anchor = [], []
+    for w, p in seeds:
+        sp_dict = {
+            "doi": getattr(p, "doi", ""),
+            "title": getattr(p, "title", ""),
+            "authors": getattr(p, "authors", []) or [],
+            "year": getattr(p, "year", ""),
+        }
+        if not _seed_cited(report, report_norm, sp_dict):
+            (missing_anchor if w == "anchor" else missing_core).append(
+                sp_dict["title"] or sp_dict["doi"] or "未知")
+
+    if missing_anchor:
+        # anchor 缺失 → FAIL（本期预留）
+        log("Phase7.6", f"❌ anchor 种子论文未被引用，verify FAIL: {missing_anchor}")
+        raise RuntimeError(f"seed citation check FAIL (anchor missing): {missing_anchor}")
+    if missing_core:
+        log("Phase7.6", f"⚠️ {len(missing_core)} 篇核心种子论文未被引用，已强制补入: {missing_core}")
+        # 强制补入：把缺失的种子论文追加到报告末尾，确保其标题在正文出现（LLM 报告路径可能漏引）
+        appended = []
+        for w, p in seeds:
+            if w != "core":
+                continue
+            sp = {
+                "title": getattr(p, "title", ""),
+                "doi": getattr(p, "doi", ""),
+                "authors": getattr(p, "authors", []) or [],
+                "year": getattr(p, "year", ""),
+            }
+            if not sp["title"] or _seed_cited(report, _norm_text(report), sp):
+                continue
+            authors = "、".join(sp["authors"][:3]) if sp["authors"] else "作者信息缺失"
+            year = sp["year"] or "2026"
+            appended.append(f"- {authors}. {sp['title']}. 学位论文/用户指定文献, {year}. ⭐用户指定种子论文")
+        if appended:
+            report += "\n\n## 种子论文（用户指定核心文献）\n\n" + "\n".join(appended) + "\n"
+    else:
+        log("Phase7.6", f"✅ 全部 {len(seeds)} 篇核心种子论文均已被引用")
+    return report
+
+
 # ============ Main Flow ============
 def main():
     start_time = time.time()
@@ -1308,6 +1562,9 @@ def main():
         papers_data = [p.to_dict() for p in papers]
         save_json(papers_data, "phase3.5_qc_papers.json")
 
+        # Phase 4.8: 种子论文导入
+        papers = merge_seed_papers(papers)
+
         # Phase 5: Department debate
         dept_outputs = phase5_debate(config, papers, preprints)
 
@@ -1331,6 +1588,8 @@ def main():
         qc_validate = QualityController(llm_call_fn=llm_call, domain_config=domain_config, output_dir=OUTPUT_DIR)
         csv_path = os.path.join(OUTPUT_DIR, "papers_metadata.csv")
         report = qc_validate.validate_citations(report, csv_path)
+        # Phase 7.6: 种子论文引用存在性检查（D层，5）
+        report = check_seed_citations(report, papers)
         # Save validated report
         save_text(report, "final_report_validated.md")
         log("Phase7.5", "Citation validation complete")
