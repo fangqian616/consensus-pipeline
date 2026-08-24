@@ -1,0 +1,475 @@
+// @deepseek-ai/dsh-consensus-pipeline
+// Native tool plugin: spawns the Python MCP server (mcp_server.py) over stdio
+// JSON-RPC 2.0 (newline-framed), discovers its tools via tools/list, and
+// re-registers them as native DSH tools with background-job progress for the
+// long-running full pipeline. Also mounts a web control panel (same-origin,
+// under /consensus-pipeline/) via the DSH webServer service.
+//
+// Deliberately has NO `@deepseek-ai/*` runtime imports: tool definitions are
+// built as raw JSON-Schema objects, so this module resolves in any DSH checkout
+// regardless of hoisted dependency versions and needs no bundled node_modules.
+import readline from 'node:readline';
+import { readFile, readdir, stat, mkdir } from 'node:fs/promises';
+import { readFileSync, writeFileSync, existsSync, realpathSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { join, dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export const name = 'dsh-consensus-pipeline';
+export const inject = ['tools', 'subprocess', 'systemPrompt', 'webServer'];
+
+const REQUEST_TIMEOUT_MS = 30_000;
+const TOOL_CALL_TIMEOUT_MS = 3600_000;
+const POLL_INTERVAL_MS = 15_000;
+
+function detectProjectRoot() {
+  // Walk up from this plugin file (resolving symlinks for pnpm) to find mcp_server.py
+  let here;
+  try {
+    here = dirname(fileURLToPath(import.meta.url));
+    here = dirname(realpathSync(here)); // resolve pnpm symlink if any
+  } catch {
+    here = process.cwd();
+  }
+  for (let i = 0; i < 8; i++) {
+    if (existsSync(join(here, 'mcp_server.py'))) return here;
+    const parent = dirname(here);
+    if (parent === here) break;
+    here = parent;
+  }
+  return process.cwd();
+}
+
+export function apply(ctx, config = {}) {
+  const python = config.python ?? 'python';
+  const _root = config.cwd ?? detectProjectRoot();
+  const script = config.script ?? join(_root, 'mcp_server.py');
+  const cwd = _root;
+  const graceMs = config.graceMs ?? 5000;
+
+  const disposers = [];
+
+  let proc = null;
+  let nextId = 1;
+  const pending = new Map();
+  let rl = null;
+  let initialized = false;
+  let toolSchemas = [];
+
+  function failAllPending(error) {
+    for (const [, p] of pending) { clearTimeout(p.timer); p.reject(error); }
+    pending.clear();
+  }
+
+  function ensureProc() {
+    if (proc) return proc;
+    proc = ctx.subprocess.spawn({
+      argv: [python, script],
+      cwd,
+      stdio: { stdin: 'pipe', stdout: 'pipe', stderr: 'inherit' },
+      graceMs,
+    });
+    rl = readline.createInterface({ input: proc.stdout, crlfDelay: Infinity });
+    rl.on('line', (line) => {
+      let msg;
+      try { msg = JSON.parse(line); } catch { return; }
+      if (msg && msg.id != null && pending.has(msg.id)) {
+        const { resolve, reject, timer } = pending.get(msg.id);
+        pending.delete(msg.id);
+        clearTimeout(timer);
+        if (msg.error) reject(new Error(msg.error.message ?? 'JSON-RPC error'));
+        else resolve(msg.result);
+      }
+    });
+    proc.done.catch(() => {
+      failAllPending(new Error('consensus-pipeline python process exited'));
+      proc = null; rl = null; initialized = false;
+    });
+    return proc;
+  }
+
+  function request(method, params = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
+    return new Promise((resolve, reject) => {
+      let p;
+      try { p = ensureProc(); } catch (error) { reject(error); return; }
+      const id = nextId++;
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        reject(new Error('consensus-pipeline JSON-RPC timeout: ' + method));
+      }, timeoutMs);
+      pending.set(id, { resolve, reject, timer });
+      try {
+        p.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+      } catch (error) {
+        clearTimeout(timer); pending.delete(id); reject(error);
+      }
+    });
+  }
+
+  async function callTool(toolName, args) {
+    const res = await request('tools/call', { name: toolName, arguments: args ?? {} }, TOOL_CALL_TIMEOUT_MS);
+    const block = res?.content?.[0];
+    if (block?.type === 'text') return block.text;
+    return JSON.stringify(res ?? {}, null, 2);
+  }
+
+  async function ensureInitialized() {
+    if (initialized) return;
+    await request('initialize', {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 'dsh-consensus-pipeline', version: '0.1.0' },
+    });
+    const list = await request('tools/list', {});
+    toolSchemas = list?.tools ?? [];
+    initialized = true;
+  }
+
+  ctx.systemPrompt?.section?.({
+    name: 'tool:consensus-pipeline',
+    order: 100,
+    text: 'Consensus Pipeline tools run the academic research pipeline (search → debate → report). Important: when the user expresses a research intent — even a vague one — do NOT ask them to finalize a topic upfront. First run a requirement research interview in conversation: ask about core questions, discipline/scope, time range, methodology, quality standard, and deliverable, refining the topic through this multi-turn dialogue. Then call run_requirement_research with the refined topic and a free-text summary of what you gathered to produce the working-group configuration, then call run_full_pipeline with that topic to start the pipeline. Use get_pipeline_status to check progress and locate output files. A web control panel is served at /consensus-pipeline/ on this host.',
+  });
+
+  (async () => {
+    try {
+      await ensureInitialized();
+    } catch (e) {
+      console.error('[dsh-consensus-pipeline] discovery failed: ' + e.message);
+      return;
+    }
+    for (const t of toolSchemas) {
+      const toolName = t.name;
+      const description = t.description ?? ('Consensus pipeline tool: ' + toolName);
+      const isFullPipeline = toolName === 'run_full_pipeline';
+
+      const def = {
+        name: toolName,
+        description,
+        parameters: t.inputSchema ?? { type: 'object', properties: {} },
+        output: {
+          schema: {
+            type: 'object',
+            additionalProperties: false,
+            properties: { text: { type: 'string' }, jobId: { type: 'string' } },
+            required: ['text'],
+          },
+          render: (_args, value) => [{ type: 'text', text: value?.text ?? '' }],
+        },
+        async execute(args, exec) {
+          if (!isFullPipeline) return { text: await callTool(toolName, args) };
+          const jobs = ctx.get('jobs');
+          const start = await callTool(toolName, args);
+          let jobId;
+          try { jobId = JSON.parse(start)?.job_id; } catch { jobId = undefined; }
+          if (!jobs || !jobId) return { text: start };
+          const started = jobs.start({
+            kind: 'consensus-pipeline',
+            label: ('run_full_pipeline ' + (args?.topic ?? '')).trim(),
+            ...(exec?.agent ? { owner: exec.agent } : {}),
+            run: () => {
+              const done = (async () => {
+                for (;;) {
+                  const st = await callTool('get_job_status', { job_id: jobId });
+                  let parsed = {};
+                  try { parsed = JSON.parse(st); } catch {}
+                  if (parsed.status === 'done' || parsed.status === 'error') {
+                    return { status: 'completed', detail: parsed.status, text: parsed.summary ?? parsed.error ?? '' };
+                  }
+                  await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+                }
+              })();
+              return {
+                cancel: () => {},
+                done: done.then((o) => ({ status: o.status, detail: o.detail })),
+                readOutput: async () => {
+                  try {
+                    const st = await callTool('get_job_status', { job_id: jobId });
+                    let parsed = {};
+                    try { parsed = JSON.parse(st); } catch {}
+                    return ('[' + (parsed.status ?? 'running') + '] ' + (parsed.summary ?? '')).slice(0, 800) || '[running] consensus pipeline executing...';
+                  } catch { return '[running] consensus pipeline executing...'; }
+                },
+              };
+            },
+          });
+          return { text: 'started background job ' + started + ' — poll get_job_status for progress', jobId: started };
+        },
+        presentCall(args) {
+          const topic = (args && args.topic) ? String(args.topic) : '';
+          return {
+            card: 'generic',
+            title: toolName + (topic ? (' · ' + topic) : ''),
+            kind: 'execute',
+            rawInput: topic || undefined,
+            content: [{ type: 'text', text: 'Consensus Pipeline 控制台：/consensus-pipeline/' }],
+          };
+        },
+        presentResult(_args, result) {
+          const v = (result && result.value) || {};
+          const text = typeof v.text === 'string' ? v.text : '';
+          const body = (text ? text.slice(0, 1500) + '\n\n' : '') + '控制台：/consensus-pipeline/';
+          return {
+            card: 'generic',
+            title: toolName + ' 完成',
+            content: [{ type: 'text', text: body }],
+          };
+        },
+      };
+
+      disposers.push(ctx.tools.register(def));
+    }
+    console.error('[dsh-consensus-pipeline] registered ' + toolSchemas.length + ' tools');
+  })();
+
+  try {
+    registerWebPanel(ctx, { cwd, callTool, disposers, python });
+  } catch (e) {
+    console.error('[dsh-consensus-pipeline] web panel registration failed: ' + (e?.message ?? e));
+  }
+
+  return () => {
+    for (const d of disposers) { try { d(); } catch {} }
+    if (rl) rl.close();
+    if (proc) proc.terminate();
+  };
+}
+
+function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', (c) => { data += c; });
+    req.on('end', () => resolve(data));
+    req.on('error', reject);
+  });
+}
+
+function json(res, status, obj) {
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify(obj));
+}
+
+async function findReport(root, topic) {
+  const tag = topic.slice(0, 20).replace(/[\/\\\s:：]+/g, '_');
+  const needles = [tag, topic.slice(0, 8)].filter((n) => n.length > 0);
+  const hits = [];
+  for (const dirName of ['v2_run_output', 'run_output']) {
+    const dir = join(root, dirName);
+    let entries = [];
+    try { entries = await readdir(dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const runDir = join(dir, e.name);
+      if (!needles.some((n) => e.name.includes(n))) continue;
+      for (const fname of ['final_report_validated.md', 'final_report.md', 'consensus_report.md', 'report.md']) {
+        const p = join(runDir, fname);
+        try {
+          const st = await stat(p);
+          hits.push({ path: p, mtime: st.mtimeMs, name: dirName + '/' + e.name + '/' + fname });
+          break;
+        } catch {}
+      }
+    }
+  }
+  hits.sort((a, b) => b.mtime - a.mtime);
+  if (hits.length === 0) return null;
+  try {
+    const content = await readFile(hits[0].path, 'utf8');
+    return { name: hits[0].name, content };
+  } catch { return null; }
+}
+
+// ── Seed paper management helpers ─────────────────────────────────────────
+function seedManifestPath(cwd) { return join(cwd, 'seed_papers', 'manifest.json'); }
+
+function readSeedManifest(cwd) {
+  try {
+    const d = JSON.parse(readFileSync(seedManifestPath(cwd), 'utf8'));
+    return d && typeof d === 'object' ? d : {};
+  } catch { return {}; }
+}
+
+function writeSeedManifest(cwd, data) {
+  writeFileSync(seedManifestPath(cwd), JSON.stringify(data, null, 2), 'utf8');
+}
+
+async function listSeedPdf(cwd) {
+  const dir = join(cwd, 'seed_papers');
+  try {
+    const entries = await readdir(dir);
+    return entries.filter((n) => n.toLowerCase().endsWith('.pdf'));
+  } catch { return []; }
+}
+
+function runSeedImport(cwd, python) {
+  const code = 'import json; from paper_importer import import_seed_papers; print(json.dumps(import_seed_papers("seed_papers"), ensure_ascii=False))';
+  const r = spawnSync(python, ['-c', code], { cwd, encoding: 'utf8', timeout: 120000 });
+  if (r.status !== 0) return null;
+  try { return JSON.parse(r.stdout); } catch { return null; }
+}
+
+function registerWebPanel(ctx, { cwd, callTool, disposers, python }) {
+  const webServer = ctx.get('webServer');
+  if (!webServer) {
+    console.error('[dsh-consensus-pipeline] webServer service unavailable — web panel skipped');
+    return;
+  }
+
+  const route = webServer.register({
+    kind: 'prefix',
+    path: '/consensus-pipeline',
+    handler: async (req, res) => {
+      let url;
+      try { url = new URL(req.url ?? '/', 'http://x'); } catch { url = new URL('/', 'http://x'); }
+      const pathname = url.pathname;
+
+      if (pathname === '/consensus-pipeline' || pathname === '/consensus-pipeline/' || pathname === '/consensus-pipeline/index.html') {
+        try {
+          const html = await readFile(join(cwd, 'panel.html'), 'utf8');
+          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' });
+          res.end(html);
+        } catch {
+          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+          res.end('<!DOCTYPE html><meta charset="utf-8"><title>Consensus Pipeline</title><h1>Consensus Pipeline</h1><p>panel.html 未找到（应位于项目根目录）。</p>');
+        }
+        return;
+      }
+
+      if (pathname === '/consensus-pipeline/api/run' && req.method === 'POST') {
+        try {
+          const body = await readRequestBody(req);
+          let p = {};
+          try { p = JSON.parse(body || '{}'); } catch {}
+          const topic = String(p.topic ?? '').trim();
+          if (!topic) return json(res, 400, { error: 'topic is required' });
+          const text = await callTool('run_full_pipeline', {
+            topic, lang: p.lang ?? 'zh', use_v2: p.use_v2 !== false, max_rounds: p.max_rounds ?? 8,
+          });
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(text);
+        } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
+        return;
+      }
+
+      if (pathname === '/consensus-pipeline/api/status') {
+        try {
+          const jobId = url.searchParams.get('job_id') ?? '';
+          const text = await callTool('get_job_status', { job_id: jobId });
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(text);
+        } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
+        return;
+      }
+
+      if (pathname === '/consensus-pipeline/api/pipeline-status') {
+        try {
+          const text = await callTool('get_pipeline_status', {});
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
+          res.end(text);
+        } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
+        return;
+      }
+
+      if (pathname === '/consensus-pipeline/api/report') {
+        try {
+          const topic = url.searchParams.get('topic') ?? '';
+          const found = await findReport(cwd, topic);
+          if (!found) return json(res, 404, { error: 'report not found (still generating?)' });
+          json(res, 200, found);
+        } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
+        return;
+      }
+
+      if (pathname === '/consensus-pipeline/api/seed-list') {
+        try {
+          const manifest = readSeedManifest(cwd);
+          const pdfs = await listSeedPdf(cwd);
+          const byFile = {};
+          for (const p of (manifest.papers || [])) byFile[p.file] = p.weight || manifest.default_weight || 'core';
+          const papers = pdfs.map((file) => ({
+            file,
+            weight: byFile[file] || manifest.default_weight || 'core',
+          }));
+          json(res, 200, { papers, default_weight: manifest.default_weight || 'core' });
+        } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
+        return;
+      }
+
+      if (pathname === '/consensus-pipeline/api/seed-upload' && req.method === 'POST') {
+        try {
+          const filename = (url.searchParams.get('filename') || '').replace(/[\\/:*?"<>|]/g, '_').trim();
+          if (!filename) return json(res, 400, { error: 'filename is required' });
+          const chunks = [];
+          for await (const c of req) chunks.push(c);
+          const buf = Buffer.concat(chunks);
+          const dir = join(cwd, 'seed_papers');
+          try { await stat(dir); } catch { await mkdir(dir, { recursive: true }); }
+          writeFileSync(join(dir, filename), buf);
+          const imported = runSeedImport(cwd, python);
+          const manifest = readSeedManifest(cwd);
+          if (!(manifest.papers || []).some((p) => p.file === filename)) {
+            manifest.papers = manifest.papers || [];
+            manifest.papers.push({ file: filename, weight: manifest.default_weight || 'core' });
+            writeSeedManifest(cwd, manifest);
+          }
+          const meta = (imported || []).find((p) => (p.file_name || p.file) === filename) || null;
+          json(res, 200, { ok: true, filename, meta });
+        } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
+        return;
+      }
+
+      if (pathname === '/consensus-pipeline/api/seed-weight' && req.method === 'POST') {
+        try {
+          const body = await readRequestBody(req);
+          let p = {};
+          try { p = JSON.parse(body || '{}'); } catch {}
+          const filename = String(p.file ?? '').trim();
+          const weight = String(p.weight ?? '').trim();
+          if (!filename || !['core', 'anchor', 'normal'].includes(weight)) {
+            return json(res, 400, { error: 'file and weight (core/anchor/normal) are required' });
+          }
+          const manifest = readSeedManifest(cwd);
+          let found = false;
+          for (const item of (manifest.papers || [])) {
+            if (item.file === filename) { item.weight = weight; found = true; break; }
+          }
+          if (!found) {
+            manifest.papers = manifest.papers || [];
+            manifest.papers.push({ file: filename, weight });
+          }
+          writeSeedManifest(cwd, manifest);
+          json(res, 200, { ok: true, filename, weight });
+        } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
+        return;
+      }
+
+      res.writeHead(404);
+      res.end('not found');
+    },
+  });
+  disposers.push(route);
+  // Inject a floating "控制台" button + iframe panel into the DSH web shell,
+  // so the panel appears INSIDE the DSH interface (not a separate tab).
+  disposers.push(webServer.tapIndex(injectFloatPanel));
+}
+
+const FLOAT_PANEL_HTML = `<style>
+.cp-fab{position:fixed;right:18px;bottom:18px;z-index:999999;background:#4f8cff;color:#fff;border:none;border-radius:999px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.45);font-family:system-ui,sans-serif;}
+.cp-fab:hover{background:#3b74d9;}
+.cp-panel{position:fixed;right:18px;bottom:68px;z-index:999998;width:480px;max-width:92vw;height:72vh;max-height:760px;background:#0f1115;border:1px solid #262b36;border-radius:12px;box-shadow:0 10px 34px rgba(0,0,0,.55);display:none;overflow:hidden;}
+.cp-panel.open{display:block;}
+.cp-panel iframe{width:100%;height:100%;border:0;display:block;}
+</style>
+<button id="cp-fab" class="cp-fab" type="button">📊 控制台</button>
+<div id="cp-panel" class="cp-panel"><iframe data-src="/consensus-pipeline/" title="Consensus Pipeline"></iframe></div>
+<script>
+(function(){var b=document.getElementById("cp-fab");var p=document.getElementById("cp-panel");var f=p?p.querySelector("iframe"):null;if(b&&p){b.addEventListener("click",function(){var o=p.classList.toggle("open");if(o&&f&&!f.src){f.src=f.getAttribute("data-src");}b.textContent=o?"✕ 关闭":"📊 控制台";});}})();
+</script>`;
+
+function injectFloatPanel(html) {
+  if (typeof html !== 'string') return html;
+  const marker = '</body>';
+  const idx = html.lastIndexOf(marker);
+  if (idx === -1) return html + FLOAT_PANEL_HTML;
+  return html.slice(0, idx) + FLOAT_PANEL_HTML + html.slice(idx);
+}

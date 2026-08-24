@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Consensus Pipeline 控制台</title>
+<style>
+:root { --bg:#0f1115; --panel:#171a21; --border:#262b36; --text:#e6e8ec; --muted:#8b93a1; --accent:#4f8cff; --ok:#3fb96f; --err:#e5534b; --warn:#e0a63c; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); }
+header { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
+header h1 { font-size:17px; margin:0; font-weight:600; }
+header .sub { color:var(--muted); font-size:12px; }
+main { max-width:1080px; margin:0 auto; padding:20px; display:grid; gap:16px; }
+.card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; }
+.row { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+.field { display:flex; flex-direction:column; gap:6px; flex:1; min-width:180px; }
+.field label { font-size:12px; color:var(--muted); }
+input, select, textarea { background:#0c0e12; border:1px solid var(--border); color:var(--text); border-radius:7px; padding:9px 11px; font-size:14px; width:100%; }
+input:focus, select:focus, textarea:focus { outline:none; border-color:var(--accent); }
+textarea { resize:vertical; font-family:inherit; line-height:1.5; }
+button { background:var(--accent); color:#fff; border:none; border-radius:7px; padding:10px 18px; font-size:14px; cursor:pointer; font-weight:600; }
+button:disabled { opacity:.5; cursor:default; }
+button.secondary { background:transparent; border:1px solid var(--border); color:var(--text); }
+.badge { display:inline-flex; align-items:center; gap:7px; padding:6px 12px; border-radius:99px; font-size:13px; font-weight:600; }
+.badge.running { background:rgba(224,166,60,.15); color:var(--warn); }
+.badge.done { background:rgba(63,185,111,.15); color:var(--ok); }
+.badge.error { background:rgba(229,83,75,.15); color:var(--err); }
+.badge.idle { background:rgba(139,147,161,.12); color:var(--muted); }
+.dot { width:8px; height:8px; border-radius:50%; background:currentColor; }
+.dot.running { animation:pulse 1.1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+pre.log { background:#0a0c10; border:1px solid var(--border); border-radius:8px; padding:12px; font-size:12px; line-height:1.55; max-height:340px; overflow:auto; white-space:pre-wrap; word-break:break-word; color:#c9d1d9; margin:12px 0 0; }
+.report { font-size:14px; line-height:1.7; }
+.report h1,.report h2,.report h3,.report h4 { margin:18px 0 8px; line-height:1.35; }
+.report h1 { font-size:20px; } .report h2 { font-size:17px; } .report h3 { font-size:15px; }
+.report pre { background:#0a0c10; border:1px solid var(--border); border-radius:8px; padding:12px; overflow:auto; font-size:12px; }
+.report code { background:#22272e; padding:1px 5px; border-radius:4px; font-size:12px; }
+.report pre code { background:none; padding:0; }
+.report table { border-collapse:collapse; width:100%; margin:12px 0; }
+.report th,.report td { border:1px solid var(--border); padding:6px 10px; text-align:left; font-size:13px; }
+.report th { background:#1a1f29; }
+.report blockquote { border-left:3px solid var(--accent); margin:12px 0; padding:2px 14px; color:var(--muted); }
+.hist { list-style:none; margin:0; padding:0; }
+.hist li { display:flex; justify-content:space-between; gap:10px; padding:9px 4px; border-bottom:1px solid var(--border); font-size:13px; }
+.hist li:last-child { border-bottom:none; }
+.hist .ph { color:var(--muted); font-size:12px; }
+.hist button { padding:4px 10px; font-size:12px; }
+.hidden { display:none; }
+h3.section { margin:0 0 10px; font-size:14px; }
+.ov { display:flex; gap:10px; flex-wrap:wrap; }
+.ov-box { flex:1; min-width:120px; background:#0c0e12; border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center; }
+.ov-val { font-size:20px; font-weight:700; }
+.ov-lab { font-size:12px; color:var(--muted); margin-top:4px; }
+.ov-detail { margin-top:10px; font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Consensus Pipeline</h1>
+  <span class="sub">学术文献检索 → 辩论 → 报告 控制台</span>
+</header>
+<main>
+  <section class="card">
+    <h3 class="section">Consensus Pipeline 总览</h3>
+    <div id="overview" class="ov">加载中…</div>
+  </section>
+
+  <section class="card">
+    <h3 class="section">种子论文管理</h3>
+    <div class="row">
+      <input type="file" id="seedFile" accept=".pdf" multiple style="flex:2">
+      <button id="seedUploadBtn">上传并导入</button>
+    </div>
+    <div class="ph" style="margin-top:8px">📌 大量论文请直接放进项目根目录的 <code>seed_papers/</code> 文件夹，刷新面板即可；少量单篇用上面的上传。</div>
+    <ul class="hist" id="seedList" style="margin-top:10px"><li style="color:var(--muted)">加载中…</li></ul>
+  </section>
+
+  <section class="card">
+    <h3 class="section">启动流程（需求调研）</h3>
+    <div class="ph" style="margin-bottom:8px">💬 在 DSH 聊天里对 agent 说出你的研究方向（可以很粗略，例如「我想研究用能权交易政策对工业企业绿色转型的影响」）。</div>
+    <div class="ph">agent 会先进行<b>需求调研</b>（多轮访谈：核心问题、学科范围、时间范围、方法论、质量标准、成果），与你一起确定研究主题和工作组配置，然后自动启动完整流程。</div>
+    <div class="ph" style="margin-top:8px">本面板仅用于：监控进度、管理种子论文、查看报告。</div>
+  </section>
+
+  <section class="card">
+    <h3 class="section">运行中的任务 <span class="sub" id="jobsHint" style="float:right;font-weight:400">每 10 秒自动刷新</span></h3>
+    <ul class="hist" id="jobsList"><li style="color:var(--muted)">加载中…</li></ul>
+  </section>
+
+  <section class="card hidden" id="reportCard">
+    <h3 class="section"><span id="reportTitle">报告</span> <button class="secondary" id="copyReport" style="float:right">复制全文</button></h3>
+    <div class="report" id="report"></div>
+  </section>
+
+  <section class="card">
+    <h3 class="section">历史运行</h3>
+    <ul class="hist" id="hist"><li style="color:var(--muted)">加载中…</li></ul>
+  </section>
+</main>
+<script>
+(function(){
+  var reportCard = document.getElementById('reportCard');
+  var report = document.getElementById('report');
+  var reportTitle = document.getElementById('reportTitle');
+  var copyBtn = document.getElementById('copyReport');
+  var hist = document.getElementById('hist');
+  var jobsList = document.getElementById('jobsList');
+  var seedFile = document.getElementById('seedFile');
+  var seedUploadBtn = document.getElementById('seedUploadBtn');
+  var seedList = document.getElementById('seedList');
+
+  var currentTopic = '';
+
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function mdToHtml(src){
+    var lines = String(src||'').split(/\r?\n/);
+    var out = [];
+    var inCode = false, inList = false, inQuote = false;
+    function closeList(){ if(inList){ out.push('</ul>'); inList=false; } }
+    function closeQuote(){ if(inQuote){ out.push('</blockquote>'); inQuote=false; } }
+    for(var i=0;i<lines.length;i++){
+      var line = lines[i];
+      if(/^\s*```/.test(line)){ closeList(); closeQuote(); if(inCode){ out.push('</pre>'); inCode=false; } else { out.push('<pre>'); inCode=true; } continue; }
+      if(inCode){ out.push(esc(line)); continue; }
+      var m;
+      if(/^\s*$/.test(line)){ closeList(); closeQuote(); continue; }
+      m = line.match(/^(#{1,4})\s+(.*)$/);
+      if(m){ closeList(); closeQuote(); var lv=m[1].length; out.push('<h'+lv+'>'+esc(m[2])+'</h'+lv+'>'); continue; }
+      m = line.match(/^\s*[-*]\s+(.*)$/);
+      if(m){ closeQuote(); if(!inList){ out.push('<ul>'); inList=true; } out.push('<li>'+esc(m[1])+'</li>'); continue; }
+      m = line.match(/^\s*(\d+)\.\s+(.*)$/);
+      if(m){ closeQuote(); if(!inList){ out.push('<ol>'); inList=true; } out.push('<li>'+esc(m[2])+'</li>'); continue; }
+      if(/^\s*>\s?/.test(line)){ closeList(); if(!inQuote){ out.push('<blockquote>'); inQuote=true; } out.push(esc(line.replace(/^\s*>\s?/,''))); continue; }
+      closeList(); closeQuote();
+      var t = esc(line).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>');
+      out.push('<p>'+t+'</p>');
+    }
+    closeList(); closeQuote(); if(inCode) out.push('</pre>');
+    return out.join('\n');
+  }
+
+  function loadReport(){
+    if(!currentTopic) return;
+    fetch('/consensus-pipeline/api/report?topic=' + encodeURIComponent(currentTopic))
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d && d.content){
+          reportCard.classList.remove('hidden');
+          report.innerHTML = mdToHtml(d.content);
+          reportTitle.textContent = '报告（' + d.name + '）';
+        }
+      })
+      .catch(function(){});
+  }
+
+  copyBtn.addEventListener('click', function(){
+    var t = report.innerText || '';
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(t); }
+    else { var ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+    copyBtn.textContent = '已复制';
+    setTimeout(function(){ copyBtn.textContent='复制全文'; }, 1200);
+  });
+
+  function loadHistory(){
+    fetch('/consensus-pipeline/api/pipeline-status')
+      .then(function(r){ return r.json(); })
+      .then(function(s){
+        var runs = s.runs || [];
+        if(!runs.length){ hist.innerHTML = '<li style="color:var(--muted)">暂无历史运行</li>'; return; }
+        hist.innerHTML = '';
+        runs.forEach(function(ru){
+          var li = document.createElement('li');
+          var left = document.createElement('div');
+          left.innerHTML = '<div>'+esc(ru.run)+'</div><div class="ph">阶段 '+esc((ru.phases_completed||[]).join(', '))+' · 当前 '+esc(ru.current_phase||'-')+'</div>';
+          var btn = document.createElement('button');
+          btn.className = 'secondary'; btn.textContent = '查看报告';
+          btn.addEventListener('click', function(){
+            currentTopic = ru.run.replace(/^\d{8}_/,'');
+            reportCard.classList.remove('hidden');
+            loadReport();
+            window.scrollTo({ top: document.getElementById('reportCard').offsetTop, behavior:'smooth' });
+          });
+          li.appendChild(left); li.appendChild(btn);
+          hist.appendChild(li);
+        });
+      })
+      .catch(function(){ hist.innerHTML = '<li style="color:var(--muted)">加载失败</li>'; });
+  }
+
+  function loadJobs(){
+    fetch('/consensus-pipeline/api/status')
+      .then(function(r){ return r.json(); })
+      .then(function(s){
+        var jobs = s.jobs || [];
+        if(!jobs.length){ jobsList.innerHTML = '<li style="color:var(--muted)">暂无运行任务</li>'; return; }
+        jobsList.innerHTML = '';
+        jobs.forEach(function(j){
+          var st = j.status;
+          var stText = st==='running' ? '运行中' : (st==='done' ? '完成' : (st==='error' ? '出错' : st));
+          var stCls = st==='running' ? 'running' : (st==='done' ? 'done' : (st==='error' ? 'error' : 'idle'));
+          var li = document.createElement('li');
+          var left = document.createElement('div');
+          left.innerHTML = '<div>'+esc(j.topic)+'</div><div class="ph">'+esc(j.job_id)+' · <span class="badge '+stCls+'"><span class="dot'+(st==='running'?' running':'')+'"></span>'+esc(stText)+'</span></div>';
+          li.appendChild(left);
+          jobsList.appendChild(li);
+        });
+      })
+      .catch(function(){ jobsList.innerHTML = '<li style="color:var(--muted)">加载失败</li>'; });
+  }
+
+  function statBox(label, value){
+    return '<div class="ov-box"><div class="ov-val">'+esc(value)+'</div><div class="ov-lab">'+esc(label)+'</div></div>';
+  }
+
+  function loadOverview(){
+    Promise.all([
+      fetch('/consensus-pipeline/api/status').then(function(r){ return r.json(); }),
+      fetch('/consensus-pipeline/api/pipeline-status').then(function(r){ return r.json(); })
+    ]).then(function(res){
+      var jobs = res[0].jobs || [];
+      var st = res[1] || {};
+      var running = jobs.filter(function(j){ return j.status === 'running'; });
+      var latestRun = (st.runs || []).slice(-1)[0];
+      var ov = document.getElementById('overview');
+      if(!ov) return;
+      var html = statBox('运行中任务', running.length + ' 个');
+      if(latestRun){
+        var depts = (latestRun.phase5_depts_completed || []).length;
+        html += statBox('最新运行阶段', 'Phase ' + (latestRun.current_phase || '-') + ' · ' + depts + '/11');
+      } else {
+        html += statBox('最新运行阶段', '无');
+      }
+      html += statBox('API Key', st.api_key_configured ? '已配置' : '未配置');
+      var detail = '';
+      if(running.length){ detail = '运行中: ' + running.map(function(j){ return j.topic; }).join('、'); }
+      if(latestRun){ detail += (detail ? '　' : '') + '最新: ' + latestRun.run + '（' + (latestRun.current_dept || '-') + '）'; }
+      ov.innerHTML = html + (detail ? '<div class="ov-detail">' + esc(detail) + '</div>' : '');
+    }).catch(function(){
+      var ov = document.getElementById('overview');
+      if(ov) ov.innerHTML = '<span style="color:var(--muted)">加载失败</span>';
+    });
+  }
+
+  function weightLabel(w){
+    return w === 'core' ? '⭐核心' : (w === 'anchor' ? '🔒锚点' : '普通');
+  }
+
+  function loadSeeds(){
+    fetch('/consensus-pipeline/api/seed-list')
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var papers = d.papers || [];
+        if(!papers.length){ seedList.innerHTML = '<li style="color:var(--muted)">暂无种子论文（seed_papers/ 为空）</li>'; return; }
+        seedList.innerHTML = '';
+        papers.forEach(function(p){
+          var li = document.createElement('li');
+          var left = document.createElement('div');
+          left.innerHTML = '<div>'+esc(p.file)+'</div><div class="ph">'+esc(weightLabel(p.weight))+'</div>';
+          var sel = document.createElement('select');
+          sel.style.cssText = 'width:120px;padding:4px 6px;font-size:12px;background:#0c0e12;border:1px solid #262b36;color:#e6e8ec;border-radius:6px';
+          ['core','anchor','normal'].forEach(function(w){
+            var o = document.createElement('option');
+            o.value = w; o.textContent = weightLabel(w);
+            if(w === p.weight) o.selected = true;
+            sel.appendChild(o);
+          });
+          sel.addEventListener('change', function(){
+            fetch('/consensus-pipeline/api/seed-weight', {
+              method:'POST', headers:{'content-type':'application/json'},
+              body: JSON.stringify({ file:p.file, weight:sel.value })
+            }).then(function(r){ return r.json(); }).then(loadSeeds).catch(function(){});
+          });
+          li.appendChild(left); li.appendChild(sel);
+          seedList.appendChild(li);
+        });
+      })
+      .catch(function(){ seedList.innerHTML = '<li style="color:var(--muted)">加载失败</li>'; });
+  }
+
+  seedUploadBtn.addEventListener('click', function(){
+    var files = seedFile.files;
+    if(!files || !files.length){ return; }
+    seedUploadBtn.disabled = true;
+    var total = files.length, done = 0;
+    function finish(){ done++; if(done >= total){ seedFile.value=''; seedUploadBtn.disabled = false; loadSeeds(); } }
+    for(var i=0;i<files.length;i++){
+      (function(f){
+        fetch('/consensus-pipeline/api/seed-upload?filename=' + encodeURIComponent(f.name), { method:'POST', body: f })
+          .then(function(r){ return r.json(); }).then(finish).catch(finish);
+      })(files[i]);
+    }
+  });
+
+  loadSeeds();
+  loadJobs();
+  loadOverview();
+  setInterval(function(){ loadJobs(); loadOverview(); }, 10000);
+  loadHistory();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "name": "@deepseek-ai/dsh-consensus-pipeline",
+  "description": "Consensus Pipeline native tool plugin: spawns the Python MCP server and exposes research-pipeline tools with progress + report preview",
+  "version": "0.2.0",
+  "type": "module",
+  "main": "index.js",
+  "license": "MIT"
+}
