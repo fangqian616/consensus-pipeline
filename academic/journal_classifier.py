@@ -24,12 +24,13 @@ def _level_from_easyscholar(rank_data: Dict) -> str:
     """
     Infer S/A/B/C/D tier from easyScholar response data.
 
-    Rules:
-    - SCI/SSCI Q1 + IF>=5 → S
-    - SCI/SSCI Q1 or CAS Tier 1 → A
-    - CSSCI/CSCD or CAS Tier 2 → B
-    - Other ranking data present → C
-    - No data → D
+    v5.0 规则（试验验证过，废弃被引百分位）:
+    - SCI/SSCI JCR Q1 + IF>=10 → S
+    - 中科院 1区 (sciUp="1区") → S
+    - SCI/SSCI Q1 或 中科院 2区 → A
+    - CSSCI/CSCD 或 JCR Q2 → B
+    - 其他有等级数据(含 3区/4区) → C
+    - 无数据 → D (classify_dynamic 会落到 U)
     """
     if not rank_data:
         return "D"
@@ -60,11 +61,11 @@ def _level_from_easyscholar(rank_data: Dict) -> str:
     if cas_warning and cas_warning != "无":  # "无" = "none" in easyScholar API response; must keep Chinese
         return "D"
 
-    if "Q1" in str(sci_jcr) and sci_if >= 5.0:
+    if "Q1" in str(sci_jcr) and sci_if >= 10.0:
         return "S"
-    if "1区" in str(cas_upgrade):  # "1区" = CAS Tier 1 in easyScholar API response; must keep Chinese
+    if "1区" in str(cas_upgrade):  # "1区" = CAS Tier 1
         return "S"
-    if "Q1" in str(sci_jcr) or "2区" in str(cas_upgrade):  # "2区" = CAS Tier 2 in easyScholar API response
+    if "Q1" in str(sci_jcr) or "2区" in str(cas_upgrade):
         return "A"
     if cssci or cscd or "Q2" in str(sci_jcr):
         return "B"
