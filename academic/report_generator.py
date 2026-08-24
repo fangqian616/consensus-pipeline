@@ -14,7 +14,7 @@ import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
-from .search_engine import PaperCandidate
+from .search_engine import PaperCandidate, is_core_seed
 from .cross_validator import ClusterResult, ValidationResult
 from .visualizer import ChartConfig
 
@@ -85,6 +85,15 @@ class ReportGenerator:
             fact_check_summary, methodology_reviews,
             debate_outputs,
         )
+
+        # v5.2: 程序部(代码)+教程部产出并入交付报告正文（此前仅在 internal_doc，导致交付报告缺代码/教程）
+        _extra = []
+        if programming_output:
+            _extra.append("## 程序部产出（技术选型与代码骨架）\n\n" + programming_output.strip())
+        if tutorial_output:
+            _extra.append("## 教程部产出\n\n" + tutorial_output.strip())
+        if _extra:
+            final_content = final_content.rstrip() + "\n\n---\n\n" + "\n\n".join(_extra) + "\n"
 
         # AI refinement to remove fluff (only needed in template mode; review mode is written by AI directly)
         # if self.llm_call_fn:
@@ -162,7 +171,7 @@ class ReportGenerator:
         sections.append(self._build_final_top_papers(s_papers, a_papers))
         sections.append(self._build_final_gaps(papers, consensus_points))
         sections.append(self._build_final_limitations(papers))
-        sections.append(self._build_final_references(s_papers, a_papers))
+        sections.append(self._build_final_references(s_papers, a_papers, papers))
         sections.append(self._build_final_footer(now, fact_check_summary))
         return "\n\n".join(sections)
 
@@ -179,8 +188,8 @@ class ReportGenerator:
         debate_outputs: Optional[Dict[str, str]] = None,
     ) -> str:
         """Use LLM to write academic review report based on paper metadata"""
-        # Build paper list for AI reference — only pass S/A/B-tier, not C-tier
-        qualified = [p for p in papers if p.quality_level in ("S", "A", "B")]
+        # Build paper list for AI reference — S/A/B-tier + 用户种子论文(即使U级也强制包含)
+        qualified = [p for p in papers if p.quality_level in ("S", "A", "B") or is_core_seed(p)]
         paper_list = self._format_paper_list(qualified)
         year_dist = self._compute_year_distribution(qualified)
         method_dist = self._compute_method_distribution(qualified)
@@ -368,9 +377,15 @@ class ReportGenerator:
 （列出所有S级和A级论文，按S/A/B分组，GB/T 7714格式）"""
 
         try:
-            # Review needs long output, use dedicated call
-            report = self._llm_call_long(system_prompt, user_prompt, temperature=0.25)
+            # Review needs long output; flash may return short occasionally → retry up to 3 times
+            report = ""
+            for _attempt in range(3):
+                report = self._llm_call_long(system_prompt, user_prompt, temperature=0.25)
+                if report and len(report) > 500:
+                    break
             if report and len(report) > 500:
+                # Normalize drifted section numbers (LLM often restarts at "一")
+                report = self._renumber_sections(report)
                 # Rebuild references with paper metadata, ensure citation numbers match
                 report = self._rebuild_references(report, qualified)
 
@@ -390,14 +405,38 @@ class ReportGenerator:
         except Exception:
             pass
 
-        # Fallback to template when LLM fails
+        # Fallback to template when LLM fails (after retries)
         sections = []
         sections.append(self._build_final_title(topic, now))
         sections.append(self._build_final_summary(topic, papers, s_papers, a_papers))
         sections.append(self._build_final_findings(s_papers, consensus_points))
         sections.append(self._build_final_trends(papers))
-        sections.append(self._build_final_references(s_papers, a_papers))
-        return "\n\n".join(sections)
+        sections.append(self._build_final_references(s_papers, a_papers, papers))
+        fallback_report = "\n\n".join(sections)
+        # 重排编号（fallback 子函数硬编码编号会跳号，如一/三/六）
+        return self._renumber_sections(fallback_report)
+
+    @staticmethod
+    def _renumber_sections(report: str) -> str:
+        """Normalize top-level Chinese section numbering to be continuous.
+
+        LLM long-form generation often drifts section numbers (e.g. writes
+        "一、研究概况" then "一、核心发现" instead of "三、核心发现"). Renumber
+        top-level "## N、" sections by occurrence order so the final report is
+        consistently numbered.
+        """
+        import re
+        cn = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"]
+        counter = 0
+        pattern = re.compile(r'^(##\s*)[一二三四五六七八九十]+([、.．])\s*(.*)$', re.MULTILINE)
+
+        def _repl(m):
+            nonlocal counter
+            counter += 1
+            num = cn[counter - 1] if counter <= len(cn) else str(counter)
+            return f"{m.group(1)}{num}{m.group(2)}{m.group(3)}"
+
+        return pattern.sub(_repl, report)
 
     @staticmethod
     def _rebuild_references(report: str, papers: List[PaperCandidate]) -> str:
@@ -802,7 +841,15 @@ class ReportGenerator:
             # Check relevance
             text = (p.title + " " + (p.journal or "")).lower()
             is_irrelevant = any(kw in text for kw in irrelevant_markers)
-            marker = " ⚠️可能不相关" if is_irrelevant else ""
+            if is_core_seed(p):
+                marker = " ⭐【用户指定种子论文】"
+                _note = ((getattr(p, "quality_detail", None) or {}).get("seed_profile") or {}).get("usage_note", "")
+                if _note:
+                    marker = f" ⭐【用户指定种子论文·{_note}】"
+            elif is_irrelevant:
+                marker = " ⚠️可能不相关"
+            else:
+                marker = ""
             # v5.1.7: Inject abstract so review AI can see paper content
             abstract_text = ""
             if p.abstract:
@@ -899,16 +946,23 @@ class ReportGenerator:
 
         # Extract method keywords
         method_keywords = self._extract_top_methods(papers)
+        method_clause = (f"{method_keywords}是该领域当前主流方法"
+                         if method_keywords else "研究方法以实证与计量分析为主")
 
         return f"""## 摘要
 
-本报告对「{topic}」领域近5年学术文献进行系统性调研，检索并筛选{total}篇高质量论文（S级{s_count}篇、A级{a_count}篇）。核心发现：{method_keywords}是该领域当前主流方法，因果推断与深度学习融合成为新兴方向，但在多任务联合建模与跨领域迁移方面仍存在显著空白。"""
+本报告对「{topic}」领域近5年学术文献进行系统性调研，检索并筛选{total}篇高质量论文（S级{s_count}篇、A级{a_count}篇）。核心发现：{method_clause}，因果推断与政策评估成为新兴方向，但在异质性识别与跨领域迁移方面仍存在空白。"""
 
     @staticmethod
     def _compress_text(text: str, max_chars: int = 80) -> str:
         """Compress long text to one-sentence summary. Skip LLM pleasantries, extract substantive conclusions."""
         if not text:
             return ""
+        # Strip department-key prefix like "[literature_search]"
+        if text.lstrip().startswith("["):
+            bracket = text.find("]")
+            if bracket != -1:
+                text = text[bracket + 1:].strip()
         # Remove Markdown markup and common LLM pleasantries
         clean = text.replace("**", "").replace("###", "").replace("##", "").strip()
         # Skip pleasantry lines
@@ -920,7 +974,10 @@ class ReportGenerator:
         substantive_lines = []
         for line in lines:
             line = line.strip().lstrip("- ").lstrip("* ").strip()
-            if not line or len(line) < 8:
+            # Skip markdown headings (# / ## / ###) and horizontal rules
+            if not line or line.startswith("#") or line.startswith("---"):
+                continue
+            if len(line) < 8:
                 continue
             is_fluff = False
             for pref in skip_prefixes:
@@ -936,6 +993,14 @@ class ReportGenerator:
 
         result = substantive_lines[0] if substantive_lines else clean[:max_chars]
 
+        # Prefer the substantive clause after the last colon (the actual conclusion)
+        for sep in ["：", ":"]:
+            if sep in result:
+                tail = result.rsplit(sep, 1)[-1].replace("**", "").strip()
+                if len(tail) >= 8:
+                    result = tail
+                break
+
         if len(result) > max_chars:
             # Find first sentence-ending period breakpoint
             for sep in ["。", ". "]:
@@ -947,43 +1012,73 @@ class ReportGenerator:
 
     def _llm_call_long(self, system_prompt: str, user_prompt: str, temperature: float = 0.25) -> str:
         """Long output LLM call (review report needs 8K+ tokens), supports segmented continuation"""
+        import os
         import requests
-        # Get API config from llm_call_fn environment
-        # Try direct call with larger max_tokens
+        # 优先直接调 API 用更大 max_tokens 一次写完，避开 llm_call_fn 的 8192 截断
+        api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+        model = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro")
+        if api_key:
+            try:
+                resp = requests.post(
+                    "https://api.deepseek.com/v1/chat/completions",
+                    headers={"Content-Type": "application/json",
+                             "Authorization": f"Bearer {api_key}"},
+                    json={"model": model,
+                          "messages": [
+                              {"role": "system", "content": system_prompt},
+                              {"role": "user", "content": user_prompt},
+                          ],
+                          "temperature": temperature, "max_tokens": 16384},
+                    timeout=600,
+                )
+                resp.raise_for_status()
+                result = resp.json()["choices"][0]["message"]["content"]
+                if result and len(result) > 500:
+                    if self._report_body_complete(result):
+                        return result
+                    return self._complete_missing_section(result, temperature)
+            except Exception:
+                pass  # 落到下面的分段续写
+
+        # Fallback: 分段续写（复用 llm_call_fn，8192 token）
         try:
-            # If llm_call_fn is run_pipeline.llm_call, we cannot directly change max_tokens
-            # Instead: segmented request — write first half, then continue second half
             result = self.llm_call_fn(system_prompt, user_prompt, temperature=temperature)
             if not result or len(result) < 500:
                 return result or ""
-            
-            # Check if truncated (incomplete ending)
-            last_line = result.strip().split("\n")[-1] if result.strip() else ""
-            incomplete_markers = [
-                not result.rstrip().endswith(("。", ".", "】", ")", "\"", "》", "```")),
-                result.rstrip().endswith(("，", "、", "因为", "但是", "而且", "其", "在")),
-            ]
-            # If output looks complete (has references section), return directly
-            if "参考文献" in result or "五、" in result or "## 五" in result:
+            if self._report_body_complete(result):
                 return result
-            
-            # Otherwise continue writing
-            continue_prompt = f"""前文到此被截断了。请从截断处继续撰写，不要重复已有内容，直接接着写：
-
-{result[-200:]}
-
----
-请从上面截断处继续，完成剩余章节（核心发现与争议、研究空白与前沿方向、参考文献）。
-
-【关键规则】续写部分的引用[N]必须严格对应论文清单中的论文，且每个[N]必须紧跟该论文的具体描述（方法名、核心结论、量化指标等），严禁使用"参见[N]"占位。如果对该论文内容不确定，不要引用该论文。对比表格单元格禁止填写"参见[N]"。"""
-
-            continuation = self.llm_call_fn(system_prompt, continue_prompt, temperature=temperature)
-            if continuation and len(continuation) > 100:
-                # Concatenate: remove overlapping parts
-                return result + "\n\n" + continuation
-            return result
+            return self._complete_missing_section(result, temperature)
         except Exception:
             return ""
+
+    @staticmethod
+    def _report_body_complete(text: str) -> bool:
+        """正文完整性：核心发现 + 参考文献 都在才算完整（只判参考文献会漏掉被截断的正文）。"""
+        has_findings = ("核心发现" in text) or ("Core Findings" in text)
+        has_refs = ("参考文献" in text) or ("References" in text)
+        return has_findings and has_refs
+
+    def _complete_missing_section(self, result: str, temperature: float) -> str:
+        """补写缺失的"核心发现与争议"章节，插到参考文献前（或追加末尾）。"""
+        findings_prompt = """你的学术报告缺少「核心发现与争议」章节（正文被截断或跳过）。请补写该章节（Markdown），要求：
+1. 提炼 4-6 条核心发现，每条配至少 1 条反面证据/质疑
+2. 每条标注置信度 🟢高 / 🟡中 / 🔴低
+3. 引用[N]必须严格对应论文清单中的论文，紧跟该论文的具体描述（方法名/核心结论/量化指标），严禁"参见[N]"占位；不确定就不引用
+直接输出「## 三、核心发现与争议」章节全文。"""
+        try:
+            findings = self.llm_call_fn(
+                "你是学术报告撰写专家，补写报告缺失的核心发现章节。", findings_prompt,
+                temperature=temperature)
+        except Exception:
+            return result
+        if not findings or len(findings) < 100:
+            return result
+        idx = result.find("## 参考文献")
+        if idx == -1:
+            idx = result.find("## References")
+        if idx > 0:
+            return result[:idx] + findings.strip() + "\n\n" + result[idx:]
+        return result + "\n\n" + findings.strip()
 
     def _ai_refine(self, draft: str, topic: str) -> str:
         """Use LLM to refine report: remove fluff, increase info density, keep all sections"""
@@ -1183,11 +1278,17 @@ class ReportGenerator:
         self,
         s_papers: List[PaperCandidate],
         a_papers: List[PaperCandidate],
+        papers: Optional[List[PaperCandidate]] = None,
     ) -> str:
-        """References: list all S-tier + A-tier papers"""
+        """References: list all S-tier + A-tier papers（核心种子论文强制排最前）"""
         lines = ["## 6. References" if self.output_lang == "en" else "## 六、参考文献", ""]
 
-        top = s_papers + a_papers
+        top = list(s_papers) + list(a_papers)
+        # 核心种子论文强制列入（用户指定，即使 U 级），排最前
+        if papers:
+            top_ids = {id(p) for p in top}
+            seeds = [p for p in papers if is_core_seed(p) and id(p) not in top_ids]
+            top = seeds + top
         if not top:
             return "\n".join(lines)
 
@@ -1198,8 +1299,9 @@ class ReportGenerator:
             title = _safe_truncate(p.title, 60)
             journal = p.journal or "预印本"
             year = p.year or "未知"
+            seed_mark = " ⭐用户指定种子论文" if is_core_seed(p) else ""
 
-            lines.append(f"[{i}] {authors}. {title}. {journal}, {year}.")
+            lines.append(f"[{i}] {authors}. {title}. {journal}, {year}.{seed_mark}")
 
         return "\n".join(lines)
 
@@ -1494,6 +1596,12 @@ class ReportGenerator:
             "LSTM": 0, "Transformer": 0, "XGBoost": 0, "CNN": 0,
             "Random Forest": 0, "GNN": 0, "因果推断": 0, "强化学习": 0,
             "GRU": 0, "LightGBM": 0, "SVM": 0, "ARIMA": 0,
+            # 实证 / 计量方法（经济学、政策评估等）
+            "双重差分": 0, "合成控制": 0, "事件研究": 0, "准实验": 0,
+            "工具变量": 0, "断点回归": 0, "面板数据": 0, "计量经济": 0,
+            "difference-in-differences": 0, "synthetic control": 0,
+            "event study": 0, "quasi-experiment": 0, "instrumental variable": 0,
+            "regression discontinuity": 0, "propensity score": 0,
         }
         for p in papers:
             text = (p.title + " " + (p.abstract or "")).lower()
