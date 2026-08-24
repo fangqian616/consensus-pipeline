@@ -1,7 +1,24 @@
-# Environment and secrets
+# Environment and secrets (sensitive)
 .env
 .env.*
 *.env
+SECRET.md
+secret*
+*.key
+*.pem
+
+# Seed papers (personal info / student id, sensitive)
+seed_papers/*.pdf
+seed_papers/manifest.json
+*.pdf
+
+# Run outputs (data, do not commit)
+run_output/
+v2_run_output/
+real_output*/
+user_profiles/
+experiment_config.json
+academic/journal_grades_snapshot.json
 
 # Python
 __pycache__/
@@ -10,42 +27,40 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Fix scripts (temporary)
-fix_all.py
-fix_stance_quant.py
-
-# IDE
-.vscode/
-.idea/
-
-# OS
-Thumbs.db
-.DS_Store
-
-# Output
-v2_run_output/
-*.pdf
-
-# SECRET files
-SECRET.md
-secret*
-
-# 实验产物
-real_output*/
-user_profiles/
-experiment_config.json
-
-# 日志
-*.log
-
-# 临时脚本
-_patch*.py
-real_experiment*.py
+# Temp / debug scripts
+_*.py
+*.bak*
+.checkpoints/
+.pytest_cache/
+fix_*.py
+verify_*.py
+*_experiment*.py
+setup_v2_full.py
 mock_experiment.py
 analyze_stance_log.py
 calibrate_thresholds.py
 git_push.py
+apply_ui_patch.py
+download_files.ps1
 
-# 运行时派生缓存
-academic/journal_grades_snapshot.json
+# Node / dsh-plugin local deps
+**/package-lock.json
+dsh-plugin/node_modules/
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+*.swp
+*~
+
+# Logs
+*.log
