@@ -3141,24 +3141,47 @@ def render_debate_tab():
             # v2 shadow CV 面板：有数据才渲染（manual 分步路径无此键，自动跳过）
             _cv_hist = result.get("shadow_cv_history") or []
             if _cv_hist:
-                st.markdown("**" + ("🧭 共识度曲线（影子 CV · 校准中，只记录不截停）" if is_zh
-                                     else "🧭 Consensus curve (shadow CV · v1 calibrated, advisory only)") + "**")
+                st.markdown("**" + ("🧭 共识度曲线（影子 CV + α/W · 校准中，只记录不截停）" if is_zh
+                                     else "🧭 Consensus curve (shadow CV + α/W · advisory only)") + "**")
                 _cv_series = {}
+                _alpha_series = {}
+                _w_series = {}
                 for _e in _cv_hist:
+                    _r = f"R{_e['round']}"
                     if _e.get("cv") is not None:
-                        _cv_series[f"R{_e['round']}"] = _e["cv"]
+                        _cv_series[_r] = _e["cv"]
+                    if _e.get("alpha") is not None:
+                        _alpha_series[_r] = _e["alpha"]
+                    if _e.get("kendall_w") is not None:
+                        _w_series[_r] = _e["kendall_w"]
+                _chart_data = {}
                 if _cv_series:
-                    st.line_chart({"CV": _cv_series})
+                    _chart_data["CV"] = _cv_series
+                if _alpha_series:
+                    _chart_data["α"] = _alpha_series
+                if _w_series:
+                    _chart_data["W"] = _w_series
+                if _chart_data:
+                    st.line_chart(_chart_data)
                 _cv_caps = []
                 for _e in _cv_hist:
                     _v = _e.get("cv")
-                    _t = f"R{_e['round']}: " + (f"{_v:.3f}" if _v is not None else "n/a")
+                    _a = _e.get("alpha")
+                    _w = _e.get("kendall_w")
+                    _mu = _e.get("mean_stance")
+                    _t = f"R{_e['round']}: CV=" + (f"{_v:.3f}" if _v is not None else "n/a")
+                    if _a is not None:
+                        _t += f" · α={_a:.3f}"
+                    if _w is not None:
+                        _t += f" · W={_w:.2f}"
+                    if _mu is not None:
+                        _t += f" · 均={_mu:.2f}"
                     if _e.get("shadow_reason"):
                         _t += " ⚠️ " + str(_e["shadow_reason"])
                     _cv_caps.append(_t)
                 st.caption(" ｜ ".join(_cv_caps))
-                st.caption(("实验参数 ε1=0.07 / ε2=0.01 / n=2（未校准占位值）· CV 越低 = 观点越趋同 · ⚠️ 为影子判定（未实际截停）" if is_zh
-                            else "Experimental ε1=0.07 / ε2=0.01 / n=2 (v1 calibrated, 9/10 accuracy, experimental) · lower CV = more convergence · ⚠️ = shadow verdict (not enforced)"))
+                st.caption(("CV 越低越趋同 · α≥0.667(试探)/0.80(可靠) · W≥0.7 强一致 · 非中立守卫(均分离3≥0.8) · ⚠️ 影子判定(未截停)" if is_zh
+                            else "lower CV = convergence · α≥0.667/0.80 · W≥0.7 = strong · non-neutral guard · ⚠️ shadow (not enforced)"))
             
             st.markdown("---")
             st.markdown("**" + t("director_review") + "**")

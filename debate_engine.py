@@ -1235,6 +1235,9 @@ This is Round {round_num}. Respond to other debaters—what do you agree with? D
                     _shadow_cv_history.append({
                         "round": round_num,
                         "cv": _cv_val,
+                        "alpha": _cv_res.get("alpha"),
+                        "kendall_w": _cv_res.get("kendall_w"),
+                        "mean_stance": _cv_res.get("mean_stance"),
                         "shadow_stop": bool(_term[0]),
                         "shadow_reason": _term[1],
                     })
