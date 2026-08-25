@@ -96,6 +96,12 @@ h3.section { margin:0 0 10px; font-size:14px; }
   <section class="card hidden" id="verifyCard">
     <h3 class="section">原子校验 <button class="secondary" id="exportMissing" style="float:right">导出待补清单</button></h3>
     <div id="verifySummary" class="ph">加载中…</div>
+    <div class="row" style="margin-top:10px">
+      <div class="field" style="flex:2"><label>DOI（补全文）</label><input id="fulltextDoi" placeholder="10.1016/j.enpol.2020.111492"></div>
+      <input type="file" id="fulltextFile" accept=".pdf" style="flex:2">
+      <button id="fulltextUploadBtn" class="secondary">上传全文</button>
+    </div>
+    <div class="ph" style="margin-top:8px">💡 付费墙论文的 PDF 按 DOI 上传后，重跑 Phase 7.7 校验即用全文验证（缺全文→验证通过/被反驳）。</div>
   </section>
 
   <section class="card">
@@ -111,6 +117,9 @@ h3.section { margin:0 0 10px; font-size:14px; }
   var copyBtn = document.getElementById('copyReport');
   var verifyCard = document.getElementById('verifyCard');
   var verifySummary = document.getElementById('verifySummary');
+  var fulltextDoi = document.getElementById('fulltextDoi');
+  var fulltextFile = document.getElementById('fulltextFile');
+  var fulltextUploadBtn = document.getElementById('fulltextUploadBtn');
   var hist = document.getElementById('hist');
   var jobsList = document.getElementById('jobsList');
   var seedFile = document.getElementById('seedFile');
@@ -230,6 +239,30 @@ h3.section { margin:0 0 10px; font-size:14px; }
     return s;
   }
   if(exportMissingBtn) exportMissingBtn.addEventListener('click', exportMissing);
+
+  if(fulltextUploadBtn) fulltextUploadBtn.addEventListener('click', function(){
+    var doi = (fulltextDoi.value || '').trim();
+    var file = fulltextFile.files && fulltextFile.files[0];
+    if(!doi){ alert('请先填写 DOI'); return; }
+    if(!file){ alert('请先选择 PDF 文件'); return; }
+    fulltextUploadBtn.textContent = '上传中…';
+    fulltextUploadBtn.disabled = true;
+    fetch('/consensus-pipeline/api/fulltext-upload?doi=' + encodeURIComponent(doi), {
+      method: 'POST',
+      body: file
+    })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d && d.ok){ alert('已上传全文：' + d.filename + '\n重跑 Phase 7.7 校验后生效'); }
+        else { alert('上传失败：' + ((d && d.error) || '未知错误')); }
+      })
+      .catch(function(){ alert('上传失败，请稍后重试'); })
+      .finally(function(){
+        fulltextUploadBtn.textContent = '上传全文';
+        fulltextUploadBtn.disabled = false;
+        fulltextFile.value = '';
+      });
+  });
 
   copyBtn.addEventListener('click', function(){
     var t = report.innerText || '';

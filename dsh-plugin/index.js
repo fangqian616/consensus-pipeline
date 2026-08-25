@@ -516,6 +516,26 @@ function registerWebPanel(ctx, { cwd, callTool, disposers, python }) {
         return;
       }
 
+      if (pathname === '/consensus-pipeline/api/fulltext-upload' && req.method === 'POST') {
+        try {
+          const doi = (url.searchParams.get('doi') || '').trim();
+          if (!doi) return json(res, 400, { error: 'doi is required' });
+          const chunks = [];
+          for await (const c of req) chunks.push(c);
+          const buf = Buffer.concat(chunks);
+          if (buf.length < 200 || buf.slice(0, 5).toString() !== '%PDF-') {
+            return json(res, 400, { error: 'body is not a valid PDF' });
+          }
+          const dir = join(cwd, 'fulltext_papers');
+          try { await stat(dir); } catch { await mkdir(dir, { recursive: true }); }
+          const safe = doi.replace(/[/:\\]/g, '_');
+          const filename = safe + '.pdf';
+          writeFileSync(join(dir, filename), buf);
+          json(res, 200, { ok: true, filename, doi });
+        } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
+        return;
+      }
+
       if (pathname === '/consensus-pipeline/api/seed-weight' && req.method === 'POST') {
         try {
           const body = await readRequestBody(req);

@@ -778,11 +778,11 @@ class ReferenceResolver:
 # ── Reference Resolver: full-text fetch (v0.13) ──────────────────────────────
 
     def fetch_fulltext(self, doi: str) -> str:
-        """v0.13: fetch an OA full-text PDF and return its body text ("" on miss).
+        """v0.13: fetch full text for full-text NLI ("" on miss).
 
-        Used for the needs-fulltext tier: claims whose abstracts are neutral get
-        a second pass against the real full text. Cached per DOI so one PDF is
-        downloaded once even when several claims cite the same paper.
+        Priority: local fulltext_papers/ (user-uploaded paywalled PDFs) →
+        Unpaywall OA → Semantic Scholar openAccessPdf. Cached per DOI so one
+        PDF is read once even when several claims cite the same paper.
         """
         if not doi:
             return ""
@@ -791,11 +791,54 @@ class ReferenceResolver:
             return cached
         text = ""
         try:
-            text = self._fetch_unpaywall_fulltext(doi) or self._fetch_s2_fulltext(doi)
+            text = (
+                self._fetch_local_fulltext(doi)
+                or self._fetch_unpaywall_fulltext(doi)
+                or self._fetch_s2_fulltext(doi)
+            )
         except Exception as _ft_err:
             print(f"  [verify] fulltext FAIL {doi}: {type(_ft_err).__name__}: {str(_ft_err)[:150]}")
         self._fulltext_cache[doi] = text
         return text
+
+    def _fetch_local_fulltext(self, doi: str) -> str:
+        """v0.13: read a user-uploaded PDF from fulltext_papers/ (paywalled papers).
+
+        Looks up the DOI in fulltext_papers/manifest.json ({doi: filename}), then
+        falls back to filename conventions ({doi}.pdf, {doi with / → _}.pdf).
+        """
+        import os
+        dirpath = os.environ.get("CP_FULLTEXT_DIR", "fulltext_papers")
+        if not os.path.isdir(dirpath):
+            return ""
+        safe = doi.replace("/", "_").replace(":", "_")
+        candidates = [f"{safe}.pdf"]
+        manifest_path = os.path.join(dirpath, "manifest.json")
+        if os.path.exists(manifest_path):
+            try:
+                with open(manifest_path, encoding="utf-8") as f:
+                    manifest = json.load(f)
+                if isinstance(manifest, dict):
+                    _fn = manifest.get(doi) or manifest.get(doi.lower())
+                    if _fn:
+                        candidates.insert(0, _fn)
+            except Exception:
+                pass
+        for name in candidates:
+            p = os.path.join(dirpath, name)
+            if not os.path.isfile(p):
+                continue
+            try:
+                with open(p, "rb") as f:
+                    data = f.read(12_000_000)
+                if data[:5] != b'%PDF-':
+                    continue
+                text = re.sub(r"\s+", " ", _extract_pdf_text(data, 30)).strip()
+                if len(text) >= 200:
+                    return text[:30000]
+            except Exception as _loc_err:
+                print(f"  [verify] local-fulltext FAIL {p}: {type(_loc_err).__name__}: {str(_loc_err)[:120]}")
+        return ""
 
     def _fetch_unpaywall_fulltext(self, doi: str) -> str:
         """Unpaywall by DOI → OA PDF URL → full body text."""
