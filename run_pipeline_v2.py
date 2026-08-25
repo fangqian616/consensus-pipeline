@@ -783,12 +783,26 @@ def _build_correction_note(cv, lang):
         return "\n".join(lines)
 
 
-def _run_phases_6_to_7(config, papers, preprints, dept_outputs, relevance_log):
+def _run_phases_6_to_7(config, papers, preprints, dept_outputs, relevance_log,
+                       fulltext_cache=None):
     """执行 Phase 6 ~ Phase 7(全部 v1)"""
     log = v1.log
 
     # Phase 6: 交叉辩论
     cross_results = v1.phase6_cross_debate(config, dept_outputs)
+
+    # Phase 6.5+: 报告生成前把全文注入 abstract（扩展摘要，减少脑补拔高）
+    # 不做 fulltext 字段改动，直接扩展 abstract，ReportGenerator 无感知地用上全文。
+    if fulltext_cache:
+        _n_fulltext = 0
+        for p in papers:
+            doi = (getattr(p, "doi", "") or "").strip()
+            ft = fulltext_cache.get(doi)
+            if ft and len(ft) >= 300:
+                p.abstract = ((getattr(p, "abstract", "") or "") +
+                              "\n\n【全文要点】" + ft[:1500]).strip()
+                _n_fulltext += 1
+        log("Phase7", f"报告生成前注入全文: {_n_fulltext}/{len(papers)} 篇")
 
     # Programming / Tutorial 独立产出
     prog_output = v1.generate_programming_output(papers)
@@ -1008,13 +1022,25 @@ def main():
         # Phase 5.5: 全文断点——辩论观点里「缺失但必要」的论文，询问用户导入
         imported_dois, skipped_dois = phase5_5_fulltext_gate(
             config, dept_outputs, papers, fulltext_cache, output_dir)
+        if imported_dois:
+            # 用户确认导入的 PDF 已放进 fulltext_papers/，重新获取全文进缓存
+            from requirement.citation_verifier import ReferenceResolver
+            _resolver = ReferenceResolver(search_fn=None)
+            _got = 0
+            for doi in imported_dois:
+                ft = _resolver.fetch_fulltext(doi)
+                if ft and len(ft) >= 500:
+                    fulltext_cache[doi] = ft[:30000]
+                    _got += 1
+            v1.log("Phase5.5", f"用户导入 {len(imported_dois)} 篇，重新获取全文 {_got} 篇（缓存共 {len(fulltext_cache)}）")
         state["phase5_5_imported"] = len(imported_dois)
         _save_state(output_dir, state)
 
         # Phase 6 ~ 7: v1 管线
         v1.log("MAIN-v2", ">>> Phase 6-7: v1 管线(交叉辩论/综述/验证)")
         report = _run_phases_6_to_7(config, papers, preprints,
-                                    dept_outputs, relevance_log)
+                                    dept_outputs, relevance_log,
+                                    fulltext_cache=fulltext_cache)
 
         # 完成
         elapsed = time.time() - start_time
