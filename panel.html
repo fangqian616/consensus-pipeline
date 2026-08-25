@@ -100,8 +100,9 @@ h3.section { margin:0 0 10px; font-size:14px; }
       <div class="field" style="flex:2"><label>DOI（补全文）</label><input id="fulltextDoi" placeholder="10.1016/j.enpol.2020.111492"></div>
       <input type="file" id="fulltextFile" accept=".pdf" style="flex:2">
       <button id="fulltextUploadBtn" class="secondary">上传全文</button>
+      <button id="reverifyBtn" class="secondary">重跑校验</button>
     </div>
-    <div class="ph" style="margin-top:8px">💡 付费墙论文的 PDF 按 DOI 上传后，重跑 Phase 7.7 校验即用全文验证（缺全文→验证通过/被反驳）。</div>
+    <div class="ph" style="margin-top:8px">💡 付费墙论文的 PDF 按 DOI 上传后，点「重跑校验」即用全文验证（缺全文→验证通过/被反驳）。</div>
   </section>
 
   <section class="card">
@@ -120,6 +121,7 @@ h3.section { margin:0 0 10px; font-size:14px; }
   var fulltextDoi = document.getElementById('fulltextDoi');
   var fulltextFile = document.getElementById('fulltextFile');
   var fulltextUploadBtn = document.getElementById('fulltextUploadBtn');
+  var reverifyBtn = document.getElementById('reverifyBtn');
   var hist = document.getElementById('hist');
   var jobsList = document.getElementById('jobsList');
   var seedFile = document.getElementById('seedFile');
@@ -263,6 +265,48 @@ h3.section { margin:0 0 10px; font-size:14px; }
         fulltextFile.value = '';
       });
   });
+
+  if(reverifyBtn) reverifyBtn.addEventListener('click', function(){
+    if(!currentTopic){ alert('请先在「历史运行」查看报告，再重跑校验'); return; }
+    reverifyBtn.textContent = '启动中…';
+    reverifyBtn.disabled = true;
+    fetch('/consensus-pipeline/api/reverify-77', { method: 'POST' })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d && d.ok){
+          reverifyBtn.textContent = '校验重跑中…';
+          pollReverify();
+        } else {
+          alert('启动失败：' + ((d && d.error) || '未知错误'));
+          reverifyBtn.textContent = '重跑校验';
+          reverifyBtn.disabled = false;
+        }
+      })
+      .catch(function(){
+        alert('启动失败，请稍后重试');
+        reverifyBtn.textContent = '重跑校验';
+        reverifyBtn.disabled = false;
+      });
+  });
+  function pollReverify(){
+    fetch('/consensus-pipeline/api/reverify-status')
+      .then(function(r){ return r.json(); })
+      .then(function(s){
+        if(s && s.running){
+          reverifyBtn.textContent = '校验重跑中…';
+          setTimeout(pollReverify, 8000);
+        } else {
+          reverifyBtn.textContent = '重跑校验';
+          reverifyBtn.disabled = false;
+          if(s && s.error){ alert('重跑校验出错，请查看 DSH 日志'); }
+          else { loadVerification(); loadReport(); }
+        }
+      })
+      .catch(function(){
+        reverifyBtn.textContent = '重跑校验';
+        reverifyBtn.disabled = false;
+      });
+  }
 
   copyBtn.addEventListener('click', function(){
     var t = report.innerText || '';

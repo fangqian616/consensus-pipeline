@@ -393,6 +393,9 @@ function registerWebPanel(ctx, { cwd, callTool, disposers, python }) {
     return;
   }
 
+  // v0.13: in-flight re-verify (Phase 7.7) job state for the panel's one-click re-run.
+  let reverify = null;
+
   const route = webServer.register({
     kind: 'prefix',
     path: '/consensus-pipeline',
@@ -533,6 +536,35 @@ function registerWebPanel(ctx, { cwd, callTool, disposers, python }) {
           writeFileSync(join(dir, filename), buf);
           json(res, 200, { ok: true, filename, doi });
         } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
+        return;
+      }
+
+      if (pathname === '/consensus-pipeline/api/reverify-77' && req.method === 'POST') {
+        try {
+          if (reverify && reverify.running) {
+            return json(res, 409, { error: 're-verify already running' });
+          }
+          const p = ctx.subprocess.spawn({
+            argv: [python, '_reverify_77.py'],
+            cwd,
+            stdio: { stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' },
+            graceMs: 5000,
+          });
+          reverify = { running: true, startedAt: Date.now(), finishedAt: null, error: false };
+          p.done.then(() => { reverify.running = false; reverify.finishedAt = Date.now(); })
+            .catch(() => { reverify.running = false; reverify.finishedAt = Date.now(); reverify.error = true; });
+          json(res, 200, { ok: true, started: true });
+        } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
+        return;
+      }
+
+      if (pathname === '/consensus-pipeline/api/reverify-status') {
+        json(res, 200, {
+          running: !!(reverify && reverify.running),
+          startedAt: reverify ? reverify.startedAt : null,
+          finishedAt: reverify ? reverify.finishedAt : null,
+          error: !!(reverify && reverify.error),
+        });
         return;
       }
 
