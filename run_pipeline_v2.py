@@ -498,6 +498,133 @@ def phase4_9_fulltext_fetch(papers, output_dir, time_budget_s=900):
     return fulltext_cache
 
 
+def _write_pending_import(pending, output_dir):
+    """写待导入清单状态文件 pending_fulltext_import.json（原子）。"""
+    path = os.path.join(output_dir, "pending_fulltext_import.json")
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(pending, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
+
+
+def _read_pending_import(output_dir):
+    """读待导入清单状态；不存在/损坏返回 None。"""
+    path = os.path.join(output_dir, "pending_fulltext_import.json")
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def phase5_5_fulltext_gate(config, dept_outputs, papers, fulltext_cache, output_dir,
+                           wait_s=600, pause_budget_s=7200):
+    """Phase 5.5: 从辩论观点提取「被引用但缺全文」的关键论文，交互式询问用户。
+
+    1. 遍历各部门辩论输出，正则提取 [N] 引用编号 → 映射 dept_papers[N-1] 的 DOI
+    2. 检查 DOI 是否在 fulltext_cache（有全文）里，缺全文的 = 「缺失但必要」
+    3. 写 pending_fulltext_import.json（waiting + deadline）
+    4. sleep 轮询：confirmed(继续) / skipped(跳过) / paused(暂停延长) / timeout(超时跳过)
+
+    返回 (imported_dois, skipped_dois)。
+    """
+    import time as _time
+    import re as _re
+
+    log = v1.log
+    departments = config.get("departments", {})
+    dept_order = config.get("dept_order", list(departments.keys()))
+
+    # 1. 提取辩论观点里被引用的论文 DOI（共识引用更「必要」）
+    cited = {}  # doi -> {title, count, depts, in_consensus}
+    for dept_key in dept_order:
+        out = dept_outputs.get(dept_key)
+        if not isinstance(out, dict):
+            continue
+        dept_papers = _filter_papers_for_dept(dept_key, papers, top_n=40)
+        dept_name = departments.get(dept_key, {}).get("zh_name", dept_key)
+
+        def _scan(text, in_consensus):
+            for m in _re.finditer(r"\[(\d+)\]", text):
+                idx = int(m.group(1))
+                if 1 <= idx <= len(dept_papers):
+                    p = dept_papers[idx - 1]
+                    doi = (getattr(p, "doi", "") or "").strip()
+                    if not doi:
+                        continue
+                    if doi not in cited:
+                        cited[doi] = {"title": getattr(p, "title", ""), "count": 0,
+                                      "depts": [], "in_consensus": False}
+                    cited[doi]["count"] += 1
+                    if dept_name not in cited[doi]["depts"]:
+                        cited[doi]["depts"].append(dept_name)
+                    if in_consensus:
+                        cited[doi]["in_consensus"] = True
+
+        for a in (out.get("debater_arguments") or []):
+            if isinstance(a, dict) and a.get("argument"):
+                _scan(a["argument"], in_consensus=False)
+        if out.get("consensus"):
+            _scan(str(out["consensus"]), in_consensus=True)
+
+    # 2. 「缺失但必要」= 缺全文 且（共识引用 或 被 ≥2 个部门引用）
+    #    注意：不用 count（引用次数）判定——辩手在冗长论点里会反复带 [N] 引用
+    #    同一篇论文几十上百次，count 会严重失真；跨部门/共识才是「必要」信号。
+    missing = [
+        {"doi": d, "title": v["title"], "cited": v["count"], "depts": v["depts"],
+         "necessary": ("共识引用" if v["in_consensus"] else f"跨 {len(v['depts'])} 部门")}
+        for d, v in cited.items()
+        if d not in fulltext_cache and (v["in_consensus"] or len(v["depts"]) >= 2)
+    ]
+    log("Phase5.5", f"辩论引用 {len(cited)} 篇论文，其中「缺失但必要」{len(missing)} 篇")
+
+    if not missing:
+        log("Phase5.5", "无「缺失但必要」论文，跳过断点")
+        return [], []
+
+    # 3. 写状态文件 + 等待用户响应
+    deadline = _time.time() + wait_s
+    pending = {
+        "status": "waiting",
+        "papers": missing,
+        "deadline": deadline,
+        "wait_s": wait_s,
+        "pause_budget_s": pause_budget_s,
+        "updated_at": _time.time(),
+    }
+    _write_pending_import(pending, output_dir)
+    log("Phase5.5", f"待导入清单已写出（{len(missing)} 篇），等待用户 {wait_s}s（可暂停/继续/跳过）")
+
+    imported, skipped = [], []
+    while True:
+        st = _read_pending_import(output_dir)
+        status = (st or {}).get("status", "")
+        if status == "paused":
+            # 暂停：倒计时停止，重新给 pause_budget_s 兜底
+            if _time.time() > deadline:
+                deadline = _time.time() + pause_budget_s
+                log("Phase5.5", f"用户已暂停，延长至 {pause_budget_s}s 兜底")
+            _time.sleep(5)
+            continue
+        if status == "confirmed":
+            imported = [p["doi"] for p in missing]
+            log("Phase5.5", f"用户确认导入 {len(imported)} 篇，继续流程")
+            break
+        if status == "skipped":
+            log("Phase5.5", "用户选择跳过")
+            break
+        if _time.time() >= deadline:
+            pending["status"] = "timeout"
+            _write_pending_import(pending, output_dir)
+            log("Phase5.5", "等待超时，自动跳过")
+            break
+        _time.sleep(5)
+
+    return imported, skipped
+
+
 def _verify_llm_raises(system_prompt, user_prompt):
     """原子校验的 LLM 调用：单独用更强模型（默认 pro，可用 DEEPSEEK_VERIFY_MODEL 覆盖）。
 
@@ -877,6 +1004,12 @@ def main():
             v1.log("MAIN-v2", f"[隔离测试] 单部门 {args.only_dept} 完成, 退出(跳过 Phase 6-7)")
             return
         dept_outputs = phase5_debate_v2(config, papers, preprints, output_dir)
+
+        # Phase 5.5: 全文断点——辩论观点里「缺失但必要」的论文，询问用户导入
+        imported_dois, skipped_dois = phase5_5_fulltext_gate(
+            config, dept_outputs, papers, fulltext_cache, output_dir)
+        state["phase5_5_imported"] = len(imported_dois)
+        _save_state(output_dir, state)
 
         # Phase 6 ~ 7: v1 管线
         v1.log("MAIN-v2", ">>> Phase 6-7: v1 管线(交叉辩论/综述/验证)")
