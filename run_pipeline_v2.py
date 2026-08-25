@@ -547,7 +547,17 @@ def _atomic_verify_and_fix(report_text, papers=None, max_rounds=2):
 
 
 def _build_correction_note(cv, lang):
-    """把未通过校验的原子论断整理成修正建议说明（确定性，不依赖 LLM）。"""
+    """把未通过校验的原子论断整理成修正建议说明（确定性，不依赖 LLM）。
+
+    v0.13: 区分「引用错位」（摘要与全文均 neutral）与「真缺全文」（仅摘要 neutral，
+    全文未抓到）——前者标注需核对引用编号，后者标注需核实全文。
+    """
+    def _has_fulltext_neutral(c):
+        return any(
+            getattr(n, "evidence", "") == "fulltext" and getattr(n, "label", "") == "neutral"
+            for n in (c.nli_results or [])
+        )
+
     if lang == "zh":
         lines = ["## 原子校验与修正建议", ""]
         lines.append(f"**校验摘要**：{cv.summary}")
@@ -557,7 +567,12 @@ def _build_correction_note(cv, lang):
         for c in cv.claim_verifications:
             if c.status in ("contradicted", "unverified"):
                 any_failed = True
-                act = "删除或改写" if c.status == "contradicted" else "加限定语或核实全文"
+                if c.status == "contradicted":
+                    act = "删除或改写"
+                elif _has_fulltext_neutral(c):
+                    act = "⚠️ 引用可能错位（摘要与全文均不支持，请核对引用编号与论文归属）"
+                else:
+                    act = "加限定语或核实全文"
                 lines.append(f"- [{c.status}] {c.claim.text} → {act}")
         if not any_failed:
             lines.append("- 无")
@@ -571,7 +586,12 @@ def _build_correction_note(cv, lang):
         for c in cv.claim_verifications:
             if c.status in ("contradicted", "unverified"):
                 any_failed = True
-                act = "remove or rewrite" if c.status == "contradicted" else "hedge or verify against fulltext"
+                if c.status == "contradicted":
+                    act = "remove or rewrite"
+                elif _has_fulltext_neutral(c):
+                    act = "⚠️ possible citation mismatch (abstract AND full text do not support; check citation number/attribution)"
+                else:
+                    act = "hedge or verify against fulltext"
                 lines.append(f"- [{c.status}] {c.claim.text} -> {act}")
         if not any_failed:
             lines.append("- none")

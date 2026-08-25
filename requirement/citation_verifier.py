@@ -105,6 +105,7 @@ class Reference:
     authors: str = ""             # Author string
     year: str = ""                # Publication year
     abstract: str = ""            # Fetched abstract (populated later)
+    fulltext: str = ""            # v0.13: OA full text (lazy, for full-text NLI)
 
 
 @dataclass
@@ -133,7 +134,7 @@ class NLIResult:
     label: str = "neutral"        # entail / contradict / neutral
     confidence: float = 0.0
     explanation: str = ""
-    evidence: str = "abstract"    # abstract / title (title = weaker evidence)
+    evidence: str = "abstract"    # abstract / title / fulltext (title = weaker evidence)
 
 
 @dataclass
@@ -430,6 +431,38 @@ def _extract_pdf_link_from_landing(data: bytes, page_url: str) -> str:
     return urllib.parse.urljoin(page_url, _html.unescape(link))
 
 
+def _extract_pdf_text(data: bytes, max_pages: int) -> str:
+    """Extract text from PDF bytes.
+
+    PyMuPDF (fitz) is the preferred extractor (best text quality and the only
+    one reliably installed here); falls back to pypdf. v0.13: shared by
+    _fetch_pdf_abstract and _fetch_pdf_fulltext.
+    """
+    try:
+        try:
+            import pymupdf as fitz
+        except ImportError:
+            import fitz
+        doc = fitz.open(stream=data, filetype="pdf")
+        parts = []
+        for page in doc[:max_pages]:
+            parts.append(page.get_text() or "")
+        doc.close()
+        return "\n".join(parts)
+    except Exception:
+        pass
+    try:
+        import io
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(data))
+        parts = []
+        for page in reader.pages[:max_pages]:
+            parts.append(page.extract_text() or "")
+        return "\n".join(parts)
+    except Exception:
+        return ""
+
+
 def _fetch_pdf_abstract(pdf_url: str, max_bytes: int = 6_000_000, _depth: int = 0) -> str:
     """Download an open-access PDF and extract its abstract (best-effort).
 
@@ -451,12 +484,37 @@ def _fetch_pdf_abstract(pdf_url: str, max_bytes: int = 6_000_000, _depth: int = 
                 if link and link != pdf_url:
                     return _fetch_pdf_abstract(link, max_bytes, _depth=1)
             return ""
-        from pypdf import PdfReader
-        reader = PdfReader(io.BytesIO(data))
-        text = ""
-        for page in reader.pages[:4]:
-            text += (page.extract_text() or "") + "\n"
+        text = _extract_pdf_text(data, 4)
         return _extract_abstract_from_text(text)
+    except Exception:
+        return ""
+
+
+def _fetch_pdf_fulltext(pdf_url: str, max_bytes: int = 12_000_000, _depth: int = 0) -> str:
+    """Download an open-access PDF and extract its FULL body text (best-effort).
+
+    Unlike _fetch_pdf_abstract (first 4 pages + abstract marker), this reads the
+    whole document body so a claim can be re-checked against the real full text
+    when its abstract is neutral (the "needs fulltext" tier). Returns "" on any
+    failure; callers fall through to keeping the abstract verdict.
+    v0.13: added for full-text NLI of needs-fulltext claims.
+    """
+    try:
+        import io
+        import urllib.request
+        req = urllib.request.Request(
+            pdf_url, headers={'User-Agent': 'Mozilla/5.0 (academic fulltext fetch)'})
+        with urllib.request.urlopen(req, timeout=40) as resp:
+            data = resp.read(max_bytes)
+        if data[:5] != b'%PDF-':
+            if _depth == 0:
+                link = _extract_pdf_link_from_landing(data, pdf_url)
+                if link and link != pdf_url:
+                    return _fetch_pdf_fulltext(link, max_bytes, _depth=1)
+            return ""
+        text = _extract_pdf_text(data, 30)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text[:30000]
     except Exception:
         return ""
 
@@ -473,6 +531,7 @@ class ReferenceResolver:
                        Fallback when CrossRef doesn't have the abstract.
         """
         self.search_fn = search_fn
+        self._fulltext_cache: Dict[str, str] = {}  # v0.13: doi -> OA full text
 
     def resolve(self, references: List[Reference]) -> int:
         """
@@ -716,6 +775,82 @@ class ReferenceResolver:
         return ""
 
 
+# ── Reference Resolver: full-text fetch (v0.13) ──────────────────────────────
+
+    def fetch_fulltext(self, doi: str) -> str:
+        """v0.13: fetch an OA full-text PDF and return its body text ("" on miss).
+
+        Used for the needs-fulltext tier: claims whose abstracts are neutral get
+        a second pass against the real full text. Cached per DOI so one PDF is
+        downloaded once even when several claims cite the same paper.
+        """
+        if not doi:
+            return ""
+        cached = self._fulltext_cache.get(doi)
+        if cached is not None:
+            return cached
+        text = ""
+        try:
+            text = self._fetch_unpaywall_fulltext(doi) or self._fetch_s2_fulltext(doi)
+        except Exception as _ft_err:
+            print(f"  [verify] fulltext FAIL {doi}: {type(_ft_err).__name__}: {str(_ft_err)[:150]}")
+        self._fulltext_cache[doi] = text
+        return text
+
+    def _fetch_unpaywall_fulltext(self, doi: str) -> str:
+        """Unpaywall by DOI → OA PDF URL → full body text."""
+        try:
+            import urllib.request
+            url = f"https://api.unpaywall.org/v2/{doi}?email=fang616@users.noreply.github.com"
+            req = urllib.request.Request(url, headers={'User-Agent': 'ConsensusPipeline/1.0'})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode())
+            if not data.get('is_oa'):
+                return ""
+            urls = []
+            best = data.get('best_oa_location') or {}
+            if best.get('url_for_pdf'):
+                urls.append(best['url_for_pdf'])
+            for loc in data.get('oa_locations') or []:
+                u = loc.get('url_for_pdf')
+                if u and u not in urls:
+                    urls.append(u)
+            for loc in [best] + list(data.get('oa_locations') or []):
+                u = loc.get('url')
+                if u and u not in urls:
+                    urls.append(u)
+            for u in urls[:3]:
+                text = _fetch_pdf_fulltext(u)
+                if len(text) >= 500:
+                    return text
+        except Exception as _up_err:
+            print(f"  [verify] unpaywall-fulltext FAIL {doi}: {type(_up_err).__name__}: {str(_up_err)[:150]}")
+        return ""
+
+    def _fetch_s2_fulltext(self, doi: str) -> str:
+        """Semantic Scholar by DOI → openAccessPdf → full body text."""
+        try:
+            import os
+            import urllib.request
+            url = (f"https://api.semanticscholar.org/graph/v1/paper/DOI:{doi}"
+                   f"?fields=openAccessPdf")
+            headers = {'User-Agent': 'ConsensusPipeline/1.0'}
+            _s2k = os.environ.get('S2_API_KEY', '')
+            if _s2k:
+                headers['x-api-key'] = _s2k
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode())
+            pdf_url = (data.get('openAccessPdf') or {}).get('url') or ''
+            if not pdf_url:
+                return ""
+            text = _fetch_pdf_fulltext(pdf_url)
+            return text if len(text) >= 500 else ""
+        except Exception as _s2_err:
+            print(f"  [verify] s2-fulltext FAIL {doi}: {type(_s2_err).__name__}: {str(_s2_err)[:150]}")
+        return ""
+
+
 # ── Atomic Fact Decomposer ──────────────────────────────────────────────────
 
 class AtomicFactDecomposer:
@@ -876,9 +1011,11 @@ Criteria:
 Output JSON:
 {{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "explanation": "one-sentence explanation"}}"""
 
-    def __init__(self, llm_call_fn=None, language: str = "zh"):
+    def __init__(self, llm_call_fn=None, language: str = "zh", fulltext_fetcher=None):
         self.llm_call_fn = llm_call_fn
         self.language = language
+        # v0.13: callable(doi) -> str|"" for full-text upgrade of neutral abstracts
+        self.fulltext_fetcher = fulltext_fetcher
 
     TITLE_PROMPT_ZH = """你是一个学术事实校验助手。该文献无法获取摘要，只有标题与出处信息。请判断仅凭标题是否能直接支持给定论断。
 
@@ -912,6 +1049,40 @@ Criteria:
 
 Output JSON: {{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "explanation": "one-sentence explanation (note title-only evidence)"}}"""
 
+    FULLTEXT_PROMPT_ZH = """你是一个学术事实校验助手。判断文献全文是否支持给定论断。
+
+论断：{claim}
+
+文献标题：{title}
+文献作者：{authors}
+文献全文片段：{fulltext}
+
+判断标准：
+- entail: 全文内容明确支持该论断（同一事实/结论）
+- contradict: 全文内容明确反驳该论断
+- neutral: 全文与该论断无关，或无法从全文判断
+- 若论断涉及研究者归属（如"X与Y的研究表明…"），以文献作者字段核对（姓名拼写变体视为同一人）
+
+输出JSON：
+{{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "explanation": "一句话说明"}}"""
+
+    FULLTEXT_PROMPT_EN = """You are an academic fact-checking assistant. Determine whether the paper's FULL TEXT supports the given claim.
+
+Claim: {claim}
+
+Paper title: {title}
+Authors: {authors}
+Full-text excerpt: {fulltext}
+
+Criteria:
+- entail: The full text clearly supports this claim (same fact/conclusion)
+- contradict: The full text clearly refutes this claim
+- neutral: The full text is unrelated to this claim, or cannot be determined from it
+- If the claim attributes the study to specific researchers (e.g. "X and Y showed..."), verify attribution against the Authors field (spelling variants count as the same person)
+
+Output JSON:
+{{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "explanation": "one-sentence explanation"}}"""
+
     def verify_claim(
         self,
         claim: AtomicClaim,
@@ -927,6 +1098,9 @@ Output JSON: {{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "exp
 
             if ref.abstract:
                 nli = self._check_nli(claim.text, ref)
+                # v0.13: abstract neutral → try OA full text before giving up
+                if nli.label == "neutral" and self.fulltext_fetcher and ref.doi:
+                    nli = self._upgrade_to_fulltext(claim.text, ref, nli)
             else:
                 # No abstract retrievable — fall back to conservative title-level
                 # check instead of skipping the reference entirely.
@@ -978,6 +1152,72 @@ Output JSON: {{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "exp
             result.explanation = parsed.get("explanation", "")
         except Exception as e:
             result.explanation = f"Title-level check failed: {e}"
+
+        return result
+
+    def _upgrade_to_fulltext(self, claim_text: str, ref: Reference, prev_nli: NLIResult) -> NLIResult:
+        """v0.13: abstract was neutral — fetch the OA full text and re-check.
+
+        Returns the full-text verdict when it flips to entail/contradict. When the
+        full text is ALSO neutral, returns a fulltext-evidence neutral verdict
+        flagged as a likely citation mismatch (neither abstract nor full text
+        supports the claim — the citation is probably attached to the wrong paper),
+        rather than silently keeping the abstract verdict.
+        """
+        fulltext = ""
+        try:
+            fulltext = ref.fulltext or (self.fulltext_fetcher(ref.doi) if self.fulltext_fetcher else "")
+        except Exception:
+            fulltext = ""
+        if not fulltext or len(fulltext) < 200:
+            return prev_nli  # paywalled / fetch failed → honest needs-fulltext
+        ref.fulltext = fulltext
+        ft = self._check_nli_fulltext(claim_text, ref)
+        if ft.label in ("entail", "contradict"):
+            return ft
+        # Full text also neutral → strong signal of a citation mismatch.
+        ft.explanation = (ft.explanation or "").rstrip() + " [摘要与全文均不支持该论断，疑为引用错位]"
+        return ft
+
+    def _check_nli_fulltext(self, claim_text: str, ref: Reference) -> NLIResult:
+        """Run NLI against the paper's full text (stronger evidence than abstract)."""
+        result = NLIResult(
+            claim=claim_text,
+            ref_index=ref.index,
+            ref_title=ref.title,
+            ref_doi=ref.doi,
+            evidence="fulltext",
+        )
+
+        if not self.llm_call_fn:
+            result.label = "neutral"
+            result.explanation = "No LLM available for fulltext NLI verification"
+            return result
+
+        prompt_template = self.FULLTEXT_PROMPT_ZH if self.language == "zh" else self.FULLTEXT_PROMPT_EN
+        user_msg = prompt_template.format(
+            claim=claim_text,
+            title=ref.title,
+            authors=ref.authors or ("（未获取）" if self.language == "zh" else "N/A"),
+            fulltext=(ref.fulltext or "")[:4000],  # Truncate long full text
+        )
+
+        try:
+            response = self.llm_call_fn(
+                "You are an academic NLI system. Output only valid JSON.",
+                user_msg,
+            )
+            parsed = AtomicFactDecomposer._parse_json_response(response)
+
+            label = parsed.get("label", "neutral").lower().strip()
+            if label not in ("entail", "contradict", "neutral"):
+                label = "neutral"
+
+            result.label = label
+            result.confidence = float(parsed.get("confidence", 0.5))
+            result.explanation = parsed.get("explanation", "")
+        except Exception as e:
+            result.explanation = f"Fulltext NLI check failed: {e}"
 
         return result
 
@@ -1170,7 +1410,11 @@ class CitationVerifier:
         self.parser = CitationParser()
         self.resolver = ReferenceResolver(search_fn=search_fn)
         self.decomposer = AtomicFactDecomposer(llm_call_fn=llm_call_fn, language=language)
-        self.nli = NLIVerifier(llm_call_fn=llm_call_fn, language=language)
+        self.nli = NLIVerifier(
+            llm_call_fn=llm_call_fn,
+            language=language,
+            fulltext_fetcher=self.resolver.fetch_fulltext,  # v0.13: abstract-neutral → OA full-text upgrade
+        )
 
     def _audit_abstracts(self, references: List[Reference]) -> List[Dict[str, Any]]:
         """v0.12.5: check each cached abstract actually belongs to its paper.
