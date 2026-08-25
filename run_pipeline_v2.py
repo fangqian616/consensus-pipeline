@@ -440,6 +440,64 @@ def _run_phases_0_to_4(skip_requirement=False):
     return config, papers, preprints, relevance_log
 
 
+def phase4_9_fulltext_fetch(papers, output_dir, time_budget_s=900):
+    """Phase 4.9: 辩论前批量获取全文（本地 fulltext_papers/ + OA 自动爬）。
+
+    零用户参与——只做自动可得的部分；用户手动补录在 Phase 5.5 断点
+    （辩论确定「缺失但必要」后）+ Phase 7.7 兜底。返回 fulltext_cache:
+    dict[doi, fulltext_text]，并持久化到 phase4.9_fulltext_cache.json。
+
+    time_budget_s: OA 爬取的总时间预算（默认 15 分钟），超时跳过剩余论文
+    （本地匹配不受预算限制，因为它是内存查找、几乎瞬时）。
+    """
+    import time as _time
+    from requirement.citation_verifier import ReferenceResolver, set_progress_hook
+
+    log = v1.log
+    resolver = ReferenceResolver(search_fn=None)
+
+    def _prog(stage, done, total):
+        try:
+            with open(os.path.join(output_dir, "phase4.9_fulltext_progress.json"), "w", encoding="utf-8") as _f:
+                json.dump({"stage": stage, "done": done, "total": total}, _f, ensure_ascii=False)
+        except Exception:
+            pass
+
+    set_progress_hook(_prog)
+    fulltext_cache = {}
+    total = len(papers)
+    log("Phase4.9", f"全文获取: 对 {total} 篇论文尝试本地+OA全文 (预算 {time_budget_s}s)")
+
+    _t_start = _time.time()
+    for i, p in enumerate(papers, 1):
+        doi = (getattr(p, "doi", "") or "").strip()
+        if not doi:
+            continue
+        # 超预算：跳过剩余（本地已匹配的已缓存，未匹配的留给辩论用摘要）
+        if _time.time() - _t_start > time_budget_s:
+            log("Phase4.9", f"OA 爬取超预算，跳过剩余 {total - i + 1} 篇")
+            break
+        try:
+            ft = resolver.fetch_fulltext(doi)
+            if ft and len(ft) >= 500:
+                fulltext_cache[doi] = ft[:30000]
+        except Exception:
+            continue
+        if i % 25 == 0 or i == total:
+            log("Phase4.9", f"全文获取 {i}/{total}, 已得 {len(fulltext_cache)} 篇")
+
+    log("Phase4.9", f"全文获取完成: {len(fulltext_cache)}/{total} 篇有全文")
+    _cache_path = os.path.join(output_dir, "phase4.9_fulltext_cache.json")
+    try:
+        with open(_cache_path, "w", encoding="utf-8") as _f:
+            json.dump(fulltext_cache, _f, ensure_ascii=False)
+        log("Phase4.9", f"全文缓存已保存 → {_cache_path}")
+    except Exception as _e:
+        log("Phase4.9", f"全文缓存保存失败: {_e}")
+    set_progress_hook(None)
+    return fulltext_cache
+
+
 def _verify_llm_raises(system_prompt, user_prompt):
     """原子校验的 LLM 调用：单独用更强模型（默认 pro，可用 DEEPSEEK_VERIFY_MODEL 覆盖）。
 
@@ -806,6 +864,11 @@ def main():
 
         # Phase 4.8: 种子论文导入
         papers = v1.merge_seed_papers(papers)
+
+        # Phase 4.9: 辩论前全文自动获取（本地 + OA 爬，零用户参与）
+        fulltext_cache = phase4_9_fulltext_fetch(papers, output_dir)
+        state["fulltext_cache_size"] = len(fulltext_cache)
+        _save_state(output_dir, state)
 
         # Phase 5: v2 辩论(量化增强)
         v1.log("MAIN-v2", ">>> Phase 5: v2 辩论(StanceTracker + 动态终止)")
