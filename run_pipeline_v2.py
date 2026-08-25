@@ -441,15 +441,39 @@ def _run_phases_0_to_4(skip_requirement=False):
 
 
 def _verify_llm_raises(system_prompt, user_prompt):
-    """CitationVerifier 要求 llm_call_fn 在失败时 RAISE（而非返回空串），
-    否则会静默解析成 0 条 claim → 0% 全 neutral 报告（历史"0% 事故"）。"""
-    resp = v1.llm_call(system_prompt, user_prompt, temperature=0.3)
-    if not resp or resp.startswith("ERROR:"):
-        raise RuntimeError(f"LLM call failed: {str(resp)[:120]}")
-    return resp
+    """原子校验的 LLM 调用：单独用更强模型（默认 pro，可用 DEEPSEEK_VERIFY_MODEL 覆盖）。
+
+    NLI 的 entail/contradict 判别需要强模型——flash 会全判 neutral 导致 0% verified。
+    生成走 flash（快），校验走 pro（准）。失败时 RAISE（CitationVerifier 依赖此约定）。
+    """
+    import os
+    import requests
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    model = os.environ.get("DEEPSEEK_VERIFY_MODEL", "deepseek-v4-pro")
+    if not api_key:
+        raise RuntimeError("DEEPSEEK_API_KEY not set")
+    try:
+        resp = requests.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+            json={"model": model,
+                  "messages": [
+                      {"role": "system", "content": system_prompt},
+                      {"role": "user", "content": user_prompt},
+                  ],
+                  "temperature": 0.3, "max_tokens": 8192},
+            timeout=180,
+        )
+        resp.raise_for_status()
+        result = resp.json()["choices"][0]["message"]["content"]
+        if not result:
+            raise RuntimeError("empty LLM response")
+        return result
+    except Exception as e:
+        raise RuntimeError(f"LLM call failed: {str(e)[:160]}")
 
 
-def _atomic_verify_and_fix(report_text, max_rounds=2):
+def _atomic_verify_and_fix(report_text, papers=None, max_rounds=2):
     """Phase 7.7: 原子事实校验（引用锚定 NLI）→ 修正 → 再校验 循环。
 
     把报告的原子事实论断逐条对引用摘要做 NLI，产出 verified/partially/
@@ -463,8 +487,28 @@ def _atomic_verify_and_fix(report_text, max_rounds=2):
         log("Phase7.7", f"CitationVerifier unavailable: {e}")
         return report_text
 
+    # search_fn：AcademicSearchEngine 拉摘要（app.py 原流程的关键，缺失→标题级→0%）
+    def _search_fn(query, max_results=5):
+        try:
+            from academic.search_engine import AcademicSearchEngine
+            engine = AcademicSearchEngine(quality_levels=["S", "A", "B"], min_results=max_results)
+            result = engine.search(query, max_results_per_source=max(20, max_results * 4))
+            ps = result["papers"] + result.get("preprints", [])[:3]
+            return [{"title": p.title, "doi": p.doi, "abstract": p.abstract} for p in ps[:max_results]]
+        except Exception:
+            return []
+
+    # papers_data：管线缓存的论文（title/doi 供匹配，abstract 供 NLI）
+    papers_data = []
+    for p in (papers or []):
+        if hasattr(p, "to_dict"):
+            papers_data.append(p.to_dict())
+        elif isinstance(p, dict):
+            papers_data.append(p)
+
     verifier = CitationVerifier(
         llm_call_fn=_verify_llm_raises,
+        search_fn=_search_fn,
         language=v1.OUTPUT_LANG,
         max_claims=20,
         max_contexts=15,
@@ -474,7 +518,7 @@ def _atomic_verify_and_fix(report_text, max_rounds=2):
     last_cv = None
     for rnd in range(1, max_rounds + 1):
         try:
-            cv = verifier.verify(current)
+            cv = verifier.verify(current, papers_data=papers_data if papers_data else None)
         except Exception as e:
             log("Phase7.7", f"round {rnd} verify error: {e}")
             break
@@ -564,7 +608,7 @@ def _run_phases_6_to_7(config, papers, preprints, dept_outputs, relevance_log):
     report = v1.check_seed_citations(report, papers)
 
     # Phase 7.7: 原子事实校验（引用锚定 NLI）→ 修正 → 再校验
-    report = _atomic_verify_and_fix(report)
+    report = _atomic_verify_and_fix(report, papers)
 
     v1.save_text(report, "final_report_validated.md")
     log("Phase7.5", "Citation validation + atomic verification complete")
