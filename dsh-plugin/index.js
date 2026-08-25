@@ -279,6 +279,84 @@ async function findReport(root, topic) {
   } catch { return null; }
 }
 
+async function findVerification(root, topic) {
+  const tag = topic.slice(0, 20).replace(/[\/\\\s:：]+/g, '_');
+  const needles = [tag, topic.slice(0, 8)].filter((n) => n.length > 0);
+  const hits = [];
+  for (const dirName of ['v2_run_output', 'run_output']) {
+    const dir = join(root, dirName);
+    let entries = [];
+    try { entries = await readdir(dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const runDir = join(dir, e.name);
+      if (!needles.some((n) => e.name.includes(n))) continue;
+      const p = join(runDir, 'citation_verification.json');
+      try {
+        const st = await stat(p);
+        hits.push({ path: p, mtime: st.mtimeMs, name: dirName + '/' + e.name });
+      } catch {}
+    }
+  }
+  hits.sort((a, b) => b.mtime - a.mtime);
+  if (hits.length === 0) return null;
+  try {
+    const d = JSON.parse(await readFile(hits[0].path, 'utf8'));
+    return {
+      name: hits[0].name,
+      total_claims: d.total_claims ?? 0,
+      verified: d.verified ?? 0,
+      partially_verified: d.partially_verified ?? 0,
+      contradicted: d.contradicted ?? 0,
+      unverified: d.unverified ?? 0,
+      insufficient_evidence: d.insufficient_evidence ?? 0,
+      needs_fulltext: d.needs_fulltext ?? 0,
+      overall_confidence: d.overall_confidence ?? 0,
+      summary: d.summary ?? '',
+    };
+  } catch { return null; }
+}
+
+async function findVerificationMissing(root, topic) {
+  const tag = topic.slice(0, 20).replace(/[\/\\\s:：]+/g, '_');
+  const needles = [tag, topic.slice(0, 8)].filter((n) => n.length > 0);
+  const hits = [];
+  for (const dirName of ['v2_run_output', 'run_output']) {
+    const dir = join(root, dirName);
+    let entries = [];
+    try { entries = await readdir(dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const runDir = join(dir, e.name);
+      if (!needles.some((n) => e.name.includes(n))) continue;
+      const p = join(runDir, 'citation_verification.json');
+      try { const st = await stat(p); hits.push({ path: p, mtime: st.mtimeMs }); } catch {}
+    }
+  }
+  hits.sort((a, b) => b.mtime - a.mtime);
+  if (hits.length === 0) return null;
+  const d = JSON.parse(await readFile(hits[0].path, 'utf8'));
+  const rows = [];
+  for (const cv of (d.claim_verifications || [])) {
+    if (cv.status === 'verified' || cv.status === 'partially_verified') continue;
+    const papers = [];
+    for (const n of (cv.nli_results || [])) {
+      papers.push({ title: n.ref_title || '', doi: n.ref_doi || '', evidence: n.evidence || '' });
+    }
+    // Tier mirrors citation_verifier.py: title-only → insufficient_evidence,
+    // abstract-but-neutral → needs_fulltext, else → plain unverified.
+    let type = 'unverified';
+    if (cv.status === 'contradicted') {
+      type = 'contradicted';
+    } else if (papers.length > 0) {
+      const allTitle = papers.every((p) => (p.evidence || 'abstract') === 'title');
+      type = allTitle ? 'insufficient_evidence' : 'needs_fulltext';
+    }
+    rows.push({ claim: (cv.claim && cv.claim.text) || '', status: cv.status, type, papers });
+  }
+  return rows;
+}
+
 // ── Seed paper management helpers ─────────────────────────────────────────
 function seedManifestPath(cwd) { return join(cwd, 'seed_papers', 'manifest.json'); }
 
@@ -380,6 +458,26 @@ function registerWebPanel(ctx, { cwd, callTool, disposers, python }) {
         return;
       }
 
+      if (pathname === '/consensus-pipeline/api/verification') {
+        try {
+          const topic = url.searchParams.get('topic') ?? '';
+          const found = await findVerification(cwd, topic);
+          if (!found) return json(res, 404, { error: 'verification not found (still generating?)' });
+          json(res, 200, found);
+        } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
+        return;
+      }
+
+      if (pathname === '/consensus-pipeline/api/verification-missing') {
+        try {
+          const topic = url.searchParams.get('topic') ?? '';
+          const rows = await findVerificationMissing(cwd, topic);
+          if (!rows) return json(res, 404, { error: 'verification not found' });
+          json(res, 200, { missing: rows });
+        } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
+        return;
+      }
+
       if (pathname === '/consensus-pipeline/api/seed-list') {
         try {
           const manifest = readSeedManifest(cwd);
@@ -461,7 +559,7 @@ const FLOAT_PANEL_HTML = `<style>
 .cp-panel iframe{width:100%;height:100%;border:0;display:block;}
 </style>
 <button id="cp-fab" class="cp-fab" type="button">📊 控制台</button>
-<div id="cp-panel" class="cp-panel"><iframe data-src="/consensus-pipeline/" title="Consensus Pipeline"></iframe></div>
+<div id="cp-panel" class="cp-panel"><iframe data-src="/consensus-pipeline/" title="Consensus Pipeline" allow="clipboard-write"></iframe></div>
 <script>
 (function(){var b=document.getElementById("cp-fab");var p=document.getElementById("cp-panel");var f=p?p.querySelector("iframe"):null;if(b&&p){b.addEventListener("click",function(){var o=p.classList.toggle("open");if(o&&f&&!f.src){f.src=f.getAttribute("data-src");}b.textContent=o?"✕ 关闭":"📊 控制台";});}})();
 </script>`;

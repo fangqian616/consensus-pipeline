@@ -93,6 +93,11 @@ h3.section { margin:0 0 10px; font-size:14px; }
     <div class="report" id="report"></div>
   </section>
 
+  <section class="card hidden" id="verifyCard">
+    <h3 class="section">原子校验 <button class="secondary" id="exportMissing" style="float:right">导出待补清单</button></h3>
+    <div id="verifySummary" class="ph">加载中…</div>
+  </section>
+
   <section class="card">
     <h3 class="section">历史运行</h3>
     <ul class="hist" id="hist"><li style="color:var(--muted)">加载中…</li></ul>
@@ -104,6 +109,8 @@ h3.section { margin:0 0 10px; font-size:14px; }
   var report = document.getElementById('report');
   var reportTitle = document.getElementById('reportTitle');
   var copyBtn = document.getElementById('copyReport');
+  var verifyCard = document.getElementById('verifyCard');
+  var verifySummary = document.getElementById('verifySummary');
   var hist = document.getElementById('hist');
   var jobsList = document.getElementById('jobsList');
   var seedFile = document.getElementById('seedFile');
@@ -153,14 +160,105 @@ h3.section { margin:0 0 10px; font-size:14px; }
         }
       })
       .catch(function(){});
+    loadVerification();
   }
+
+  function loadVerification(){
+    if(!currentTopic) return;
+    fetch('/consensus-pipeline/api/verification?topic=' + encodeURIComponent(currentTopic))
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d && d.total_claims != null){
+          verifyCard.classList.remove('hidden');
+          var conf = Math.round((d.overall_confidence||0)*100);
+          var color = conf>=67 ? 'var(--ok)' : (conf>=40 ? '#e6a23c' : 'var(--err)');
+          var html = '<div class="ov">'
+            + '<div class="ov-box"><div class="ov-val" style="color:'+color+'">'+conf+'%</div><div class="ov-lab">总体置信度</div></div>'
+            + statBox('✅ 验证通过', d.verified)
+            + statBox('🟡 部分验证', d.partially_verified)
+            + statBox('❌ 被反驳', d.contradicted)
+            + statBox('🔴 缺摘要', d.insufficient_evidence)
+            + statBox('🟠 缺全文', d.needs_fulltext)
+            + statBox('⚪ 未验证(其他)', Math.max(0, (d.unverified||0) - (d.insufficient_evidence||0) - (d.needs_fulltext||0)))
+            + '</div>';
+          if(d.summary) html += '<div class="ph" style="margin-top:8px">'+esc(d.summary)+'</div>';
+          verifySummary.innerHTML = html;
+        } else {
+          verifyCard.classList.remove('hidden');
+          verifySummary.innerHTML = '<div style="color:var(--muted)">暂无原子校验结果（尚未跑到 Phase 7.7，或仍在生成）</div>';
+        }
+      })
+      .catch(function(){ verifyCard.classList.add('hidden'); });
+  }
+
+  var exportMissingBtn = document.getElementById('exportMissing');
+  function exportMissing(){
+    if(!currentTopic) return;
+    fetch('/consensus-pipeline/api/verification-missing?topic=' + encodeURIComponent(currentTopic))
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var rows = (d && d.missing) || [];
+        if(!rows.length){ alert('暂无待补清单（所有断言均已验证或部分验证）'); return; }
+        var header = ['断言内容','缺失类型','论文标题','DOI'];
+        var lines = [header.join(',')];
+        rows.forEach(function(row){
+          var typeMap = {needs_fulltext:'缺全文', insufficient_evidence:'缺摘要', contradicted:'被反驳', unverified:'未验证', partially_verified:'部分验证'};
+          var type = typeMap[row.type || row.status] || row.type || row.status || '未验证';
+          if(row.papers && row.papers.length){
+            row.papers.forEach(function(p){
+              lines.push([csvCell(row.claim), type, csvCell(p.title||''), csvCell(p.doi||'')].join(','));
+            });
+          } else {
+            lines.push([csvCell(row.claim), type, '', ''].join(','));
+          }
+        });
+        var blob = new Blob(['\ufeff' + lines.join('\r\n')], {type:'text/csv;charset=utf-8;'});
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = '待补清单_' + currentTopic + '.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      })
+      .catch(function(){ alert('导出失败，请稍后重试'); });
+  }
+  function csvCell(s){
+    s = (s==null?'':String(s));
+    if(/[",\r\n]/.test(s)){ s = '"' + s.replace(/"/g,'""') + '"'; }
+    return s;
+  }
+  if(exportMissingBtn) exportMissingBtn.addEventListener('click', exportMissing);
 
   copyBtn.addEventListener('click', function(){
     var t = report.innerText || '';
-    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(t); }
-    else { var ta=document.createElement('textarea'); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
-    copyBtn.textContent = '已复制';
-    setTimeout(function(){ copyBtn.textContent='复制全文'; }, 1200);
+    if(!t){ copyBtn.textContent = '无内容'; setTimeout(function(){ copyBtn.textContent='复制全文'; }, 1200); return; }
+    function ok(){ copyBtn.textContent = '已复制'; setTimeout(function(){ copyBtn.textContent='复制全文'; }, 1200); }
+    function fail(){ copyBtn.textContent = '复制失败，请手动选中复制'; setTimeout(function(){ copyBtn.textContent='复制全文'; }, 1600); }
+    function legacyCopy(){
+      var ta = document.createElement('textarea');
+      ta.value = t;
+      ta.setAttribute('readonly','');
+      ta.style.position = 'fixed';
+      ta.style.top = '0';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try { ta.setSelectionRange(0, t.length); } catch(e){}
+      var okC = false;
+      try { okC = document.execCommand('copy'); } catch(e){ okC = false; }
+      document.body.removeChild(ta);
+      return okC;
+    }
+    // 同步 execCommand 在用户点击手势中不依赖 Permissions Policy，最可靠
+    if(legacyCopy()){ ok(); return; }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(t).then(ok, fail);
+    } else {
+      fail();
+    }
   });
 
   function loadHistory(){
