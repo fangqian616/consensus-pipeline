@@ -96,6 +96,12 @@ h3.section { margin:0 0 10px; font-size:14px; }
   <section class="card hidden" id="verifyCard">
     <h3 class="section">原子校验 <button class="secondary" id="exportMissing" style="float:right">导出待补清单</button></h3>
     <div id="verifySummary" class="ph">加载中…</div>
+    <div id="reverifyBar" class="hidden" style="margin-top:10px">
+      <div style="background:#0a0c10;border:1px solid var(--border);border-radius:6px;height:12px;overflow:hidden">
+        <div id="reverifyFill" style="background:var(--accent);height:100%;width:0%;transition:width .4s"></div>
+      </div>
+      <div class="ph" id="reverifyStage" style="margin-top:5px">准备中…</div>
+    </div>
     <div class="row" style="margin-top:10px">
       <input type="file" id="fulltextFile" accept=".pdf" multiple style="flex:2">
       <button id="fulltextUploadBtn" class="secondary">批量上传</button>
@@ -120,6 +126,9 @@ h3.section { margin:0 0 10px; font-size:14px; }
   var fulltextFile = document.getElementById('fulltextFile');
   var fulltextUploadBtn = document.getElementById('fulltextUploadBtn');
   var reverifyBtn = document.getElementById('reverifyBtn');
+  var reverifyBar = document.getElementById('reverifyBar');
+  var reverifyFill = document.getElementById('reverifyFill');
+  var reverifyStage = document.getElementById('reverifyStage');
   var hist = document.getElementById('hist');
   var jobsList = document.getElementById('jobsList');
   var seedFile = document.getElementById('seedFile');
@@ -292,16 +301,34 @@ h3.section { margin:0 0 10px; font-size:14px; }
         reverifyBtn.disabled = false;
       });
   });
+  var STAGE_LABELS = {
+    starting: '准备中…',
+    resolve: '解析论文摘要',
+    verify: 'NLI 验证断言',
+    nli: 'NLI 验证断言',
+    done: '完成'
+  };
   function pollReverify(){
     fetch('/consensus-pipeline/api/reverify-status')
       .then(function(r){ return r.json(); })
       .then(function(s){
         if(s && s.running){
           reverifyBtn.textContent = '校验重跑中…';
-          setTimeout(pollReverify, 8000);
+          if(reverifyBar) reverifyBar.classList.remove('hidden');
+          var p = s.progress || {};
+          var pct = 0;
+          if(p.total > 0){ pct = Math.round((p.done / p.total) * 100); }
+          if(reverifyFill) reverifyFill.style.width = pct + '%';
+          var lbl = STAGE_LABELS[p.stage] || p.stage || '处理中';
+          var cnt = (p.total > 0) ? (' ' + p.done + '/' + p.total) : '';
+          if(reverifyStage) reverifyStage.textContent = lbl + cnt + ' — ' + pct + '%';
+          setTimeout(pollReverify, 3000);
         } else {
           reverifyBtn.textContent = '重跑校验';
           reverifyBtn.disabled = false;
+          if(reverifyFill) reverifyFill.style.width = '100%';
+          if(reverifyStage) reverifyStage.textContent = '完成';
+          setTimeout(function(){ if(reverifyBar) reverifyBar.classList.add('hidden'); }, 3000);
           if(s && s.error){ alert('重跑校验出错，请查看 DSH 日志'); }
           else { loadVerification(); loadReport(); }
         }

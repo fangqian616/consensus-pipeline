@@ -21,6 +21,25 @@ from dataclasses import dataclass, field
 # (app.py newer than this file) is identifiable from a single screenshot.
 VERIFIER_BUILD = "v0.12.18"
 
+# v0.13: optional progress hook — CLI/UI runners install fn(stage, done, total) to
+# report coarse progress during resolve()/verify(); the library itself stays
+# side-effect-free (never writes files or touches UI directly).
+_PROGRESS_HOOK = None
+
+
+def set_progress_hook(fn):
+    """Install fn(stage: str, done: int, total: int); pass None to disable."""
+    global _PROGRESS_HOOK
+    _PROGRESS_HOOK = fn
+
+
+def _emit_progress(stage: str, done: int, total: int):
+    if _PROGRESS_HOOK:
+        try:
+            _PROGRESS_HOOK(stage, done, total)
+        except Exception:
+            pass
+
 
 # ── Content Filters ─────────────────────────────────────────────────────────
 
@@ -585,9 +604,11 @@ class ReferenceResolver:
         # v0.12.8: every resolution logs its source, every failure logs a
         # TITLE-ONLY line — cloud runs (Manage-App terminal) stay diagnosable.
         _title_attempts = 0
-        for ref in references:
+        _total = len(references)
+        for _idx, ref in enumerate(references, 1):
             if ref.abstract:
                 resolved += 1
+                _emit_progress("resolve", _idx, _total)
                 continue
 
             # Try CrossRef first (if DOI available)
@@ -635,6 +656,7 @@ class ReferenceResolver:
             if not ref.abstract:
                 print(f"  [verify] TITLE-ONLY [{ref.index}] doi={ref.doi or 'N/A'} "
                       f"title={(ref.title or '')[:50]}")
+            _emit_progress("resolve", _idx, _total)
 
         return resolved
 
@@ -1719,9 +1741,11 @@ class CitationVerifier:
             return report
 
         # ── NLI verification ──
-        for claim in claims:
+        _nli_total = len(claims)
+        for _ci, claim in enumerate(claims, 1):
             cv = self.nli.verify_claim(claim, ref_dict)
             report.claim_verifications.append(cv)
+            _emit_progress("nli", _ci, _nli_total)
 
         # ── Aggregate ──
         # v0.12.10: single aggregation path — the UI calls the same helper at

@@ -557,11 +557,16 @@ function registerWebPanel(ctx, { cwd, callTool, disposers, python }) {
       }
 
       if (pathname === '/consensus-pipeline/api/reverify-status') {
+        let progress = null;
+        try {
+          progress = JSON.parse(await readFile(join(cwd, 'reverify_progress.json'), 'utf8'));
+        } catch {}
         json(res, 200, {
           running: !!(reverify && reverify.running),
           startedAt: reverify ? reverify.startedAt : null,
           finishedAt: reverify ? reverify.finishedAt : null,
           error: !!(reverify && reverify.error),
+          progress,
         });
         return;
       }
