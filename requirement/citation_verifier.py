@@ -887,7 +887,9 @@ class ReferenceResolver:
                 p = os.path.join(dirpath, name)
                 try:
                     with open(p, "rb") as f:
-                        data = f.read(4_000_000)
+                        # v0.13.1: 读完整文件——PDF 的 xref 表在末尾，截断读取
+                        # 会让 fitz 解析失败（>4MB 的 PDF 会提取到 0 字符）。
+                        data = f.read(30_000_000)
                     if data[:5] != b'%PDF-':
                         continue
                     head_text = _extract_pdf_text(data, 2)
