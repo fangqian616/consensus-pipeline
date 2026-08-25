@@ -357,6 +357,23 @@ async function findVerificationMissing(root, topic) {
   return rows;
 }
 
+// ── Phase 5.5 全文断点: pending import 状态 ──────────────────────────────
+async function findPendingImportPath(root) {
+  const hits = [];
+  for (const dirName of ['v2_run_output', 'run_output']) {
+    const dir = join(root, dirName);
+    let entries = [];
+    try { entries = await readdir(dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const p = join(dir, e.name, 'pending_fulltext_import.json');
+      try { const st = await stat(p); hits.push({ path: p, mtime: st.mtimeMs }); } catch {}
+    }
+  }
+  hits.sort((a, b) => b.mtime - a.mtime);
+  return hits.length > 0 ? hits[0].path : null;
+}
+
 // ── Seed paper management helpers ─────────────────────────────────────────
 function seedManifestPath(cwd) { return join(cwd, 'seed_papers', 'manifest.json'); }
 
@@ -568,6 +585,36 @@ function registerWebPanel(ctx, { cwd, callTool, disposers, python }) {
           error: !!(reverify && reverify.error),
           progress,
         });
+        return;
+      }
+
+      if (pathname === '/consensus-pipeline/api/pending-import') {
+        if (req.method === 'POST') {
+          try {
+            const body = await readRequestBody(req);
+            let p = {};
+            try { p = JSON.parse(body || '{}'); } catch {}
+            const status = String(p.status ?? '').trim();
+            if (!['confirmed', 'skipped', 'paused'].includes(status)) {
+              return json(res, 400, { error: 'status must be confirmed/skipped/paused' });
+            }
+            const path = await findPendingImportPath(cwd);
+            if (!path) return json(res, 404, { error: 'no pending import' });
+            const pending = JSON.parse(await readFile(path, 'utf8'));
+            pending.status = status;
+            pending.updated_at = Date.now();
+            writeFileSync(path, JSON.stringify(pending, null, 2));
+            json(res, 200, { ok: true, status });
+          } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
+          return;
+        }
+        // GET
+        try {
+          const path = await findPendingImportPath(cwd);
+          if (!path) return json(res, 200, { pending: null });
+          const pending = JSON.parse(await readFile(path, 'utf8'));
+          json(res, 200, { pending });
+        } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
         return;
       }
 

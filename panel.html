@@ -93,6 +93,11 @@ h3.section { margin:0 0 10px; font-size:14px; }
     <div class="report" id="report"></div>
   </section>
 
+  <section class="card hidden" id="pendingImportCard">
+    <h3 class="section">⏳ 待导入全文（辩论发现必要论文缺全文）</h3>
+    <div id="pendingImportBody" class="ph">加载中…</div>
+  </section>
+
   <section class="card hidden" id="verifyCard">
     <h3 class="section">原子校验 <button class="secondary" id="exportMissing" style="float:right">导出待补清单</button></h3>
     <div id="verifySummary" class="ph">加载中…</div>
@@ -121,6 +126,8 @@ h3.section { margin:0 0 10px; font-size:14px; }
   var report = document.getElementById('report');
   var reportTitle = document.getElementById('reportTitle');
   var copyBtn = document.getElementById('copyReport');
+  var pendingImportCard = document.getElementById('pendingImportCard');
+  var pendingImportBody = document.getElementById('pendingImportBody');
   var verifyCard = document.getElementById('verifyCard');
   var verifySummary = document.getElementById('verifySummary');
   var fulltextFile = document.getElementById('fulltextFile');
@@ -504,6 +511,45 @@ h3.section { margin:0 0 10px; font-size:14px; }
   loadOverview();
   setInterval(function(){ loadJobs(); loadOverview(); }, 10000);
   loadHistory();
+  loadPendingImport();
+  setInterval(loadPendingImport, 5000);
+
+  function loadPendingImport(){
+    fetch('/consensus-pipeline/api/pending-import')
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var p = d && d.pending;
+        if(!p || !p.status || p.status === 'confirmed' || p.status === 'skipped' || p.status === 'timeout'){
+          pendingImportCard.classList.add('hidden');
+          return;
+        }
+        pendingImportCard.classList.remove('hidden');
+        var remain = '';
+        if(p.deadline){
+          var secs = Math.max(0, Math.round((p.deadline - Date.now()/1000)));
+          var m = Math.floor(secs/60), s = secs%60;
+          remain = (p.status === 'paused' ? '⏸ 已暂停（倒计时停止）' : ('⏱ 剩余 ' + m + ':' + (s<10?'0':'') + s));
+        }
+        var rows = (p.papers||[]).map(function(pap){
+          return '<li><b>' + esc(pap.doi) + '</b> <span style="color:var(--muted)">' + esc(pap.title||'') + '</span><br><span class="ph">必要原因：' + esc(pap.necessary||'') + ' · 依赖：' + esc((pap.depts||[]).join('/')) + '</span></li>';
+        }).join('');
+        pendingImportBody.innerHTML = '<div class="ph">' + remain + ' · 共 ' + (p.papers||[]).length + ' 篇（PDF 拖进 fulltext_papers/ 后点「继续」）</div><ul class="hist">' + rows + '</ul><div class="row" style="margin-top:10px"><button id="piPause" class="secondary">⏸ 暂停</button><button id="piContinue">▶ 继续</button><button id="piSkip" class="secondary">⏭ 跳过</button></div>';
+        wirePendingButtons();
+      })
+      .catch(function(){ pendingImportCard.classList.add('hidden'); });
+  }
+  function wirePendingButtons(){
+    function send(status){
+      fetch('/consensus-pipeline/api/pending-import', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status:status})})
+        .then(function(r){ return r.json(); })
+        .then(function(){ loadPendingImport(); })
+        .catch(function(){});
+    }
+    var bP = document.getElementById('piPause'), bC = document.getElementById('piContinue'), bS = document.getElementById('piSkip');
+    if(bP) bP.addEventListener('click', function(){ send('paused'); });
+    if(bC) bC.addEventListener('click', function(){ send('confirmed'); });
+    if(bS) bS.addEventListener('click', function(){ send('skipped'); });
+  }
 })();
 </script>
 </body>
