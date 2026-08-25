@@ -154,6 +154,7 @@ class NLIResult:
     confidence: float = 0.0
     explanation: str = ""
     evidence: str = "abstract"    # abstract / title / fulltext (title = weaker evidence)
+    related: Optional[bool] = None  # v0.13: 论文主题是否与断言相关(全文NLI时判定)
 
 
 @dataclass
@@ -1188,10 +1189,11 @@ Output JSON: {{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "exp
 - entail: 全文内容明确支持该论断（同一事实/结论）
 - contradict: 全文内容明确反驳该论断
 - neutral: 全文与该论断无关，或无法从全文判断
+- related: 文献主题与论断主题是否相关（true=相关但证据不足/措辞更强，false=完全不相关，疑引用错位）
 - 若论断涉及研究者归属（如"X与Y的研究表明…"），以文献作者字段核对（姓名拼写变体视为同一人）
 
 输出JSON：
-{{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "explanation": "一句话说明"}}"""
+{{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "related": true/false, "explanation": "一句话说明"}}"""
 
     FULLTEXT_PROMPT_EN = """You are an academic fact-checking assistant. Determine whether the paper's FULL TEXT supports the given claim.
 
@@ -1205,10 +1207,11 @@ Criteria:
 - entail: The full text clearly supports this claim (same fact/conclusion)
 - contradict: The full text clearly refutes this claim
 - neutral: The full text is unrelated to this claim, or cannot be determined from it
+- related: whether the paper's TOPIC is related to the claim's topic (true=related but evidence insufficient/overstated, false=unrelated, likely a citation mismatch)
 - If the claim attributes the study to specific researchers (e.g. "X and Y showed..."), verify attribution against the Authors field (spelling variants count as the same person)
 
 Output JSON:
-{{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "explanation": "one-sentence explanation"}}"""
+{{"label": "entail/contradict/neutral", "confidence": 0.0-1.0, "related": true/false, "explanation": "one-sentence explanation"}}"""
 
     def verify_claim(
         self,
@@ -1286,10 +1289,10 @@ Output JSON:
         """v0.13: abstract was neutral — fetch the OA full text and re-check.
 
         Returns the full-text verdict when it flips to entail/contradict. When the
-        full text is ALSO neutral, returns a fulltext-evidence neutral verdict
-        flagged as a likely citation mismatch (neither abstract nor full text
-        supports the claim — the citation is probably attached to the wrong paper),
-        rather than silently keeping the abstract verdict.
+        full text is ALSO neutral, returns a fulltext-evidence neutral verdict and
+        classifies it: related=false → 引用错位 (wrong paper), related=true →
+        断言拔高 (right paper but claim overstated). Falls back to the abstract
+        verdict only when the full text can't be fetched (paywalled).
         """
         fulltext = ""
         try:
@@ -1302,8 +1305,11 @@ Output JSON:
         ft = self._check_nli_fulltext(claim_text, ref)
         if ft.label in ("entail", "contradict"):
             return ft
-        # Full text also neutral → strong signal of a citation mismatch.
-        ft.explanation = (ft.explanation or "").rstrip() + " [摘要与全文均不支持该论断，疑为引用错位]"
+        # Full text also neutral → classify 引用错位 vs 断言拔高.
+        if ft.related is False:
+            ft.explanation = (ft.explanation or "").rstrip() + " [引用错位：论文主题与断言不相关]"
+        else:
+            ft.explanation = (ft.explanation or "").rstrip() + " [断言拔高：论文相关但措辞过强，未明确支持]"
         return ft
 
     def _check_nli_fulltext(self, claim_text: str, ref: Reference) -> NLIResult:
@@ -1343,6 +1349,11 @@ Output JSON:
             result.label = label
             result.confidence = float(parsed.get("confidence", 0.5))
             result.explanation = parsed.get("explanation", "")
+            _rel = parsed.get("related")
+            if isinstance(_rel, bool):
+                result.related = _rel
+            elif isinstance(_rel, str):
+                result.related = _rel.lower() in ("true", "yes", "1")
         except Exception as e:
             result.explanation = f"Fulltext NLI check failed: {e}"
 

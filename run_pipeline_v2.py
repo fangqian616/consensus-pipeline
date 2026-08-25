@@ -734,14 +734,16 @@ def _atomic_verify_and_fix(report_text, papers=None, max_rounds=2):
 def _build_correction_note(cv, lang):
     """把未通过校验的原子论断整理成修正建议说明（确定性，不依赖 LLM）。
 
-    v0.13: 区分「引用错位」（摘要与全文均 neutral）与「真缺全文」（仅摘要 neutral，
-    全文未抓到）——前者标注需核对引用编号，后者标注需核实全文。
+    v0.13: 区分三类未验证——
+    - 引用错位（全文 neutral 且 related=false）：核对引用编号/论文归属
+    - 断言拔高（全文 neutral 且 related=true）：论文相关但措辞过强，弱化措辞
+    - 真缺全文（仅摘要 neutral，全文未抓到）：核实全文
     """
-    def _has_fulltext_neutral(c):
-        return any(
-            getattr(n, "evidence", "") == "fulltext" and getattr(n, "label", "") == "neutral"
-            for n in (c.nli_results or [])
-        )
+    def _fulltext_neutral_related(c):
+        for n in (c.nli_results or []):
+            if getattr(n, "evidence", "") == "fulltext" and getattr(n, "label", "") == "neutral":
+                return getattr(n, "related", None)
+        return None
 
     if lang == "zh":
         lines = ["## 原子校验与修正建议", ""]
@@ -752,10 +754,13 @@ def _build_correction_note(cv, lang):
         for c in cv.claim_verifications:
             if c.status in ("contradicted", "unverified"):
                 any_failed = True
+                _rel = _fulltext_neutral_related(c)
                 if c.status == "contradicted":
                     act = "删除或改写"
-                elif _has_fulltext_neutral(c):
-                    act = "⚠️ 引用可能错位（摘要与全文均不支持，请核对引用编号与论文归属）"
+                elif _rel is False:
+                    act = "⚠️ 引用错位（论文主题与断言不相关，请核对引用编号与论文归属）"
+                elif _rel is True:
+                    act = "✂️ 断言拔高（论文相关但措辞过强，建议弱化为『探讨了…/发现…与…相关』）"
                 else:
                     act = "加限定语或核实全文"
                 lines.append(f"- [{c.status}] {c.claim.text} → {act}")
@@ -771,10 +776,13 @@ def _build_correction_note(cv, lang):
         for c in cv.claim_verifications:
             if c.status in ("contradicted", "unverified"):
                 any_failed = True
+                _rel = _fulltext_neutral_related(c)
                 if c.status == "contradicted":
                     act = "remove or rewrite"
-                elif _has_fulltext_neutral(c):
-                    act = "⚠️ possible citation mismatch (abstract AND full text do not support; check citation number/attribution)"
+                elif _rel is False:
+                    act = "⚠️ citation mismatch (paper topic unrelated to claim; check citation number/attribution)"
+                elif _rel is True:
+                    act = "✂️ overstated claim (paper related but claim too strong; soften to 'discussed…/found … correlates with…')"
                 else:
                     act = "hedge or verify against fulltext"
                 lines.append(f"- [{c.status}] {c.claim.text} -> {act}")
