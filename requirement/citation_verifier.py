@@ -463,6 +463,25 @@ def _extract_pdf_text(data: bytes, max_pages: int) -> str:
         return ""
 
 
+def _extract_doi_from_pdf_text(text: str) -> str:
+    """Extract a DOI from PDF text (first page usually carries it).
+
+    v0.13: lets users drop paywalled PDFs with ANY filename into
+    fulltext_papers/ — the DOI is read from the document itself, no renaming.
+    """
+    if not text:
+        return ""
+    # Preferred: explicit "doi.org/..." or "DOI: ..." markers
+    m = re.search(r"(?i)(?:doi\.org/|doi:\s*)(10\.\d{4,9}/[^\s\"'<>]+)", text)
+    if m:
+        return m.group(1).rstrip('.,;)]}').strip()
+    # Fallback: bare DOI pattern
+    m = re.search(r"\b(10\.\d{4,9}/[-._;()/:A-Za-z0-9]+)", text)
+    if m:
+        return m.group(1).rstrip('.,;)]}').strip()
+    return ""
+
+
 def _fetch_pdf_abstract(pdf_url: str, max_bytes: int = 6_000_000, _depth: int = 0) -> str:
     """Download an open-access PDF and extract its abstract (best-effort).
 
@@ -532,6 +551,7 @@ class ReferenceResolver:
         """
         self.search_fn = search_fn
         self._fulltext_cache: Dict[str, str] = {}  # v0.13: doi -> OA full text
+        self._local_fulltext_index = None  # v0.13: doi -> filename (scanned lazily)
 
     def resolve(self, references: List[Reference]) -> int:
         """
@@ -804,8 +824,9 @@ class ReferenceResolver:
     def _fetch_local_fulltext(self, doi: str) -> str:
         """v0.13: read a user-uploaded PDF from fulltext_papers/ (paywalled papers).
 
-        Looks up the DOI in fulltext_papers/manifest.json ({doi: filename}), then
-        falls back to filename conventions ({doi}.pdf, {doi with / → _}.pdf).
+        Resolution order: manifest.json ({doi: filename}) → a lazily-built index
+        that reads the DOI from INSIDE each PDF (so filenames don't matter) →
+        filename convention ({doi}.pdf, {doi with / → _}.pdf).
         """
         import os
         dirpath = os.environ.get("CP_FULLTEXT_DIR", "fulltext_papers")
@@ -824,6 +845,14 @@ class ReferenceResolver:
                         candidates.insert(0, _fn)
             except Exception:
                 pass
+        # v0.13: scan every PDF's internal DOI — user drops files with ANY name.
+        try:
+            _idx = self._build_local_fulltext_index()
+            _fn = _idx.get(doi) or _idx.get(doi.lower())
+            if _fn and _fn not in candidates:
+                candidates.insert(0, _fn)
+        except Exception:
+            pass
         for name in candidates:
             p = os.path.join(dirpath, name)
             if not os.path.isfile(p):
@@ -839,6 +868,37 @@ class ReferenceResolver:
             except Exception as _loc_err:
                 print(f"  [verify] local-fulltext FAIL {p}: {type(_loc_err).__name__}: {str(_loc_err)[:120]}")
         return ""
+
+    def _build_local_fulltext_index(self):
+        """v0.13: scan fulltext_papers/*.pdf, read each PDF's internal DOI.
+
+        Builds {doi: filename} once and caches it, so a folder full of
+        arbitrarily-named paywalled PDFs is matched to claims automatically.
+        """
+        import os
+        if self._local_fulltext_index is not None:
+            return self._local_fulltext_index
+        index = {}
+        dirpath = os.environ.get("CP_FULLTEXT_DIR", "fulltext_papers")
+        if os.path.isdir(dirpath):
+            for name in os.listdir(dirpath):
+                if not name.lower().endswith(".pdf"):
+                    continue
+                p = os.path.join(dirpath, name)
+                try:
+                    with open(p, "rb") as f:
+                        data = f.read(4_000_000)
+                    if data[:5] != b'%PDF-':
+                        continue
+                    head_text = _extract_pdf_text(data, 2)
+                    _doi = _extract_doi_from_pdf_text(head_text)
+                    if _doi:
+                        index[_doi] = name
+                        index[_doi.lower()] = name
+                except Exception:
+                    continue
+        self._local_fulltext_index = index
+        return index
 
     def _fetch_unpaywall_fulltext(self, doi: str) -> str:
         """Unpaywall by DOI → OA PDF URL → full body text."""

@@ -101,7 +101,7 @@ h3.section { margin:0 0 10px; font-size:14px; }
       <button id="fulltextUploadBtn" class="secondary">批量上传</button>
       <button id="reverifyBtn" class="secondary">重跑校验</button>
     </div>
-    <div class="ph" style="margin-top:8px">💡 批量补全文：PDF 文件名用 DOI 命名（<code>/</code> 换成 <code>_</code>），如 <code>10.1016_j.enpol.2020.111492.pdf</code>，可一次多选。或直接拖进项目 <code>fulltext_papers/</code> 文件夹，再点「重跑校验」。</div>
+    <div class="ph" style="margin-top:8px">💡 批量补全文：直接框选 PDF 上传即可（<b>文件名随便</b>，DOI 会自动从 PDF 内部提取），或拖进项目 <code>fulltext_papers/</code> 文件夹后点「重跑校验」。</div>
   </section>
 
   <section class="card">
@@ -248,20 +248,13 @@ h3.section { margin:0 0 10px; font-size:14px; }
     fulltextUploadBtn.textContent = '上传中 0/' + files.length;
     fulltextUploadBtn.disabled = true;
     Array.prototype.forEach.call(files, function(file){
-      var doi = doiFromFilename(file.name);
-      if(!doi){
-        results.push('⚠️ ' + file.name + '：文件名不是 DOI，请改成 10.xxxx_xxx.pdf 格式');
-        done++;
-        refresh();
-        return;
-      }
-      fetch('/consensus-pipeline/api/fulltext-upload?doi=' + encodeURIComponent(doi), {
+      fetch('/consensus-pipeline/api/fulltext-upload', {
         method: 'POST',
         body: file
       })
         .then(function(r){ return r.json(); })
         .then(function(d){
-          results.push((d && d.ok) ? '✅ ' + file.name + ' → ' + doi : '❌ ' + file.name + '：' + ((d && d.error) || '失败'));
+          results.push((d && d.ok) ? '✅ ' + file.name : '❌ ' + file.name + '：' + ((d && d.error) || '失败'));
         })
         .catch(function(){ results.push('❌ ' + file.name + '：网络错误'); })
         .finally(function(){ done++; refresh(); });
@@ -272,15 +265,10 @@ h3.section { margin:0 0 10px; font-size:14px; }
         fulltextUploadBtn.textContent = '批量上传';
         fulltextUploadBtn.disabled = false;
         fulltextFile.value = '';
-        alert('上传完成：\n' + results.join('\n'));
+        alert('上传完成（DOI 会在重跑校验时自动从 PDF 内提取）：\n' + results.join('\n'));
       }
     }
   });
-  function doiFromFilename(name){
-    var m = String(name||'').match(/^(10\.\d{4,9}[_/][^\s]+?)\.pdf$/i);
-    if(!m) return '';
-    return m[1].replace(/_/g, '/');
-  }
 
   if(reverifyBtn) reverifyBtn.addEventListener('click', function(){
     if(!currentTopic){ alert('请先在「历史运行」查看报告，再重跑校验'); return; }

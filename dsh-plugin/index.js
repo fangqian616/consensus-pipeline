@@ -521,8 +521,6 @@ function registerWebPanel(ctx, { cwd, callTool, disposers, python }) {
 
       if (pathname === '/consensus-pipeline/api/fulltext-upload' && req.method === 'POST') {
         try {
-          const doi = (url.searchParams.get('doi') || '').trim();
-          if (!doi) return json(res, 400, { error: 'doi is required' });
           const chunks = [];
           for await (const c of req) chunks.push(c);
           const buf = Buffer.concat(chunks);
@@ -531,10 +529,10 @@ function registerWebPanel(ctx, { cwd, callTool, disposers, python }) {
           }
           const dir = join(cwd, 'fulltext_papers');
           try { await stat(dir); } catch { await mkdir(dir, { recursive: true }); }
-          const safe = doi.replace(/[/:\\]/g, '_');
-          const filename = safe + '.pdf';
+          // 任意命名（时间戳），DOI 由重跑校验时从 PDF 内部提取——无需用户重命名
+          const filename = `upload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.pdf`;
           writeFileSync(join(dir, filename), buf);
-          json(res, 200, { ok: true, filename, doi });
+          json(res, 200, { ok: true, filename });
         } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
         return;
       }
