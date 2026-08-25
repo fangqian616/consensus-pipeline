@@ -97,12 +97,11 @@ h3.section { margin:0 0 10px; font-size:14px; }
     <h3 class="section">原子校验 <button class="secondary" id="exportMissing" style="float:right">导出待补清单</button></h3>
     <div id="verifySummary" class="ph">加载中…</div>
     <div class="row" style="margin-top:10px">
-      <div class="field" style="flex:2"><label>DOI（补全文）</label><input id="fulltextDoi" placeholder="10.1016/j.enpol.2020.111492"></div>
-      <input type="file" id="fulltextFile" accept=".pdf" style="flex:2">
-      <button id="fulltextUploadBtn" class="secondary">上传全文</button>
+      <input type="file" id="fulltextFile" accept=".pdf" multiple style="flex:2">
+      <button id="fulltextUploadBtn" class="secondary">批量上传</button>
       <button id="reverifyBtn" class="secondary">重跑校验</button>
     </div>
-    <div class="ph" style="margin-top:8px">💡 付费墙论文的 PDF 按 DOI 上传后，点「重跑校验」即用全文验证（缺全文→验证通过/被反驳）。</div>
+    <div class="ph" style="margin-top:8px">💡 批量补全文：PDF 文件名用 DOI 命名（<code>/</code> 换成 <code>_</code>），如 <code>10.1016_j.enpol.2020.111492.pdf</code>，可一次多选。或直接拖进项目 <code>fulltext_papers/</code> 文件夹，再点「重跑校验」。</div>
   </section>
 
   <section class="card">
@@ -118,7 +117,6 @@ h3.section { margin:0 0 10px; font-size:14px; }
   var copyBtn = document.getElementById('copyReport');
   var verifyCard = document.getElementById('verifyCard');
   var verifySummary = document.getElementById('verifySummary');
-  var fulltextDoi = document.getElementById('fulltextDoi');
   var fulltextFile = document.getElementById('fulltextFile');
   var fulltextUploadBtn = document.getElementById('fulltextUploadBtn');
   var reverifyBtn = document.getElementById('reverifyBtn');
@@ -243,28 +241,46 @@ h3.section { margin:0 0 10px; font-size:14px; }
   if(exportMissingBtn) exportMissingBtn.addEventListener('click', exportMissing);
 
   if(fulltextUploadBtn) fulltextUploadBtn.addEventListener('click', function(){
-    var doi = (fulltextDoi.value || '').trim();
-    var file = fulltextFile.files && fulltextFile.files[0];
-    if(!doi){ alert('请先填写 DOI'); return; }
-    if(!file){ alert('请先选择 PDF 文件'); return; }
-    fulltextUploadBtn.textContent = '上传中…';
+    var files = fulltextFile.files;
+    if(!files || !files.length){ alert('请先选择 PDF 文件（可多选）'); return; }
+    var results = [];
+    var done = 0;
+    fulltextUploadBtn.textContent = '上传中 0/' + files.length;
     fulltextUploadBtn.disabled = true;
-    fetch('/consensus-pipeline/api/fulltext-upload?doi=' + encodeURIComponent(doi), {
-      method: 'POST',
-      body: file
-    })
-      .then(function(r){ return r.json(); })
-      .then(function(d){
-        if(d && d.ok){ alert('已上传全文：' + d.filename + '\n重跑 Phase 7.7 校验后生效'); }
-        else { alert('上传失败：' + ((d && d.error) || '未知错误')); }
+    Array.prototype.forEach.call(files, function(file){
+      var doi = doiFromFilename(file.name);
+      if(!doi){
+        results.push('⚠️ ' + file.name + '：文件名不是 DOI，请改成 10.xxxx_xxx.pdf 格式');
+        done++;
+        refresh();
+        return;
+      }
+      fetch('/consensus-pipeline/api/fulltext-upload?doi=' + encodeURIComponent(doi), {
+        method: 'POST',
+        body: file
       })
-      .catch(function(){ alert('上传失败，请稍后重试'); })
-      .finally(function(){
-        fulltextUploadBtn.textContent = '上传全文';
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+          results.push((d && d.ok) ? '✅ ' + file.name + ' → ' + doi : '❌ ' + file.name + '：' + ((d && d.error) || '失败'));
+        })
+        .catch(function(){ results.push('❌ ' + file.name + '：网络错误'); })
+        .finally(function(){ done++; refresh(); });
+    });
+    function refresh(){
+      fulltextUploadBtn.textContent = '上传中 ' + done + '/' + files.length;
+      if(done >= files.length){
+        fulltextUploadBtn.textContent = '批量上传';
         fulltextUploadBtn.disabled = false;
         fulltextFile.value = '';
-      });
+        alert('上传完成：\n' + results.join('\n'));
+      }
+    }
   });
+  function doiFromFilename(name){
+    var m = String(name||'').match(/^(10\.\d{4,9}[_/][^\s]+?)\.pdf$/i);
+    if(!m) return '';
+    return m[1].replace(/_/g, '/');
+  }
 
   if(reverifyBtn) reverifyBtn.addEventListener('click', function(){
     if(!currentTopic){ alert('请先在「历史运行」查看报告，再重跑校验'); return; }
