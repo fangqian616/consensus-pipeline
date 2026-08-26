@@ -3736,6 +3736,34 @@ def render_proofread_tab():
                     "No cached papers found, will parse bibliography and fetch abstracts online"
                 )
 
+            # v0.13: 全文补录上传——付费墙论文的 PDF 放 fulltext_papers/，重新校验时全文升级自动用
+            with st.expander("📖 " + ("补全文（上传付费墙论文 PDF）" if is_zh else "Upload fulltext PDFs (paywalled papers)"), expanded=False):
+                st.caption(("上传论文全文 PDF（文件名随便，DOI 会自动从 PDF 内部提取）。重新校验时，原子校验会用本地全文验证「需查全文」的论断。" if is_zh
+                            else "Upload paper fulltext PDFs (any filename; DOI auto-extracted). Re-running fact check uses them to verify needs-fulltext claims."))
+                st.caption("⚠️ " + ("全文上传建议在本地部署使用：线上浏览器环境可能因性能不足导致上传失败。" if is_zh
+                                    else "⚠️ Fulltext upload is best on local deployment; cloud browsers may lack performance."))
+                _ft_files = st.file_uploader(
+                    ("选择 PDF（可多选）" if is_zh else "Choose PDFs (multiple)"),
+                    type=["pdf"], accept_multiple_files=True, key="fulltext_upload")
+                if st.button("⬆️ " + ("上传全文" if is_zh else "Upload fulltext"), key="fulltext_upload_btn"):
+                    if not _ft_files:
+                        st.warning(("请先选择 PDF 文件" if is_zh else "Choose PDFs first"))
+                    else:
+                        import os as _os
+                        _ft_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "fulltext_papers")
+                        _os.makedirs(_ft_dir, exist_ok=True)
+                        _n_ok = 0
+                        for _f in _ft_files:
+                            try:
+                                _safe = f"upload_{int(time.time()*1000)}_{_f.name}".replace("/", "_").replace("\\", "_")
+                                with open(_os.path.join(_ft_dir, _safe), "wb") as _out:
+                                    _out.write(_f.getbuffer())
+                                _n_ok += 1
+                            except Exception:
+                                pass
+                        st.success((f"已上传 {_n_ok} 篇全文到 fulltext_papers/。请点「重新校验」让全文升级生效。" if is_zh
+                                    else f"Uploaded {_n_ok} fulltext PDF(s) to fulltext_papers/. Re-run fact check to apply."))
+
             _fc_btn_lbl = (("重新校验" if st.session_state.get("fact_check_report") else "开始事实校验") if is_zh
                            else ("Re-run Fact Check" if st.session_state.get("fact_check_report") else "Start Fact Check"))
             if st.button("🚀 " + _fc_btn_lbl, key="fact_check_btn"):
