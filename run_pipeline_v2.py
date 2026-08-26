@@ -89,12 +89,15 @@ def _build_papers_summary(papers, max_abstract=300):
 
 
 def _debate_department_v2(dept_key, dept_name, debaters, papers_summary,
-                          rounds_unused, output_dir, topic_directions=None):
+                          rounds_unused, output_dir, topic_directions=None,
+                          prev_dept_consensus=None):
     """
     v2 部门辩论: StanceTracker 采集表态 + CV 量化 + 动态终止
 
     rounds_unused: 保留参数兼容 v1 签名, v2 不使用(轮次由 CV 决定)
     output_dir: 运行输出目录(用于 StanceTracker 日志)
+    prev_dept_consensus: 前序部门共识摘要列表(修复孤岛式辩论——让本部门看到前面部门的观点,
+                         可采纳/反驳/补充, 建立部门间意见联动)
     """
     log = v1.log
     llm_call = v1.llm_call
@@ -184,6 +187,11 @@ def _debate_department_v2(dept_key, dept_name, debaters, papers_summary,
                     system_prompt += "\n\n" + stance_block
 
             user_msg = f"论文列表：\n{papers_summary[:12000]}"
+            # 前序部门共识注入（修复孤岛式辩论：本部门能看到前面部门的观点）
+            if prev_dept_consensus:
+                prev_dept_context = "\n\n【前序部门共识摘要（供参考/采纳/反驳/补充）】\n" + \
+                    "\n".join(f"- {c}" for c in prev_dept_consensus)
+                user_msg += prev_dept_context
             if round_num > 1:
                 user_msg += f"\n\n（{round_label}——请深化或回应）"
 
@@ -298,8 +306,33 @@ v2 量化摘要:
     }
 
 
-def phase5_debate_v2(config, papers, preprints, output_dir):
-    """v2 部门辩论: 全部门遍历,每个部门使用 StanceTracker"""
+def _inject_fulltext_to_papers(papers, fulltext_cache, max_chars=1500):
+    """把全文要点注入 papers 的 abstract（扩展摘要），让辩论/报告用全文而非纯摘要。
+
+    返回注入的论文数。幂等：abstract 已含「【全文要点】」的跳过，不重复注入。
+    """
+    n = 0
+    for p in papers:
+        doi = (getattr(p, "doi", "") or "").strip()
+        ft = (fulltext_cache or {}).get(doi)
+        if ft and len(ft) >= 300:
+            ab = getattr(p, "abstract", "") or ""
+            if "【全文要点】" in ab:
+                continue
+            p.abstract = (ab + "\n\n【全文要点】" + ft[:max_chars]).strip()
+            n += 1
+    return n
+
+
+def phase5_debate_v2(config, papers, preprints, output_dir, dept_slice=None,
+                     prev_dept_consensus=None):
+    """v2 部门辩论: 全部门遍历,每个部门使用 StanceTracker
+
+    dept_slice: (start, end) 只跑 dept_order[start:end]（end=None 到末尾）。
+    用于辩论中途断点：前 N 个部门 → 断点问用户导入全文 → 剩余部门用全文。
+    prev_dept_consensus: 前序部门共识摘要（两段式辩论时，Phase 5b 传入 Phase 5a 的共识，
+    让剩余部门看到前面部门的观点，建立部门间联动）。
+    """
     v1.log("Phase5-v2", "Starting v2 stance-aware department debate")
     v1.log("Phase5-v2", f"  shadow_mode={V2_CONFIG['shadow_mode']}, "
            f"max_rounds={V2_CONFIG['max_rounds']}, "
@@ -307,24 +340,31 @@ def phase5_debate_v2(config, papers, preprints, output_dir):
 
     departments = config.get("departments", {})
     dept_order = config.get("dept_order", list(departments.keys()))
+    if dept_slice:
+        dept_order = dept_order[dept_slice[0]:dept_slice[1]]
     topic_directions = config.get("topic_directions", [])
 
     state = _load_state(output_dir)
     completed = set(state.get("phase5_depts_completed", []))
 
     dept_outputs = {}
+    prev_consensus = list(prev_dept_consensus or [])
 
     for dept_key in dept_order:
+        dept_info = departments.get(dept_key, {})
+        dept_name = dept_info.get(
+            "en_name" if v1.OUTPUT_LANG == "en" else "zh_name", dept_key)
+
         if dept_key in completed:
             saved = _load_json_file(output_dir, f"phase5_dept_{dept_key}.json")
             if isinstance(saved, dict):
                 dept_outputs[dept_key] = saved
                 v1.log("Phase5-v2", f"Resume: 跳过已完成部门 {dept_key}")
+                # 已跳过部门的共识也要进前序观点，供后续部门联动
+                if saved.get("consensus"):
+                    prev_consensus.append(f"[{dept_name}] {str(saved['consensus'])[:400]}")
                 continue
 
-        dept_info = departments.get(dept_key, {})
-        dept_name = dept_info.get(
-            "en_name" if v1.OUTPUT_LANG == "en" else "zh_name", dept_key)
         debaters = dept_info.get("debaters", {})
 
         dept_papers = _filter_papers_for_dept(dept_key, papers, top_n=40)
@@ -338,8 +378,12 @@ def phase5_debate_v2(config, papers, preprints, output_dir):
         output = _debate_department_v2(
             dept_key, dept_name, debaters, papers_summary,
             rounds_unused=0, output_dir=output_dir,
-            topic_directions=topic_directions)
+            topic_directions=topic_directions,
+            prev_dept_consensus=prev_consensus)
         dept_outputs[dept_key] = output
+        # 本部门共识摘要加入前序观点，供后续部门联动
+        if isinstance(output, dict) and output.get("consensus"):
+            prev_consensus.append(f"[{dept_name}] {str(output['consensus'])[:400]}")
         # 部门输出落盘(原子) + 更新状态
         _atomic_write_json(output_dir, f"phase5_dept_{dept_key}.json", output)
         state["phase5_depts_completed"] = list(dept_outputs.keys())
@@ -498,6 +542,26 @@ def phase4_9_fulltext_fetch(papers, output_dir, time_budget_s=900):
     return fulltext_cache
 
 
+# 核心主题关键词：判断论文是否与「用能权交易→绿色转型」主线直接相关。
+# Phase 5.5 断点只对「核心主题相关」的缺全文论文询问用户，边缘主题（储能/绿色金融等）不打扰。
+_CORE_TOPIC_KEYWORDS = [
+    "energy use right", "energy-use right", "energy using right", "energy-using right",
+    "energy consuming right", "energy-consuming right", "energy consumption right",
+    "energy consumption permit", "energy quota", "energy rights trading", "energy right trading",
+    "用能权", "能源使用权", "能耗权",
+    "green transformation", "green transition", "绿色转型",
+]
+
+
+def _is_core_topic_related(paper) -> bool:
+    """论文标题/摘要是否与核心主题（用能权交易→绿色转型）直接相关。"""
+    text = ((getattr(paper, "title", "") or "") + " " + (getattr(paper, "abstract", "") or "")).lower()
+    for kw in _CORE_TOPIC_KEYWORDS:
+        if kw in text:
+            return True
+    return False
+
+
 def _write_pending_import(pending, output_dir):
     """写待导入清单状态文件 pending_fulltext_import.json（原子）。"""
     path = os.path.join(output_dir, "pending_fulltext_import.json")
@@ -556,7 +620,8 @@ def phase5_5_fulltext_gate(config, dept_outputs, papers, fulltext_cache, output_
                         continue
                     if doi not in cited:
                         cited[doi] = {"title": getattr(p, "title", ""), "count": 0,
-                                      "depts": [], "in_consensus": False}
+                                      "depts": [], "in_consensus": False,
+                                      "topic_related": _is_core_topic_related(p)}
                     cited[doi]["count"] += 1
                     if dept_name not in cited[doi]["depts"]:
                         cited[doi]["depts"].append(dept_name)
@@ -569,14 +634,16 @@ def phase5_5_fulltext_gate(config, dept_outputs, papers, fulltext_cache, output_
         if out.get("consensus"):
             _scan(str(out["consensus"]), in_consensus=True)
 
-    # 2. 「缺失但必要」= 缺全文 且（共识引用 或 被 ≥2 个部门引用）
-    #    注意：不用 count（引用次数）判定——辩手在冗长论点里会反复带 [N] 引用
-    #    同一篇论文几十上百次，count 会严重失真；跨部门/共识才是「必要」信号。
+    # 2. 「缺失但必要」= 缺全文 且（共识引用 或 被 ≥2 部门引用）且 核心主题相关
+    #    主题相关性过滤：边缘主题（储能/绿色金融等）即使部门引用也不问用户，
+    #    因为报告聚焦「用能权→绿色转型」主线，边缘论文最终不会被引用（白传）。
     missing = [
         {"doi": d, "title": v["title"], "cited": v["count"], "depts": v["depts"],
          "necessary": ("共识引用" if v["in_consensus"] else f"跨 {len(v['depts'])} 部门")}
         for d, v in cited.items()
-        if d not in fulltext_cache and (v["in_consensus"] or len(v["depts"]) >= 2)
+        if d not in fulltext_cache
+        and (v["in_consensus"] or len(v["depts"]) >= 2)
+        and v.get("topic_related", False)
     ]
     log("Phase5.5", f"辩论引用 {len(cited)} 篇论文，其中「缺失但必要」{len(missing)} 篇")
 
@@ -799,18 +866,9 @@ def _run_phases_6_to_7(config, papers, preprints, dept_outputs, relevance_log,
     # Phase 6: 交叉辩论
     cross_results = v1.phase6_cross_debate(config, dept_outputs)
 
-    # Phase 6.5+: 报告生成前把全文注入 abstract（扩展摘要，减少脑补拔高）
-    # 不做 fulltext 字段改动，直接扩展 abstract，ReportGenerator 无感知地用上全文。
-    if fulltext_cache:
-        _n_fulltext = 0
-        for p in papers:
-            doi = (getattr(p, "doi", "") or "").strip()
-            ft = fulltext_cache.get(doi)
-            if ft and len(ft) >= 300:
-                p.abstract = ((getattr(p, "abstract", "") or "") +
-                              "\n\n【全文要点】" + ft[:1500]).strip()
-                _n_fulltext += 1
-        log("Phase7", f"报告生成前注入全文: {_n_fulltext}/{len(papers)} 篇")
+    # Phase 6.5+: 报告生成前把全文注入 abstract（幂等，Phase 5b 已注入的跳过）
+    _n_fulltext = _inject_fulltext_to_papers(papers, fulltext_cache)
+    log("Phase7", f"报告生成前注入全文: {_n_fulltext}/{len(papers)} 篇")
 
     # Programming / Tutorial 独立产出
     prog_output = v1.generate_programming_output(papers)
@@ -1025,9 +1083,12 @@ def main():
             dept_outputs = _run_single_dept(args.only_dept, config, papers, preprints, output_dir)
             v1.log("MAIN-v2", f"[隔离测试] 单部门 {args.only_dept} 完成, 退出(跳过 Phase 6-7)")
             return
-        dept_outputs = phase5_debate_v2(config, papers, preprints, output_dir)
+        # Phase 5a: 前 N 个部门辩论（形成初步观点）
+        _BREAK_AFTER_N = 3
+        dept_outputs = phase5_debate_v2(config, papers, preprints, output_dir,
+                                        dept_slice=(0, _BREAK_AFTER_N))
 
-        # Phase 5.5: 全文断点——辩论观点里「缺失但必要」的论文，询问用户导入
+        # Phase 5.5: 全文断点——从初步观点确定「缺失但必要」论文，询问用户导入
         imported_dois, skipped_dois = phase5_5_fulltext_gate(
             config, dept_outputs, papers, fulltext_cache, output_dir)
         if imported_dois:
@@ -1041,8 +1102,33 @@ def main():
                     fulltext_cache[doi] = ft[:30000]
                     _got += 1
             v1.log("Phase5.5", f"用户导入 {len(imported_dois)} 篇，重新获取全文 {_got} 篇（缓存共 {len(fulltext_cache)}）")
+            # 标记「用户补全文论文」，报告生成时强制引用（复用 is_core_seed 的 weight='core' 机制）
+            imported_set = set(imported_dois)
+            _n_mark = 0
+            for p in papers:
+                if (getattr(p, "doi", "") or "").strip() in imported_set:
+                    p.weight = "core"
+                    p.quality_detail = dict(getattr(p, "quality_detail", None) or {})
+                    p.quality_detail["weight"] = "core"
+                    p.quality_detail["user_fulltext"] = True
+                    _n_mark += 1
+            v1.log("Phase5.5", f"已标记 {_n_mark} 篇为用户补全文论文（报告强制引用）")
         state["phase5_5_imported"] = len(imported_dois)
         _save_state(output_dir, state)
+
+        # 注入全文到 papers，剩余部门辩论用全文（而不是纯摘要）
+        _n_inj = _inject_fulltext_to_papers(papers, fulltext_cache)
+        v1.log("Phase5-v2", f"全文注入 abstract: {_n_inj} 篇（剩余部门辩论用）")
+
+        # Phase 5b: 剩余部门辩论（用全文 + 前序部门共识联动）
+        _prev_consensus = []
+        for _dk, _out in dept_outputs.items():
+            if isinstance(_out, dict) and _out.get("consensus"):
+                _dname = _out.get("department", _dk)
+                _prev_consensus.append(f"[{_dname}] {str(_out['consensus'])[:400]}")
+        dept_outputs.update(phase5_debate_v2(config, papers, preprints, output_dir,
+                                             dept_slice=(_BREAK_AFTER_N, None),
+                                             prev_dept_consensus=_prev_consensus))
 
         # Phase 6 ~ 7: v1 管线
         v1.log("MAIN-v2", ">>> Phase 6-7: v1 管线(交叉辩论/综述/验证)")
