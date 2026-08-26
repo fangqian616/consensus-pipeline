@@ -89,6 +89,12 @@ _NON_CLAIM_PATTERNS = [
     # Report self-references (section pointers in body text)
     r'本文第\d*\.?\d*[节章]', r'本[节章]\s', r'本文.*探讨',
     r'本文.*指出', r'本文.*分析', r'本文.*构建',
+    # 综述自我指涉（"本综述/该综述纳入 N 篇"这类自我统计，非论文结论，无法 NLI 验证）
+    r'本综述', r'该综述', r'综述纳入', r'纳入的?\s*\d+\s*篇',
+    r'不足\s*\d+\s*篇', r'集中于\s*\d{4}', r'纳入.*篇文献',
+    # 时间/趋势背景陈述（纯时间/数量事实，不含方法/机制/结论，无法用论文验证）
+    r'\d{2}世纪末已有研究', r'已有研究讨论', r'实证研究数量',
+    r'研究数量\s*(快速)?增加', r'数量快速增加', r'年间发表',
 ]
 
 _NON_CLAIM_RE = re.compile('|'.join(_NON_CLAIM_PATTERNS), re.IGNORECASE)
@@ -993,6 +999,7 @@ class AtomicFactDecomposer:
 4. 每个论断必须是自包含的（不依赖上下文也能理解）
 5. 最多输出5个论断
 6. 严格排除：代码/API描述（函数、参数、变量、数据结构操作）、论文元数据（作者、标题、期刊名、DOI、发表年份）、教程/操作步骤、纯历史事件或常识背景陈述（如"20世纪70年代发生了石油危机"这类不含方法、机制、数据、研究发现的时间/事实陈述——但涉及研究方法、模型、机制的论断必须保留）
+7. 严格排除：报告的自我指涉/自我统计（如"本综述纳入215篇文献""该综述收录了N篇""纳入的文献不足8篇"这类对报告自身的统计描述，不是任何被引论文的结论，无法用论文验证）
 
 输出JSON格式：
 {"claims": ["论断1", "论断2", ...]}
@@ -1008,6 +1015,7 @@ Rules:
 4. Each claim must be self-contained (understandable without context)
 5. Output at most 5 claims
 6. Strictly exclude: pure historical/common-knowledge statements (time/event facts without methods, mechanisms, data, or research findings — e.g. "an oil crisis occurred in the 1970s"). KEEP claims about research methods, models, or mechanisms.
+7. Strictly exclude: the report's self-references / self-statistics (e.g. "this review included 215 papers", "fewer than 8 papers directly studied X") — these describe the report itself, not any cited paper's finding, and cannot be verified against papers.
 
 Output JSON format:
 {"claims": ["claim1", "claim2", ...]}
