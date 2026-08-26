@@ -901,6 +901,84 @@ def _run_phases_6_to_7(config, papers, preprints, dept_outputs, relevance_log,
     return report
 
 
+def rerun_phases_67(output_dir, import_fulltext=True):
+    """只重跑 Phase 6-7（交叉辩论+报告+校验），复用已完成的辩论产出。
+
+    import_fulltext=True 时，扫描项目根目录 fulltext_papers/ 里的 PDF，提取 DOI，
+    标记对应论文 weight=core（强制进报告），并重新获取全文进缓存——
+    即「以已导入论文为基础重跑报告」的正式入口（整合原 _rerun_67.py / _test_imported.py）。
+    """
+    import glob as _glob
+
+    v1.OUTPUT_DIR = output_dir
+    v1.OUTPUT_LANG = "zh"
+    log = v1.log
+
+    config = _load_config(output_dir)
+    papers = _load_papers(output_dir)
+    preprints = _load_preprints(output_dir)
+    if config is None or papers is None:
+        log("Rerun67", f"失败: 缺少 config / papers in {output_dir}")
+        return None
+
+    cache_path = os.path.join(output_dir, "phase4.9_fulltext_cache.json")
+    fulltext_cache = {}
+    if os.path.exists(cache_path):
+        try:
+            with open(cache_path, encoding="utf-8") as f:
+                fulltext_cache = json.load(f)
+        except Exception:
+            fulltext_cache = {}
+
+    # 扫描 fulltext_papers/，标记导入论文 weight=core + 重新获取全文
+    if import_fulltext:
+        from requirement.citation_verifier import ReferenceResolver, _extract_pdf_text, _extract_doi_from_pdf_text
+        resolver = ReferenceResolver(search_fn=None)
+        fp_dir = os.path.join(_script_dir, "fulltext_papers")
+        imported_dois = set()
+        if os.path.isdir(fp_dir):
+            for fn in os.listdir(fp_dir):
+                if not fn.lower().endswith(".pdf"):
+                    continue
+                try:
+                    data = open(os.path.join(fp_dir, fn), "rb").read()
+                    if data[:5] != b"%PDF-":
+                        continue
+                    doi = _extract_doi_from_pdf_text(_extract_pdf_text(data, 2))
+                    if doi:
+                        imported_dois.add(doi)
+                except Exception:
+                    continue
+        _n_mark = _n_got = 0
+        for p in papers:
+            doi = (getattr(p, "doi", "") or "").strip()
+            if doi in imported_dois:
+                p.weight = "core"
+                p.quality_detail = dict(getattr(p, "quality_detail", None) or {})
+                p.quality_detail["weight"] = "core"
+                p.quality_detail["user_fulltext"] = True
+                _n_mark += 1
+                ft = resolver.fetch_fulltext(doi)
+                if ft and len(ft) >= 500:
+                    fulltext_cache[doi] = ft[:30000]
+                    _n_got += 1
+        log("Rerun67", f"导入论文: 扫描 {len(imported_dois)} DOI, 标记 {_n_mark} 篇, 全文 {_n_got} 篇")
+
+    # 加载 dept_outputs
+    dept_outputs = {}
+    for f in _glob.glob(os.path.join(output_dir, "phase5_dept_*.json")):
+        dept_outputs[os.path.basename(f).replace("phase5_dept_", "").replace(".json", "")] = \
+            json.load(open(f, encoding="utf-8"))
+    if not dept_outputs:
+        log("Rerun67", f"失败: 无 phase5_dept_*.json (先跑完整 pipeline)")
+        return None
+
+    log("Rerun67", f"复用 {len(dept_outputs)} 个部门辩论产出, 重跑 Phase 6-7")
+    relevance_log = {"domain_config_driven": True, "resumed": True}
+    return _run_phases_6_to_7(config, papers, preprints, dept_outputs, relevance_log,
+                              fulltext_cache=fulltext_cache)
+
+
 # ============ 断点续跑辅助 (Model A 地基) ============
 
 STATE_FILENAME = "v2_run_state.json"
@@ -1006,6 +1084,8 @@ def main():
                        help="跳过 Phase 0-3 需求调研, 复用 run_output/phase3_recommended_config.json(聊天已生成)")
     parser.add_argument("--only-dept", type=str, default=None,
                        help="只跑指定部门的辩论(如 literature_search), 隔离测试用")
+    parser.add_argument("--rerun-67", action="store_true",
+                       help="只重跑 Phase 6-7(报告+校验), 复用辩论产出, 自动导入 fulltext_papers/ 全文")
     args = parser.parse_args()
 
     # v2 配置
@@ -1028,6 +1108,12 @@ def main():
     v1.TOPIC = args.topic
     v1.OUTPUT_LANG = args.lang
     v1.OUTPUT_DIR = output_dir
+
+    # --rerun-67: 只重跑 Phase 6-7（复用辩论产出 + 导入 fulltext_papers/ 全文），然后退出
+    if args.rerun_67:
+        v1.log("MAIN-v2", ">>> --rerun-67: 只重跑 Phase 6-7（复用辩论产出 + 导入全文）")
+        rerun_phases_67(output_dir, import_fulltext=True)
+        return
 
     start_time = time.time()
     v1.log("MAIN-v2", "=" * 50)
