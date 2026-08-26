@@ -1422,6 +1422,40 @@ def _simple_llm_call(system_prompt, user_prompt, temperature=0.3, max_tokens=160
     return resp.json()["choices"][0]["message"]["content"]
 
 
+def _verify_llm_call(system_prompt, user_prompt, temperature=0.3):
+    """原子校验专用 LLM 调用：固定用 pro 模型（NLI 的 entail/contradict 判别
+    需要强模型，flash 会全判 neutral 导致 0% 回归）。失败 RAISE（CitationVerifier
+    依赖此约定）。与 CLI 的 _verify_llm_raises 对齐。
+    """
+    import os
+    import requests as _req
+    api_url = st.session_state.get("api_url", "")
+    api_key = st.session_state.get("api_key", "")
+    # v0.13: 固定 pro（可用 DEEPSEEK_VERIFY_MODEL 覆盖），不随侧边栏 flash 走
+    model = os.environ.get("DEEPSEEK_VERIFY_MODEL", "deepseek-v4-pro")
+    if not api_key:
+        raise RuntimeError("API Key 为空：断点恢复不会保存 Key。请先在左侧栏重新输入 API Key。")
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": temperature,
+        "max_tokens": 8192,
+    }
+    try:
+        resp = _req.post(api_url, headers=headers, json=payload, timeout=300)
+        resp.raise_for_status()
+        result = resp.json()["choices"][0]["message"]["content"]
+        if not result:
+            raise RuntimeError("empty LLM response")
+        return result
+    except Exception as e:
+        raise RuntimeError(f"LLM call failed: {str(e)[:160]}")
+
+
 def _run_fact_check_verify(report_text_override=None):
     """v0.12 shared executor: citation-grounded verification of the final
     report against cached papers. Called by BOTH the automatic pipeline stage
@@ -1441,7 +1475,9 @@ def _run_fact_check_verify(report_text_override=None):
         # silently parsed as {} (decompose dropped the context -> 0 claims ->
         # silent 0% report). Raising routes to per-call fallbacks (whole-context
         # claim / NLI fail explanation) and the all-failed detector below.
-        return _simple_llm_call(system_prompt, user_prompt, temperature=0.3)
+        # v0.13: 用 pro 模型（_verify_llm_call），不再随侧边栏 flash 走——
+        # flash 会全判 neutral 导致 0% 回归。
+        return _verify_llm_call(system_prompt, user_prompt, temperature=0.3)
 
     def _search_fn(query, max_results=5):
         try:
@@ -3829,7 +3865,16 @@ def render_proofread_tab():
                             st.write("**NLI Results**:")
                             for nli in cv.nli_results:
                                 nli_emoji = {"entail": "✅", "contradict": "❌", "neutral": "➖"}.get(nli.label, "❓")
-                                st.write(f"  {nli_emoji} [{nli.ref_index}] {nli.ref_title[:60]} — {nli.label} ({nli.confidence:.0%})")
+                                # v0.13: 展示证据层级 + 引用错位/断言拔高（CLI 新增的 related 字段）
+                                _ev = getattr(nli, "evidence", "abstract")
+                                _ev_label = {"abstract": "📄摘要", "title": "📌标题", "fulltext": "📖全文"}.get(_ev, _ev)
+                                _rel = getattr(nli, "related", None)
+                                _rel_label = ""
+                                if _rel is False:
+                                    _rel_label = " · ⚠️引用错位(主题不相关)"
+                                elif _rel is True:
+                                    _rel_label = " · ✂️断言拔高(措辞过强)"
+                                st.write(f"  {nli_emoji} [{nli.ref_index}] {nli.ref_title[:60]} — {nli.label} ({nli.confidence:.0%}) · {_ev_label}{_rel_label}")
                                 if nli.explanation:
                                     st.caption(f"    {nli.explanation}")
                                 if nli.ref_doi:
