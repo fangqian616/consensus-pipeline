@@ -224,7 +224,8 @@ class ReportGenerator:
             23. [No "see" prefix] Adding "see" before [N] is forbidden in body text and tables
             24. [Citation Constraint] All citations from paper list only, each conclusion indicates supporting count
             25. [Confidence Label] Each core conclusion has confidence label with supporting paper count
-            26. [Limitations Required] Include "Search Boundary and Limitations" section covering: search source coverage, paper quantity limits, methodology boundary conditions, conclusion applicability and extrapolation risks"""
+            26. [Limitations Required] Include "Search Boundary and Limitations" section covering: search source coverage, paper quantity limits, methodology boundary conditions, conclusion applicability and extrapolation risks
+            27. [Faithful Paraphrase Rule] When citing [N], the description must verbatim match what the paper's title/abstract explicitly states; never substitute or infer specifics: research angle/framework (write "energy vulnerability" if the paper says so, not "sustainable"), data level/scope ("city-level" must not become "province/national"), effect direction/mechanism (only transcribe what the paper explicitly concludes). When a detail is not explicitly stated, omit it — better to write one fewer accurate paraphrase than one with a wrong detail"""
         else:
             system_prompt = """你是一位资深学术综述撰写专家。你的任务是基于给定的论文数据和辩论组共识撰写一篇结构完整的学术动向综述报告。
 
@@ -254,7 +255,13 @@ class ReportGenerator:
 23. 【禁止"参见"前缀】正文、对比表、辩论焦点中禁止在[N]前加"参见"前缀（如"参见[10]综述"→应写为"Ghoddusi等[10]综述"）。引用必须紧接作者名或具体描述，不得用"参见"代替
 24. 【v0.7.0引用硬约束】所有论文引用必须从论文清单中选取，禁止生成清单外的引用。每个结论必须标注支撑论文数量，格式：(N/M篇支撑，置信度🟢/🟡/🔴)，其中N=支撑论文数，M=该主题总论文数
 25. 【v0.7.0置信度标注】每个核心结论后面必须标注置信度：(N/M篇支撑，置信度🟢高/🟡中/🔴低)，评判标准：N≥5且方法论一致→🟢；3≤N<5或存在争议→🟡；N<3→🔴
-26. 【v0.7.0局限性必现】综述必须包含"检索边界与局限性"章节，说明：(a)检索源覆盖范围与盲区；(b)论文数量与代表性限制；(c)方法论评估的边界条件；(d)结论适用范围与外推风险"""
+26. 【v0.7.0局限性必现】综述必须包含"检索边界与局限性"章节，说明：(a)检索源覆盖范围与盲区；(b)论文数量与代表性限制；(c)方法论评估的边界条件；(d)结论适用范围与外推风险
+27. 【转述忠实性硬规则】引用[N]时，描述必须逐字对应论文标题/摘要中明确出现的表述，严禁自行替换或推断具体细节：
+- 研究角度/框架：论文写"能源脆弱性(energy vulnerability)"就必须写"脆弱性"，严禁写成"可持续""安全"等
+- 数据层级/范围：论文写"市级/城市层面(city-level)"就必须写"市级"，严禁写成"省级""国家层面"
+- 效应方向/机制：只转述论文明确写出的结论方向，严禁自行推断因果方向、符号、作用渠道
+- 论文没有明确写出的细节（数据层级、研究角度、效应方向、机制），一律不写，宁缺毋滥
+- 宁可少写一条有把握的转述，也不写一条可能细节错误的转述"""
 
         if self.output_lang == "en":
             user_prompt = f"""Please write an academic trend review report on "{topic}".
