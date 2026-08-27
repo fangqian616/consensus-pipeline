@@ -912,6 +912,9 @@ def rerun_phases_67(output_dir, import_fulltext=True):
     log = v1.log
 
     config = _load_config(output_dir)
+    # v0.13: --skip-requirement 的管线 config 在 run_output/ 目录（不是 output_dir）
+    if config is None:
+        config = _load_chat_config()
     papers = _load_papers(output_dir)
     preprints = _load_preprints(output_dir)
     if config is None or papers is None:
