@@ -81,10 +81,17 @@ Consensus Pipeline takes a research topic and produces a structured literature r
 - ✅ Cross-department validation (one department checks another's work)
 - ✅ Per-claim confidence annotation (e.g., "42/77 papers, high confidence")
 - ✅ NLI citation verification — per-claim verdicts (✅/⚠️/❌), with unverifiable claims (📖 needs-fulltext / 📭 title-only) explicitly excluded from the confidence score, not silently counted
+- ✅ Citation-mismatch vs overstatement classification — when both abstract AND full text are neutral, the verifier tells you *why*: ⚠️ wrong-paper citation vs ✂️ overstated wording
+- ✅ Full-text NLI upgrade — abstract-neutral claims auto-recheck against the paper's real full text (OA via Unpaywall/Semantic Scholar, or your uploaded PDF)
+- ✅ Meta-narrative claim filtering — report self-statistics ("this review included 215 papers") are excluded from verification, so they can't poison the confidence score
+- ✅ Department-to-department consensus handoff — later departments see earlier departments' conclusions (no more isolated debate silos)
+- ✅ Faithful-paraphrase rule — the report only transcribes what papers explicitly state (no invented data levels / mechanism directions)
+- ✅ Full-text supplementation system — upload paywalled-paper PDFs, debate-midway breakpoint asks which "missing-but-necessary" papers to import, imported papers are force-included in the report
 - ✅ Auto-generated runnable code for research methods
 - ✅ PDF/DOCX export
 - ✅ Bilingual output (`--lang en` or `--lang zh`)
 - ✅ Streamlit UI with real-time debate monitoring
+- ✅ DSH control panel — atomic-verification card, full-text batch upload, one-click re-verify with progress bar, pending-import list (pause / continue / skip)
 
 ### What's still rough:
 - ⚠️ Some UI labels are bilingual (Chinese/English mix) in English mode
@@ -189,6 +196,19 @@ Claims that *cannot* be judged from abstracts alone are **honestly separated, no
 - 📭 **Title-only** — no abstract available (excluded from scoring)
 
 The overall confidence score therefore reflects only claims the verifier could actually judge. Author metadata is injected during verification, so the checker first confirms *"this is the right paper"* before judging the content — catching mismatched citations that merely look plausible.
+
+### Full-Text Supplementation System
+
+Paywalled papers are the honest gap: the verifier can only judge a claim from its abstract, and many claims need the real full text. The pipeline closes this gap in two steps:
+
+1. **Phase 4.9 — automatic (zero user effort).** Before debate, the pipeline crawls OA full text for every retrieved paper (Unpaywall → Semantic Scholar → OpenAlex) and matches any PDFs you've placed in `fulltext_papers/`.
+2. **Phase 5.5 — interactive breakpoint.** After the first few debate departments, the pipeline extracts every paper the debate *actually cites*, finds the ones that are both **missing full text** and **necessary** (consensus-cited or cross-department), and asks you to import just those few.
+3. **Full-text NLI upgrade.** When an abstract is neutral, the verifier fetches the full text and re-checks: entail → ✅ verified; contradict → ❌; still neutral → classified as ⚠️ **citation mismatch** (wrong paper) or ✂️ **overstated claim** (right paper, wording too strong).
+4. **Force-include.** Papers you import are marked `weight=core` and guaranteed a spot in the report — your uploads never go to waste.
+
+Upload PDFs two ways:
+- **DSH control panel** — batch upload (any filename; the DOI is auto-extracted from inside the PDF), then one-click re-verify
+- **Drop files** into `fulltext_papers/`, then run `--rerun-67` to regenerate just the report + verification stage
 
 ### QC Department (3-Layer Filter)
 
@@ -353,6 +373,21 @@ python run_pipeline.py --topic "Your Topic" --lang en
 
 Any OpenAI-compatible API works — DeepSeek, OpenAI, local models via Ollama/vLLM, etc.
 
+#### Step 6: Full-Text Supplementation (paywalled papers)
+
+Papers behind paywalls can't be verified from their abstract alone. Two ways to close the gap:
+
+**A. DSH control panel** — when running inside DeepSeek Harness, a 📊 控制台 button opens the panel with an "atomic verification" card: batch-upload paywalled PDFs (any filename, DOI auto-extracted), one-click re-verify with a progress bar, and a pending-import list with pause / continue / skip.
+
+**B. CLI `--rerun-67`** — drop PDFs into `fulltext_papers/`, then regenerate only the report + verification stage (reuses the finished debate, no need to re-run the whole pipeline):
+
+```bash
+python run_pipeline_v2.py --topic "用能权交易政策对工业企业绿色转型的影响" \
+  --output-dir "v2_run_output/<your-run-dir>" --rerun-67
+```
+
+`--rerun-67` scans `fulltext_papers/`, marks imported papers `weight=core` (force-included in the report), re-fetches their full text, and re-runs Phase 6-7 only.
+
 ---
 
 ### 🔄 Which Should I Use?
@@ -410,7 +445,14 @@ consensus-pipeline/
 ├── router.py                    # AI Router — smart department config
 ├── debate_engine.py             # Core debate engine
 ├── config_manager.py            # Config persistence & presets
-├── run_pipeline.py              # CLI runner for headless execution
+├── run_pipeline.py              # CLI runner (v1) for headless execution
+├── run_pipeline_v2.py           # CLI runner (v2) — stance-aware + full-text supplementation
+├── stance_quant_v2.py           # v2 stance quantification (CV / Krippendorff's α / Kendall's W)
+├── mcp_server.py                # MCP server (DSH native tools)
+├── panel.html                   # DSH control panel (verification card + full-text upload)
+├── dsh-plugin/                  # DSH plugin (mounts /consensus-pipeline/ + native tools)
+│   └── index.js                 #   panel routes + JSON-RPC tools
+├── fulltext_papers/             # User-uploaded paywalled-paper PDFs (gitignored)
 ├── quality_controller.py        # QC department (3-layer filter)
 ├── domain_config_generator.py   # Dynamic domain config
 ├── docx_exporter.py             # Word export
@@ -428,7 +470,7 @@ consensus-pipeline/
 │   ├── structurer.py            # Scope & constraint extraction
 │   ├── discussion_group.py      # Multi-angle requirement discussion
 │   ├── config_recommender.py    # Department config recommendation
-│   ├── citation_verifier.py     # NLI citation verification
+│   ├── citation_verifier.py     # NLI citation verification (full-text upgrade + mismatch/overstatement)
 │   └── fact_checker.py          # Key-conclusion fact checking
 ├── templates/                   # Debate prompt templates
 ├── presets/                     # Built-in presets
