@@ -386,6 +386,41 @@ python run_pipeline.py --topic "你的主题" --lang zh
 | 无头服务器运行 | — | ✅ |
 | CI/CD 集成 | — | ✅ |
 
+### 🚀 端到端操作流程（本地 / DSH）
+
+从课题到报告的两条完整路径，各含全文补录。
+
+#### 路径 A：本地部署（命令行）
+
+```bash
+# 1. 安装依赖
+pip install -r requirements.txt
+
+# 2. 配置 API key
+echo DEEPSEEK_API_KEY=sk-xxx > .env      # Linux/macOS
+
+# 3.（可选）需求调研 → 工作组配置
+python run_requirement_research.py --topic "你的课题"
+
+# 4. 完整管线（Phase 0-7）
+python run_pipeline_v2.py --topic "你的课题" --lang zh
+
+# 5. 辩论中途（Phase 5.5）断点：列出「缺失但必要」的论文
+#    → 下载那些付费墙 PDF，拖进 fulltext_papers/（文件名随便，DOI 自动识别）
+#    → 确认继续（或等超时自动跳过）
+
+# 6. 跑完后若仍有缺全文，只重跑报告+校验阶段：
+python run_pipeline_v2.py --topic "你的课题" --output-dir "v2_run_output/<运行目录>" --rerun-67
+```
+
+#### 路径 B：DSH（DeepSeek Harness）
+
+1. 在聊天里对 agent 说出研究方向 → agent 先做需求访谈，然后启动管线。
+2. 点右下角 **📊 控制台** 按钮打开面板。
+3. **原子校验卡片** 实时显示置信度 + 验证通过/缺全文/缺摘要分布。
+4. Phase 5.5 断点出现 **⏳ 待导入清单**：点 **⏸ 暂停**，下载付费墙 PDF，**批量上传**（或拖进 `fulltext_papers/`），再点 **▶ 继续**。
+5. 跑完后：点 **导出待补清单** 下载剩余缺口的 CSV，补上传 PDF 后点 **重跑校验**（带进度条）。
+
 ---
 
 ## 📋 前提条件

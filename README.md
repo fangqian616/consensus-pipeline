@@ -402,6 +402,41 @@ python run_pipeline_v2.py --topic "用能权交易政策对工业企业绿色转
 | Running on a headless server | — | ✅ |
 | CI/CD pipeline integration | — | ✅ |
 
+### 🚀 End-to-End Workflow (Local / DSH)
+
+Two complete paths from topic to report — each with full-text supplementation.
+
+#### Path A: Local deployment (CLI)
+
+```bash
+# 1. Install
+pip install -r requirements.txt
+
+# 2. Configure API key
+echo DEEPSEEK_API_KEY=sk-xxx > .env      # Linux/macOS
+
+# 3. (Optional) Requirement research → department config
+python run_requirement_research.py --topic "你的课题"
+
+# 4. Full pipeline (Phase 0-7)
+python run_pipeline_v2.py --topic "你的课题" --lang zh
+
+# 5. Debate-midway breakpoint (Phase 5.5): the run lists "missing-but-necessary" papers
+#    → download those paywalled PDFs, drop them into fulltext_papers/ (any filename; DOI auto-extracted)
+#    → confirm to continue (or let it time out to skip)
+
+# 6. After the run, if some claims still need full text, re-run only the report + verify stage:
+python run_pipeline_v2.py --topic "你的课题" --output-dir "v2_run_output/<run-dir>" --rerun-67
+```
+
+#### Path B: DSH (DeepSeek Harness)
+
+1. Tell the agent your research direction in chat → it runs the requirement interview, then starts the pipeline.
+2. Click the **📊 控制台** button (bottom-right) to open the panel.
+3. The **atomic-verification card** shows live confidence + verified / needs-fulltext / title-only breakdown.
+4. At the Phase 5.5 breakpoint, a **⏳ pending-import list** appears: click **⏸ pause**, download the paywalled PDFs, **batch-upload** them (or drop into `fulltext_papers/`), then click **▶ continue**.
+5. After the run: click **导出待补清单** to export a CSV of remaining gaps, upload those PDFs, then click **重跑校验** (progress bar included).
+
 ---
 
 ## 📋 Prerequisites
