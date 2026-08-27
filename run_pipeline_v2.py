@@ -598,6 +598,12 @@ def phase5_5_fulltext_gate(config, dept_outputs, papers, fulltext_cache, output_
     departments = config.get("departments", {})
     dept_order = config.get("dept_order", list(departments.keys()))
 
+    # v0.13: config 是 recommended config（不含 exclusion_signals），
+    # 从磁盘读真正的 domain_config（Phase 0.5 生成，含 exclusion_signals）做主题相关性判断
+    domain_config = (_load_json_file(output_dir, "phase0.5_domain_config.json")
+                     or _load_json_file(output_dir, "domain_config.json")
+                     or config)
+
     # 1. 提取辩论观点里被引用的论文 DOI（共识引用更「必要」）
     cited = {}  # doi -> {title, count, depts, in_consensus}
     for dept_key in dept_order:
@@ -618,7 +624,7 @@ def phase5_5_fulltext_gate(config, dept_outputs, papers, fulltext_cache, output_
                     if doi not in cited:
                         cited[doi] = {"title": getattr(p, "title", ""), "count": 0,
                                       "depts": [], "in_consensus": False,
-                                      "topic_related": _is_core_topic_related(p, config)}
+                                      "topic_related": _is_core_topic_related(p, domain_config)}
                     cited[doi]["count"] += 1
                     if dept_name not in cited[doi]["depts"]:
                         cited[doi]["depts"].append(dept_name)
