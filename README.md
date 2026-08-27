@@ -260,14 +260,13 @@ In the left sidebar:
 
 #### Step 3: Choose Your Pipeline Mode
 
-The app supports two modes — select the one that matches your goal:
+The app focuses on academic research:
 
 | Mode | Tab | What It Does |
 |------|-----|-------------|
 | **Academic Research** | `📚 Academic` | Literature search → multi-agent debate → literature review with confidence scores |
-| **Creative / Animation** | `🎬 Animation` | Script writing → storyboard → asset generation (for video projects) |
 
-> 💡 For academic literature reviews, use the **Academic** tab. This tutorial focuses on the academic pipeline.
+> 💡 This tutorial focuses on the academic pipeline.
 
 #### Step 4: Start the Academic Pipeline
 
