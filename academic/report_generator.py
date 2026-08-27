@@ -446,9 +446,52 @@ class ReportGenerator:
         return pattern.sub(_repl, report)
 
     @staticmethod
+    def _fix_citation_mismatches(report: str, papers: List[PaperCandidate]) -> str:
+        """v0.13: 修正 LLM 记错的引用编号。
+
+        根因：LLM 写正文时可能把引用编号记错（如「Jammazi[21]」但论文清单
+        第 21 篇是北欧电价论文）。这里检测「英文词[N]」模式：若论文清单第 N 篇
+        的标题/作者不含该词，则在论文清单里搜该词的正确编号并修正；找不到则
+        删除该引用（宁缺毋滥，与转述忠实性同原则）。
+        """
+        import re
+        # 建立 作者姓 + 标题词 → 编号 的映射
+        word_to_idx = {}
+        for i, p in enumerate(papers, 1):
+            tokens = set()
+            for a in (getattr(p, "authors", None) or [])[:3]:
+                if a:
+                    tokens.add(a.split()[-1].lower())  # 作者姓
+            title = (getattr(p, "title", "") or "").lower()
+            for w in re.findall(r'[a-z]{4,}', title):
+                tokens.add(w)
+            for t in tokens:
+                word_to_idx.setdefault(t, []).append(i)
+
+        def _repl(m):
+            word = m.group(1).lower()
+            idx = int(m.group(2))
+            if idx > len(papers):
+                return m.group(0)  # 超范围，留给后续 out_of_range 处理
+            p = papers[idx - 1]
+            p_authors = [a.lower() for a in (getattr(p, "authors", None) or [])]
+            p_title = (getattr(p, "title", "") or "").lower()
+            if word in p_title or any(word in a for a in p_authors):
+                return m.group(0)  # 匹配，保留
+            # 不匹配：找正确编号（排除当前 idx）
+            cands = [c for c in word_to_idx.get(word, []) if c != idx]
+            if cands:
+                return f"{m.group(1)}[{cands[0]}]"
+            return ""  # 找不到，删除引用
+
+        return re.sub(r'([A-Za-z]{2,})\[(\d+)\]', _repl, report)
+
+    @staticmethod
     def _rebuild_references(report: str, papers: List[PaperCandidate]) -> str:
         """Extract all [N] citations from AI review, rebuild reference section with paper metadata, ensure one-to-one correspondence"""
         import re
+        # v0.13: 先修正 LLM 记错的引用编号（正文「作者名[N]」vs 论文清单第 N 篇）
+        report = ReportGenerator._fix_citation_mismatches(report, papers)
         # 1. Extract all citation numbers from main text
         cited_indices = set()
         for m in re.finditer(r'\[(\d+)\]', report):
@@ -691,21 +734,22 @@ class ReportGenerator:
             lines = []
             if chart_paths.get("year_trend"):
                 # Use path relative to output_dir, avoid hardcoded local absolute paths
-                rel_path = os.path.relpath(chart_paths["year_trend"], self.output_dir)
+                # v0.13: Windows 的 os.path.relpath 返回反斜杠，Markdown 不认，转成正斜杠
+                rel_path = os.path.relpath(chart_paths["year_trend"], self.output_dir).replace("\\", "/")
                 lines.append(f"![年度发文量趋势]({rel_path})")
                 lines.append("")
                 lines.append("*图1：年度发文量趋势（红色柱体为高活跃年份）*")
                 lines.append("")
 
             if chart_paths.get("method_dist"):
-                rel_path = os.path.relpath(chart_paths["method_dist"], self.output_dir)
+                rel_path = os.path.relpath(chart_paths["method_dist"], self.output_dir).replace("\\", "/")
                 lines.append(f"![方法论分布]({rel_path})")
                 lines.append("")
                 lines.append("*图2：方法论占比分布*")
                 lines.append("")
 
             if chart_paths.get("grade_dist"):
-                rel_path = os.path.relpath(chart_paths["grade_dist"], self.output_dir)
+                rel_path = os.path.relpath(chart_paths["grade_dist"], self.output_dir).replace("\\", "/")
                 lines.append(f"![期刊等级分布]({rel_path})")
                 lines.append("")
                 lines.append("*图3：期刊等级分布（S级=顶刊，A级=优秀，B级=良好）*")

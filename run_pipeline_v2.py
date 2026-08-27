@@ -542,24 +542,21 @@ def phase4_9_fulltext_fetch(papers, output_dir, time_budget_s=900):
     return fulltext_cache
 
 
-# 核心主题关键词：判断论文是否与「用能权交易→绿色转型」主线直接相关。
-# Phase 5.5 断点只对「核心主题相关」的缺全文论文询问用户，边缘主题（储能/绿色金融等）不打扰。
-_CORE_TOPIC_KEYWORDS = [
-    "energy use right", "energy-use right", "energy using right", "energy-using right",
-    "energy consuming right", "energy-consuming right", "energy consumption right",
-    "energy consumption permit", "energy quota", "energy rights trading", "energy right trading",
-    "用能权", "能源使用权", "能耗权",
-    "green transformation", "green transition", "绿色转型",
-]
+def _is_core_topic_related(paper, domain_config=None) -> bool:
+    """论文是否与核心主题相关（通用版）。
 
-
-def _is_core_topic_related(paper) -> bool:
-    """论文标题/摘要是否与核心主题（用能权交易→绿色转型）直接相关。"""
+    v0.13: 不再硬编码特定主题关键词——之前的「用能权」硬编码导致其他主题
+    （如「机器学习能源价格预测」）的 Phase 5.5 断点被全部跳过（关键词全不匹配）。
+    改为用 domain_config 的 exclusion_signals 判断「明确离题」（材料/生物/医学等，
+    由 domain_config_generator 按主题动态生成），其余默认相关。配合「共识引用 /
+    跨≥2部门」的必要性过滤，对任意主题通用。
+    """
     text = ((getattr(paper, "title", "") or "") + " " + (getattr(paper, "abstract", "") or "")).lower()
-    for kw in _CORE_TOPIC_KEYWORDS:
-        if kw in text:
-            return True
-    return False
+    exclusions = ((domain_config or {}).get("exclusion_signals") or []) if domain_config else []
+    for ex in exclusions:
+        if ex and ex.lower() in text:
+            return False
+    return True
 
 
 def _write_pending_import(pending, output_dir):
@@ -621,7 +618,7 @@ def phase5_5_fulltext_gate(config, dept_outputs, papers, fulltext_cache, output_
                     if doi not in cited:
                         cited[doi] = {"title": getattr(p, "title", ""), "count": 0,
                                       "depts": [], "in_consensus": False,
-                                      "topic_related": _is_core_topic_related(p)}
+                                      "topic_related": _is_core_topic_related(p, config)}
                     cited[doi]["count"] += 1
                     if dept_name not in cited[doi]["depts"]:
                         cited[doi]["depts"].append(dept_name)
