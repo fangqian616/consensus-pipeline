@@ -415,6 +415,21 @@ python run_pipeline_v2.py --topic "你的课题" --output-dir "v2_run_output/<�
 
 #### 路径 B：DSH（DeepSeek Harness）
 
+**安装（一次性）：** 把插件链接到 DSH 的 `node_modules`，启动时自动加载。
+
+```bash
+# Windows（管理员 PowerShell）：junction 链接插件目录
+cd C:\path\to\dsh\node_modules\@deepseek-ai
+mklink /J dsh-consensus-pipeline C:\path\to\consensus-pipeline\dsh-plugin
+
+# Linux/macOS：symlink
+ln -s /path/to/consensus-pipeline/dsh-plugin /path/to/dsh/node_modules/@deepseek-ai/dsh-consensus-pipeline
+```
+
+然后配置插件的项目根目录（`cwd`）和 Python 路径（`python`），重启 DSH。右下角出现 **📊 控制台** 浮动按钮。
+
+**日常使用：**
+
 1. 在聊天里对 agent 说出研究方向 → agent 先做需求访谈，然后启动管线。
 2. 点右下角 **📊 控制台** 按钮打开面板。
 3. **原子校验卡片** 实时显示置信度 + 验证通过/缺全文/缺摘要分布。

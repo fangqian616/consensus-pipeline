@@ -431,6 +431,21 @@ python run_pipeline_v2.py --topic "你的课题" --output-dir "v2_run_output/<ru
 
 #### Path B: DSH (DeepSeek Harness)
 
+**Setup (once):** link the plugin into DSH's `node_modules` so it loads on startup.
+
+```bash
+# Windows (admin PowerShell): junction the plugin dir
+cd C:\path\to\dsh\node_modules\@deepseek-ai
+mklink /J dsh-consensus-pipeline C:\path\to\consensus-pipeline\dsh-plugin
+
+# Linux/macOS: symlink
+ln -s /path/to/consensus-pipeline/dsh-plugin /path/to/dsh/node_modules/@deepseek-ai/dsh-consensus-pipeline
+```
+
+Then configure the plugin with the project root (`cwd`) and Python path (`python`), and restart DSH. The **📊 控制台** floating button appears bottom-right.
+
+**Daily use:**
+
 1. Tell the agent your research direction in chat → it runs the requirement interview, then starts the pipeline.
 2. Click the **📊 控制台** button (bottom-right) to open the panel.
 3. The **atomic-verification card** shows live confidence + verified / needs-fulltext / title-only breakdown.
