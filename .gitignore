@@ -12,6 +12,9 @@ seed_papers/*.pdf
 seed_papers/manifest.json
 *.pdf
 
+# 用户上传的全文补录 PDF（含可选的 manifest.json，整个目录都别提交）
+fulltext_papers/
+
 # Run outputs (data, do not commit)
 run_output/
 v2_run_output/
