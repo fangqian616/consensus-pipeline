@@ -39,6 +39,9 @@ htmlcov/
 
 # Temp / debug scripts
 _*.py
+# _reverify_77.py 是「重跑校验」功能脚本（DSH 插件 reverify-77 端点调用），非临时脚本，需纳入版本控制
+!_reverify_77.py
+reverify_progress.json
 *.bak*
 .checkpoints/
 .pytest_cache/

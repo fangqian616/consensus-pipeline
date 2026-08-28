@@ -44,9 +44,12 @@ def _emit_progress(stage: str, done: int, total: int):
 # ── Content Filters ─────────────────────────────────────────────────────────
 
 _CODE_KEYWORDS_RE = re.compile(
+    # v0.13.2: 只保留明确的英文代码标识符。此前把「方法/参数/变量/对象/属性」等
+    # 中文通用词也算代码关键词，导致学术正文里「机器学习方法」「超参数寻优」等
+    # 常见表述被误判为代码而整段丢弃（19 个上下文只留下 3-4 个真断言）。
+    # 中文代码描述由 _NON_CLAIM_PATTERNS 里的精确模式兜底，不会漏。
     r'(?:def |class |import |from \w+ import|return |print\(|np\.|pd\.|plt\.|'
-    r'torch\.|tf\.|dataframe|\.view\(|\.reshape\(|__init__|self\.|lambda |'
-    r'函数|参数|默认值|实例化|调用|字典|列表|变量|模块|对象|方法|属性)',
+    r'torch\.|tf\.|dataframe|\.view\(|\.reshape\(|__init__|self\.|lambda )',
     re.IGNORECASE,
 )
 
@@ -79,7 +82,9 @@ _NON_CLAIM_PATTERNS = [
     r'报告揭示', r'报告提出', r'本报告', r'报告分析', r'报告指出',
     r'报告总结', r'报告发现', r'报告构建',
     r'个研究空白', r'个子方向', r'层结构', r'知识网络',
-    r'通过整合.*[组部]', r'构建了.*框架', r'构建了一套',
+    # v0.13.2: 「构建了.*框架」过宽，误杀论文成果（如"Wang等构建了碳价预测框架"）。
+    # 收紧为仅匹配报告自我指涉（带"报告/本文/本综述"前缀）。
+    r'通过整合.*[组部]', r'(?:本报告|本文|本综述|该报告|报告)构建了.*框架', r'(?:本报告|本文|本综述|该报告|报告)构建了一套',
     r'三C\b', r'综合范式', r'失效边界声明', r'完整性验证框架',
     r'范式转变', r'研究空白',
     # System methodology / pipeline process descriptions (not external claims)
@@ -161,6 +166,7 @@ class NLIResult:
     explanation: str = ""
     evidence: str = "abstract"    # abstract / title / fulltext (title = weaker evidence)
     related: Optional[bool] = None  # v0.13: 论文主题是否与断言相关(全文NLI时判定)
+    nli_error: bool = False  # v0.13.1: 本次 NLI 的 LLM 调用失败(网络/API错误)，非正常 neutral
 
 
 @dataclass
@@ -199,6 +205,11 @@ class CitationVerificationReport:
     # v0.12.11: which verifier build PRODUCED this report ("" = pre-fingerprint
     # code / restored legacy checkpoint). Survives to_dict()/from_dict().
     verifier_build: str = ""
+    # v0.13.1: NLI 因 LLM 调用失败(网络不可达)而失败的 claim 数，用于「校验器没网」报错提示
+    nli_llm_failures: int = 0
+    # v0.13.2: 所有断言都因缺全文/仅标题被排除出打分(无 scored)时为 True。
+    # 此时 overall_confidence 无意义，UI 应显示「证据不足」而非「0%」。
+    evidence_insufficient: bool = False
 
     def to_dict(self) -> dict:
         import dataclasses
@@ -261,9 +272,17 @@ class CitationParser:
 
     @classmethod
     def extract_citation_contexts(cls, report_text: str) -> List[CitationContext]:
-        """Find paragraphs containing citation markers."""
+        """Find paragraphs containing citation markers (正文 only)。
+
+        v0.13.2: 排除「参考文献」及之后的附录章节（程序部/教程部/代码等），
+        并跳过代码块——此前参考文献条目（`[11] Author. Title...`）和代码里的
+        列表字面量（`[200, 500]`）会被误当成引用上下文，导致「20 个上下文
+        只分解出 4 个真断言」（其余全是参考文献/代码垃圾）。
+        """
         contexts = []
         current_section = ""
+        in_code_block = False
+        in_backmatter = False  # 参考文献/程序部/教程部 等后置章节
 
         # Split into paragraphs, tracking section headers
         lines = report_text.split('\n')
@@ -272,12 +291,31 @@ class CitationParser:
         for line in lines:
             stripped = line.strip()
 
+            # 代码块开关（``` 包裹的内容不是正文引用）
+            if stripped.startswith('```'):
+                if paragraph_buf:
+                    cls._flush_paragraph(paragraph_buf, current_section, contexts)
+                    paragraph_buf = []
+                in_code_block = not in_code_block
+                continue
+            if in_code_block:
+                continue
+
             # Track section headers
             if stripped.startswith('#'):
                 if paragraph_buf:
                     cls._flush_paragraph(paragraph_buf, current_section, contexts)
                     paragraph_buf = []
                 current_section = stripped.lstrip('#').strip()
+                # 参考文献/程序部/教程部 等后置章节之后的内容不再作为正文引用
+                if re.search(
+                    r'(参考文献|References|Bibliography|引用文献|文献列表|'
+                    r'程序部|教程部|技术选型|代码实现|Programming|Tutorial)',
+                    current_section, re.IGNORECASE,
+                ):
+                    in_backmatter = True
+                continue
+            if in_backmatter:
                 continue
 
             if not stripped:
@@ -1290,6 +1328,7 @@ Output JSON:
             result.explanation = parsed.get("explanation", "")
         except Exception as e:
             result.explanation = f"Title-level check failed: {e}"
+            result.nli_error = True
 
         return result
 
@@ -1364,6 +1403,7 @@ Output JSON:
                 result.related = _rel.lower() in ("true", "yes", "1")
         except Exception as e:
             result.explanation = f"Fulltext NLI check failed: {e}"
+            result.nli_error = True
 
         return result
 
@@ -1405,6 +1445,7 @@ Output JSON:
             result.explanation = parsed.get("explanation", "")
         except Exception as e:
             result.explanation = f"NLI check failed: {e}"
+            result.nli_error = True
 
         return result
 
@@ -1485,6 +1526,10 @@ def rederive_report_aggregates(report: "CitationVerificationReport", src: str = 
     report.unverified = sum(1 for cv in cvs if cv.status == "unverified")
     report.insufficient_evidence = sum(1 for cv in cvs if _is_title_only_unverified(cv))
     report.needs_fulltext = sum(1 for cv in cvs if _is_neutral_only_unverified(cv))
+    report.nli_llm_failures = sum(
+        1 for cv in cvs
+        if any(getattr(n, "nli_error", False) for n in cv.nli_results)
+    )
     scored = [cv for cv in cvs
               if not _is_title_only_unverified(cv)
               and not _is_neutral_only_unverified(cv)]
@@ -1496,8 +1541,12 @@ def rederive_report_aggregates(report: "CitationVerificationReport", src: str = 
             for cv in scored
         )
         report.overall_confidence = weighted / len(scored)
+        report.evidence_insufficient = False
     else:
         report.overall_confidence = 0.0
+        # v0.13.2: 无任何可打分断言 = 证据不足(全 needs-fulltext/title-only)，
+        # 而非「验证失败」——UI 应显示「证据不足」而非 0%。
+        report.evidence_insufficient = (report.needs_fulltext + report.insufficient_evidence) > 0
     if not src:
         src = "cached papers" if "cached papers" in (report.summary or "") else "bibliography"
     # v0.12.16: mutually-exclusive tiers — the unverified total is no longer
@@ -1519,10 +1568,18 @@ def rederive_report_aggregates(report: "CitationVerificationReport", src: str = 
         report.summary += "; " + ", ".join(_tiers) + " excluded from scoring"
     if _other_unv > 0:
         report.summary += f"; {_other_unv} other unverified (counted in scoring)"
-    report.summary += f". Overall confidence: {report.overall_confidence:.0%}"
+    if report.evidence_insufficient:
+        report.summary += "。置信度：证据不足（所有断言缺全文/仅标题，无法评分）"
+    else:
+        report.summary += f". Overall confidence: {report.overall_confidence:.0%}"
     if report.abstract_audit:
         report.summary += (f" Abstract audit: {len(report.abstract_audit)} mismatched "
                            f"cached abstract(s) quarantined.")
+    if report.nli_llm_failures:
+        report.summary += (
+            f" ⚠️ NLI 校验失败 {report.nli_llm_failures}/{report.total_claims} 条"
+            "（LLM 调用失败/网络不可达），置信度不代表报告质量。"
+        )
     return report
 
 

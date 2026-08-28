@@ -147,30 +147,60 @@ h3.section { margin:0 0 10px; font-size:14px; }
 
   function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-  function mdToHtml(src){
+  function mdToHtml(src, topic){
     var lines = String(src||'').split(/\r?\n/);
     var out = [];
-    var inCode = false, inList = false, inQuote = false;
+    var inCode = false, inList = false, inQuote = false, table = [];
     function closeList(){ if(inList){ out.push('</ul>'); inList=false; } }
     function closeQuote(){ if(inQuote){ out.push('</blockquote>'); inQuote=false; } }
+    function inline(s){
+      return esc(s)
+        .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+        .replace(/\*([^*\n]+)\*/g,'<em>$1</em>')
+        .replace(/`([^`]+)`/g,'<code>$1</code>');
+    }
+    function imgSrc(p){
+      if(/^(https?:|data:)/.test(p)) return p;
+      return '/consensus-pipeline/api/image?topic=' + encodeURIComponent(topic||'') + '&file=' + encodeURIComponent(p) + '&v=2';
+    }
+    function cells(row){ return row.replace(/^\s*\|/,'').replace(/\|\s*$/,'').split('|').map(function(c){ return c.trim(); }); }
+    function flushTable(){
+      if(!table.length) return;
+      var html = '<table>';
+      var hc = cells(table[0]);
+      html += '<thead><tr>' + hc.map(function(c){ return '<th>'+inline(c)+'</th>'; }).join('') + '</tr></thead>';
+      var body = [];
+      for(var i=1;i<table.length;i++){
+        if(/^\s*\|?[\s:\-|]+\|?\s*$/.test(table[i])) continue;
+        var cc = cells(table[i]);
+        body.push('<tr>' + cc.map(function(c){ return '<td>'+inline(c)+'</td>'; }).join('') + '</tr>');
+      }
+      if(body.length) html += '<tbody>' + body.join('') + '</tbody>';
+      html += '</table>';
+      out.push(html);
+      table = [];
+    }
     for(var i=0;i<lines.length;i++){
       var line = lines[i];
-      if(/^\s*```/.test(line)){ closeList(); closeQuote(); if(inCode){ out.push('</pre>'); inCode=false; } else { out.push('<pre>'); inCode=true; } continue; }
+      if(/^\s*```/.test(line)){ flushTable(); closeList(); closeQuote(); if(inCode){ out.push('</pre>'); inCode=false; } else { out.push('<pre>'); inCode=true; } continue; }
       if(inCode){ out.push(esc(line)); continue; }
       var m;
-      if(/^\s*$/.test(line)){ closeList(); closeQuote(); continue; }
+      if(/^\s*$/.test(line)){ flushTable(); closeList(); closeQuote(); continue; }
+      if(/^\s*\|/.test(line) && /\|\s*$/.test(line)){ closeList(); closeQuote(); table.push(line); continue; }
+      flushTable();
       m = line.match(/^(#{1,4})\s+(.*)$/);
-      if(m){ closeList(); closeQuote(); var lv=m[1].length; out.push('<h'+lv+'>'+esc(m[2])+'</h'+lv+'>'); continue; }
+      if(m){ closeList(); closeQuote(); var lv=m[1].length; out.push('<h'+lv+'>'+inline(m[2])+'</h'+lv+'>'); continue; }
       m = line.match(/^\s*[-*]\s+(.*)$/);
-      if(m){ closeQuote(); if(!inList){ out.push('<ul>'); inList=true; } out.push('<li>'+esc(m[1])+'</li>'); continue; }
+      if(m){ closeQuote(); if(!inList){ out.push('<ul>'); inList=true; } out.push('<li>'+inline(m[1])+'</li>'); continue; }
       m = line.match(/^\s*(\d+)\.\s+(.*)$/);
-      if(m){ closeQuote(); if(!inList){ out.push('<ol>'); inList=true; } out.push('<li>'+esc(m[2])+'</li>'); continue; }
-      if(/^\s*>\s?/.test(line)){ closeList(); if(!inQuote){ out.push('<blockquote>'); inQuote=true; } out.push(esc(line.replace(/^\s*>\s?/,''))); continue; }
+      if(m){ closeQuote(); if(!inList){ out.push('<ol>'); inList=true; } out.push('<li>'+inline(m[2])+'</li>'); continue; }
+      if(/^\s*>\s?/.test(line)){ closeList(); if(!inQuote){ out.push('<blockquote>'); inQuote=true; } out.push(inline(line.replace(/^\s*>\s?/,''))); continue; }
       closeList(); closeQuote();
-      var t = esc(line).replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code>$1</code>');
-      out.push('<p>'+t+'</p>');
+      m = line.match(/^\s*!\[([^\]]*)\]\(([^)]+)\)\s*$/);
+      if(m){ out.push('<p><img src="'+imgSrc(m[2])+'" alt="'+esc(m[1])+'" style="max-width:100%"></p>'); continue; }
+      out.push('<p>'+inline(line).replace(/!\[([^\]]*)\]\(([^)]+)\)/g, function(_a,alt,src){ return '<img src="'+imgSrc(src)+'" alt="'+esc(alt)+'" style="max-width:100%">'; }) + '</p>');
     }
-    closeList(); closeQuote(); if(inCode) out.push('</pre>');
+    flushTable(); closeList(); closeQuote(); if(inCode) out.push('</pre>');
     return out.join('\n');
   }
 
@@ -181,7 +211,7 @@ h3.section { margin:0 0 10px; font-size:14px; }
       .then(function(d){
         if(d && d.content){
           reportCard.classList.remove('hidden');
-          report.innerHTML = mdToHtml(d.content);
+          report.innerHTML = mdToHtml(d.content, currentTopic);
           reportTitle.textContent = '报告（' + d.name + '）';
         }
       })
@@ -196,10 +226,19 @@ h3.section { margin:0 0 10px; font-size:14px; }
       .then(function(d){
         if(d && d.total_claims != null){
           verifyCard.classList.remove('hidden');
-          var conf = Math.round((d.overall_confidence||0)*100);
-          var color = conf>=67 ? 'var(--ok)' : (conf>=40 ? '#e6a23c' : 'var(--err)');
+          var confVal, confColor, confLabel;
+          if(d.evidence_insufficient){
+            confVal = 'N/A';
+            confColor = '#8b949e';
+            confLabel = '证据不足';
+          } else {
+            var conf = Math.round((d.overall_confidence||0)*100);
+            confVal = conf + '%';
+            confColor = conf>=67 ? 'var(--ok)' : (conf>=40 ? '#e6a23c' : 'var(--err)');
+            confLabel = '总体置信度';
+          }
           var html = '<div class="ov">'
-            + '<div class="ov-box"><div class="ov-val" style="color:'+color+'">'+conf+'%</div><div class="ov-lab">总体置信度</div></div>'
+            + '<div class="ov-box"><div class="ov-val" style="color:'+confColor+'">'+confVal+'</div><div class="ov-lab">'+confLabel+'</div></div>'
             + statBox('✅ 验证通过', d.verified)
             + statBox('🟡 部分验证', d.partially_verified)
             + statBox('❌ 被反驳', d.contradicted)
@@ -208,6 +247,8 @@ h3.section { margin:0 0 10px; font-size:14px; }
             + statBox('⚪ 未验证(其他)', Math.max(0, (d.unverified||0) - (d.insufficient_evidence||0) - (d.needs_fulltext||0)))
             + '</div>';
           if(d.summary) html += '<div class="ph" style="margin-top:8px">'+esc(d.summary)+'</div>';
+          if((d.nli_llm_failures||0) > 0) html += '<div style="margin-top:8px;padding:8px 10px;border:1px solid #e6a23c;border-radius:6px;background:#2a2117;color:#e6a23c;font-size:13px">⚠️ 校验器网络异常：'+esc(d.nli_llm_failures)+' 条断言因 LLM 调用失败（网络不可达）未完成校验，当前置信度不代表报告质量。</div>';
+          if(d.evidence_insufficient) html += '<div style="margin-top:8px;padding:8px 10px;border:1px solid #8b949e;border-radius:6px;background:#1b1f24;color:#8b949e;font-size:13px">📄 证据不足：所有断言缺全文/仅标题，无法评分。上传全文（Phase 5.5 断点或 fulltext_papers/）后重跑校验可获得真实置信度。</div>';
           verifySummary.innerHTML = html;
         } else {
           verifyCard.classList.remove('hidden');
@@ -291,7 +332,7 @@ h3.section { margin:0 0 10px; font-size:14px; }
     if(!currentTopic){ alert('请先在「历史运行」查看报告，再重跑校验'); return; }
     reverifyBtn.textContent = '启动中…';
     reverifyBtn.disabled = true;
-    fetch('/consensus-pipeline/api/reverify-77', { method: 'POST' })
+    fetch('/consensus-pipeline/api/reverify-77', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ topic: currentTopic }) })
       .then(function(r){ return r.json(); })
       .then(function(d){
         if(d && d.ok){

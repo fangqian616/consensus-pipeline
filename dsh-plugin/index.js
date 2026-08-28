@@ -16,7 +16,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const name = 'dsh-consensus-pipeline';
-export const inject = ['tools', 'subprocess', 'systemPrompt', 'webServer'];
+export const inject = ['tools', 'subprocess', 'systemPrompt', 'webServer', 'skills'];
 
 const REQUEST_TIMEOUT_MS = 30_000;
 const TOOL_CALL_TIMEOUT_MS = 3600_000;
@@ -129,6 +129,40 @@ export function apply(ctx, config = {}) {
     name: 'tool:consensus-pipeline',
     order: 100,
     text: 'Consensus Pipeline tools run the academic research pipeline (search → debate → report). Important: when the user expresses a research intent — even a vague one — do NOT ask them to finalize a topic upfront. First run a requirement research interview in conversation: ask about core questions, discipline/scope, time range, methodology, quality standard, and deliverable, refining the topic through this multi-turn dialogue. Then call run_requirement_research with the refined topic and a free-text summary of what you gathered to produce the working-group configuration, then call run_full_pipeline with that topic to start the pipeline. Use get_pipeline_status to check progress and locate output files. A web control panel is served at /consensus-pipeline/ on this host.',
+  });
+
+  // 注册「需求调研逐个追问」skill —— 随插件绑定，任何 agent 在做研究任务时
+  // 加载它，就获得同一套逐轮访谈 SOP（不靠 agent 临场发挥）。
+  ctx.skills?.register?.({
+    name: 'consensus-requirement-interview',
+    description: '逐个追问的需求调研访谈流程，把模糊的研究主题收敛成结构化需求，再交给管线生成配置。',
+    source: 'dsh-consensus-pipeline',
+    whenToUse: '当用户表达研究意图、准备用 Consensus Pipeline 做学术调研/文献综述时，先加载本 skill 再开始访谈。',
+    content: [
+      '# 需求调研逐个追问 SOP（Consensus Pipeline）',
+      '',
+      '## 铁律',
+      '1. 一次只问一个问题，禁止一次性抛出问题清单。',
+      '2. 禁止预设/硬编码任何学科方向（不要默认「能源」「用能权」等）。',
+      '3. 每轮只做：提问 → 收到回答 → 提取信息 → 判断是否完成 → 未完成则问下一个维度。',
+      '',
+      '## 固定维度顺序（逐个问，不要跳过）',
+      '1. 核心研究问题 / 侧重点',
+      '2. 学科范围（让用户自己说，不预设）',
+      '3. 时间范围（近 3/5/10 年，或自定义区间）',
+      '4. 方法论偏好（计量 / 机器学习 / 混合 / 定性等）',
+      '5. 论文质量标准（顶刊 / 同行评审 / 不限）',
+      '6. 预期交付物（综述报告 / 综述+技术选型+教程 等）',
+      '',
+      '## 完成判定',
+      '覆盖 ≥80% 维度（至少 5/6）且已有明确目标、已有交付物 → 结束访谈。',
+      '',
+      '## 完成后',
+      '1. 把收集到的信息整理成一段 free-text requirements summary（含目标、约束、时间范围、交付物、质量标准、检索来源）。',
+      '2. 调用 run_requirement_research(topic, requirements=summary) 生成工作组配置。',
+      '3. 调用 run_full_pipeline(topic) 启动完整管线。',
+      '4. 用 get_pipeline_status 查进度和输出文件位置。',
+    ].join('\n'),
   });
 
   (async () => {
@@ -265,7 +299,7 @@ async function findReport(root, topic) {
         const p = join(runDir, fname);
         try {
           const st = await stat(p);
-          hits.push({ path: p, mtime: st.mtimeMs, name: dirName + '/' + e.name + '/' + fname });
+          hits.push({ path: p, mtime: st.mtimeMs, name: dirName + '/' + e.name + '/' + fname, dir: runDir });
           break;
         } catch {}
       }
@@ -275,7 +309,7 @@ async function findReport(root, topic) {
   if (hits.length === 0) return null;
   try {
     const content = await readFile(hits[0].path, 'utf8');
-    return { name: hits[0].name, content };
+    return { name: hits[0].name, content, dir: hits[0].dir };
   } catch { return null; }
 }
 
@@ -312,6 +346,8 @@ async function findVerification(root, topic) {
       insufficient_evidence: d.insufficient_evidence ?? 0,
       needs_fulltext: d.needs_fulltext ?? 0,
       overall_confidence: d.overall_confidence ?? 0,
+      nli_llm_failures: d.nli_llm_failures ?? 0,
+      evidence_insufficient: d.evidence_insufficient ?? false,
       summary: d.summary ?? '',
     };
   } catch { return null; }
@@ -478,6 +514,30 @@ function registerWebPanel(ctx, { cwd, callTool, disposers, python }) {
         return;
       }
 
+      if (pathname === '/consensus-pipeline/api/image') {
+        try {
+          const topic = url.searchParams.get('topic') ?? '';
+          const file = url.searchParams.get('file') ?? '';
+          // 安全：拒绝路径穿越 / 绝对路径，只允许报告目录内的相对路径
+          if (!file || file.includes('..') || file.startsWith('/') || file.startsWith('\\') || /^[a-zA-Z]:/.test(file)) {
+            return json(res, 400, { error: 'bad file' });
+          }
+          const found = await findReport(cwd, topic);
+          if (!found || !found.dir) return json(res, 404, { error: 'report not found' });
+          let buf;
+          try { buf = await readFile(join(found.dir, file)); } catch { return json(res, 404, { error: 'image not found' }); }
+          const ext = (file.split('.').pop() || '').toLowerCase();
+          const mime = ext === 'png' ? 'image/png'
+            : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
+            : ext === 'gif' ? 'image/gif'
+            : ext === 'webp' ? 'image/webp'
+            : 'application/octet-stream';
+          res.writeHead(200, { 'content-type': mime, 'cache-control': 'no-cache' });
+          res.end(buf);
+        } catch (e) { json(res, 500, { error: e?.message ?? String(e) }); }
+        return;
+      }
+
       if (pathname === '/consensus-pipeline/api/verification') {
         try {
           const topic = url.searchParams.get('topic') ?? '';
@@ -559,8 +619,17 @@ function registerWebPanel(ctx, { cwd, callTool, disposers, python }) {
           if (reverify && reverify.running) {
             return json(res, 409, { error: 're-verify already running' });
           }
+          const body = await readRequestBody(req);
+          let pb = {};
+          try { pb = JSON.parse(body || '{}'); } catch {}
+          const topic = String(pb.topic ?? '').trim();
+          const runDirArg = [];
+          if (topic) {
+            const found = await findReport(cwd, topic);
+            if (found && found.dir) runDirArg.push(found.dir);
+          }
           const p = ctx.subprocess.spawn({
-            argv: [python, '_reverify_77.py'],
+            argv: [python, '_reverify_77.py', ...runDirArg],
             cwd,
             stdio: { stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' },
             graceMs: 5000,
