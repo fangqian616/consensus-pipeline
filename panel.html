@@ -53,9 +53,27 @@ h3.section { margin:0 0 10px; font-size:14px; }
 .ov-val { font-size:20px; font-weight:700; }
 .ov-lab { font-size:12px; color:var(--muted); margin-top:4px; }
 .ov-detail { margin-top:10px; font-size:12px; color:var(--muted); }
+/* v0.13.2: 断点强提醒——固定顶部横幅，不随滚动消失，闪烁醒目 */
+.breakpoint-banner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+  background: #d9534f; color: #fff; padding: 12px 16px;
+  font-size: 15px; font-weight: 600; text-align: center;
+  box-shadow: 0 2px 14px rgba(0,0,0,.55);
+  animation: bpBlink 1.2s infinite alternate;
+}
+.breakpoint-banner .bp-btn {
+  display: inline-block; margin-left: 12px;
+  background: #fff; color: #d9534f; border: none; border-radius: 4px;
+  padding: 5px 14px; font-weight: 700; cursor: pointer; font-size: 14px;
+}
+@keyframes bpBlink { from { background: #d9534f; } to { background: #9c1f1b; } }
 </style>
 </head>
 <body>
+<div id="breakpointBanner" class="breakpoint-banner hidden">
+  ⏸️ 管线暂停：辩论发现 <b id="bpCount">0</b> 篇必要论文缺全文，等待你上传 PDF
+  <button class="bp-btn" id="bpJump">⏳ 查看待导入清单</button>
+</div>
 <header>
   <h1>Consensus Pipeline</h1>
   <span class="sub">学术文献检索 → 辩论 → 报告 控制台</span>
@@ -561,11 +579,20 @@ h3.section { margin:0 0 10px; font-size:14px; }
       .then(function(r){ return r.json(); })
       .then(function(d){
         var p = d && d.pending;
+        var banner = document.getElementById('breakpointBanner');
+        var bpCount = document.getElementById('bpCount');
         if(!p || !p.status || p.status === 'confirmed' || p.status === 'skipped' || p.status === 'timeout'){
           pendingImportCard.classList.add('hidden');
+          if(banner) banner.classList.add('hidden');
+          document.title = 'Consensus Pipeline';
           return;
         }
         pendingImportCard.classList.remove('hidden');
+        if(banner){
+          banner.classList.remove('hidden');
+          if(bpCount) bpCount.textContent = (p.papers||[]).length;
+        }
+        document.title = '⏸ 等待上传论文（' + (p.papers||[]).length + '篇）';
         var remain = '';
         if(p.deadline){
           var secs = Math.max(0, Math.round((p.deadline - Date.now()/1000)));
@@ -578,8 +605,13 @@ h3.section { margin:0 0 10px; font-size:14px; }
         pendingImportBody.innerHTML = '<div class="ph">' + remain + ' · 共 ' + (p.papers||[]).length + ' 篇（PDF 拖进 fulltext_papers/ 后点「继续」）</div><ul class="hist">' + rows + '</ul><div class="row" style="margin-top:10px"><button id="piPause" class="secondary">⏸ 暂停</button><button id="piContinue">▶ 继续</button><button id="piSkip" class="secondary">⏭ 跳过</button></div>';
         wirePendingButtons();
       })
-      .catch(function(){ pendingImportCard.classList.add('hidden'); });
+      .catch(function(){ pendingImportCard.classList.add('hidden'); var b=document.getElementById('breakpointBanner'); if(b) b.classList.add('hidden'); document.title='Consensus Pipeline'; });
   }
+  var bpJumpBtn = document.getElementById('bpJump');
+  if(bpJumpBtn) bpJumpBtn.addEventListener('click', function(){
+    var card = document.getElementById('pendingImportCard');
+    if(card) { card.classList.remove('hidden'); card.scrollIntoView({behavior:'smooth'}); }
+  });
   function wirePendingButtons(){
     function send(status){
       fetch('/consensus-pipeline/api/pending-import', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status:status})})
