@@ -48,8 +48,8 @@ OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_outpu
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
-def llm_call(system_prompt: str, user_message: str, temperature: float = 0.3) -> str:
-    """Unified LLM call function"""
+def llm_call(system_prompt: str, user_message: str, temperature: float = 0.3, retries: int = 2) -> str:
+    """Unified LLM call function (v0.13.2: 空响应/异常自动重试，避免静默产出 0 字节文件)"""
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {API_KEY}",
@@ -63,14 +63,20 @@ def llm_call(system_prompt: str, user_message: str, temperature: float = 0.3) ->
         "temperature": temperature,
         "max_tokens": 8192,
     }
-    try:
-        resp = requests.post(API_URL, headers=headers, json=payload, timeout=120)
-        resp.raise_for_status()
-        result = resp.json()
-        return result["choices"][0]["message"]["content"]
-    except Exception as e:
-        print(f"  [LLM ERROR] {e}")
-        return ""
+    for attempt in range(retries + 1):
+        try:
+            resp = requests.post(API_URL, headers=headers, json=payload, timeout=120)
+            resp.raise_for_status()
+            result = resp.json()
+            content = result["choices"][0]["message"]["content"]
+            if content and content.strip():
+                return content
+            print(f"  [LLM WARN] 空响应 (attempt {attempt + 1}/{retries + 1})")
+        except Exception as e:
+            print(f"  [LLM ERROR] {e} (attempt {attempt + 1}/{retries + 1})")
+        if attempt < retries:
+            time.sleep(3)
+    return ""
 
 
 def log(stage: str, msg: str):
@@ -1137,6 +1143,8 @@ def generate_programming_output(papers):
 {json.dumps([{'title': p.title, 'journal': p.journal, 'year': p.year, 'level': p.quality_level} for p in papers[:15]], ensure_ascii=False, indent=2)}"""
 
     result = llm_call(prompt, _lang_user_msg("请完成以上三大任务，中文输出，Markdown格式", "Please complete the above three tasks, output in English, Markdown format"), temperature=0.3)
+    if not result or not result.strip():
+        result = "> ⚠️ 程序部产出生成失败：LLM 多次返回空响应。请稍后重跑本阶段以重新生成技术选型与代码骨架。"
     save_text(result, "programming_output.md")
     return result
 
@@ -1175,6 +1183,8 @@ def generate_tutorial_output(papers):
 {json.dumps([{'title': p.title, 'journal': p.journal, 'year': p.year} for p in papers[:10]], ensure_ascii=False, indent=2)}"""
 
     result = llm_call(prompt, _lang_user_msg("请完成以上三大教程，中文输出，Markdown格式，代码块用python标记", "Please complete the above three tutorials, output in English, Markdown format, code blocks marked with python"), temperature=0.3)
+    if not result or not result.strip():
+        result = "> ⚠️ 教程部产出生成失败：LLM 多次返回空响应。请稍后重跑本阶段以重新生成教程。"
     save_text(result, "tutorial_output.md")
     return result
 

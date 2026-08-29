@@ -3827,6 +3827,13 @@ def render_proofread_tab():
                 st.success(f"Verification complete | Overall confidence: {_fc_result.overall_confidence:.0%}{_fc_vtag}")
                 st.write(_fc_result.summary)
 
+                # Consensus Meter - standalone module consensus_meter.py (isolated: failures never affect the metric cards)
+                try:
+                    from consensus_meter import render_consensus_meter_st
+                    render_consensus_meter_st(_fc_result, is_zh=is_zh)
+                except Exception as _meter_err:
+                    st.caption(f"\u26a0\ufe0f Consensus Meter render failed: {_meter_err}")
+
                 # Stats row
                 c1, c2, c3, c4, c5, c6 = st.columns(6)
                 c1.metric("✅ Verified", _fc_result.verified)
