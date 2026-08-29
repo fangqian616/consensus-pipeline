@@ -600,10 +600,24 @@ h3.section { margin:0 0 10px; font-size:14px; }
           remain = (p.status === 'paused' ? '⏸ 已暂停（倒计时停止）' : ('⏱ 剩余 ' + m + ':' + (s<10?'0':'') + s));
         }
         var rows = (p.papers||[]).map(function(pap){
-          return '<li><b>' + esc(pap.doi) + '</b> <span style="color:var(--muted)">' + esc(pap.title||'') + '</span><br><span class="ph">必要原因：' + esc(pap.necessary||'') + ' · 依赖：' + esc((pap.depts||[]).join('/')) + '</span></li>';
+          var doiLink = 'https://doi.org/' + encodeURI(pap.doi || '');
+          return '<li><a href="' + doiLink + '" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;word-break:break-all">' + esc(pap.doi) + '</a> <span style="color:var(--muted)">' + esc(pap.title||'') + '</span><br><span class="ph">必要原因：' + esc(pap.necessary||'') + ' · 依赖：' + esc((pap.depts||[]).join('/')) + '</span></li>';
         }).join('');
-        pendingImportBody.innerHTML = '<div class="ph">' + remain + ' · 共 ' + (p.papers||[]).length + ' 篇（PDF 拖进 fulltext_papers/ 后点「继续」）</div><ul class="hist">' + rows + '</ul><div class="row" style="margin-top:10px"><button id="piPause" class="secondary">⏸ 暂停</button><button id="piContinue">▶ 继续</button><button id="piSkip" class="secondary">⏭ 跳过</button></div>';
+        var copyAllBtn = '<button class="secondary" id="copyAllDoi" style="float:right">📋 复制全部 DOI</button>';
+        pendingImportBody.innerHTML = '<div class="ph">' + remain + ' · 共 ' + (p.papers||[]).length + ' 篇（点 DOI 直达论文页，PDF 拖进 fulltext_papers/ 后点「继续」）' + copyAllBtn + '</div><ul class="hist">' + rows + '</ul><div class="row" style="margin-top:10px"><button id="piPause" class="secondary">⏸ 暂停</button><button id="piContinue">▶ 继续</button><button id="piSkip" class="secondary">⏭ 跳过</button></div>';
         wirePendingButtons();
+        var cb = document.getElementById('copyAllDoi');
+        if(cb) cb.addEventListener('click', function(){
+          var list = (p.papers||[]).map(function(x){ return x.doi; }).join('\n');
+          var ta = document.createElement('textarea');
+          ta.value = list; ta.setAttribute('readonly','');
+          ta.style.position='fixed'; ta.style.top='0'; ta.style.left='-9999px';
+          document.body.appendChild(ta); ta.select();
+          var ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+          document.body.removeChild(ta);
+          cb.textContent = ok ? ('✅ 已复制 ' + (p.papers||[]).length + ' 条') : '❌ 复制失败';
+          setTimeout(function(){ cb.textContent='📋 复制全部 DOI'; }, 1500);
+        });
       })
       .catch(function(){ pendingImportCard.classList.add('hidden'); var b=document.getElementById('breakpointBanner'); if(b) b.classList.add('hidden'); document.title='Consensus Pipeline'; });
   }

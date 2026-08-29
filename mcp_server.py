@@ -400,12 +400,15 @@ async def _handle_run_full_pipeline(params: dict) -> str:
     async def _job():
         try:
             if use_v2:
+                # v0.13.2: 超时 6h → 12h。完整跑含断点等待(用户暂停可达 1-2h) +
+                # 11 部门辩论 + Phase 7.7 原子校验(30-60min)，6h 会在校验阶段被 kill，
+                # 导致 citation_verification.json / final_report_validated.md 缺失。
                 result = await _run_v2_pipeline(topic, lang, shadow=True,
                                                 max_rounds=max_rounds,
                                                 skip_requirement=skip_requirement,
-                                                timeout=21600)
+                                                timeout=43200)
             else:
-                result = await _run_v1_pipeline(topic, lang, timeout=10800)
+                result = await _run_v1_pipeline(topic, lang, timeout=21600)
             JOBS[job_id]["status"] = "done"
             JOBS[job_id]["result"] = result
         except Exception as e:
