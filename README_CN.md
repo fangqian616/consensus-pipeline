@@ -269,7 +269,7 @@ curl -fsSL https://github.com/fangqian616/consensus-pipeline/raw/main/install.sh
 以 bundle 形式安装（自动注册原生工具 + 挂载 `/consensus-pipeline/` 面板）：
 
 ```bash
-npx -p @deepseek-ai/dsh dsh plugin --profile web add github:fangqian616/consensus-pipeline#<commit>&path:dsh-plugin
+npx -p @deepseek-ai/dsh dsh plugin --profile web add github:fangqian616/consensus-pipeline#3d42c5f&path:dsh-plugin
 ```
 
 本地开发则把插件目录链接进 DSH 的 `node_modules` 后重启。

@@ -270,7 +270,7 @@ Then paste the printed snippet into your MCP client (`mcpServers.consensus-pipel
 Install as a bundle (auto-registers native tools + the `/consensus-pipeline/` panel):
 
 ```bash
-npx -p @deepseek-ai/dsh dsh plugin --profile web add github:fangqian616/consensus-pipeline#<commit>&path:dsh-plugin
+npx -p @deepseek-ai/dsh dsh plugin --profile web add github:fangqian616/consensus-pipeline#3d42c5f&path:dsh-plugin
 ```
 
 Or, for local development, link the plugin dir into DSH's `node_modules` and restart.
