@@ -3,36 +3,23 @@
 共识管线 v2 分歧量化模块 — 影子模式采集器
 ==========================================
 
-
--------------------------------------------------
-
-  • 收敛判定：CV < 0.07 判收敛（ε1=0.07，校准）
+收敛与僵局判定：
+  • 收敛判定：CV < 0.07 判收敛（ε1=0.07）
   • 僵局判定：|ΔCV| < 0.01 视为走平（ε2=0.01）
   • 复合僵局：(flat+up)/总论点 ≥ 0.75 且 CV ≥ ε1 → 高位僵持
   • 解析失败率门：最新轮失败率 ≥ 20% 时跳过一切判定，防止 CV 假低信号
 
-
-
-
 依赖：仅 Python 标准库（json / re / ast / statistics / datetime / pathlib / logging）
 
-用法：
-  1. 将此文件放到与 debate_engine.py 同目录
-  2. 在 debate_engine.py 中 import 需要的函数（见 12 适配点索引）
-  3. 辩论运行时自动写 debate_stance_log.jsonl（与原 debate_log 并存，不改原日志）
-
 函数速查：
-  extract_arguments()      → §3 R1后抽取核心论点清单（需传入LLM调用函数）
-  render_stance_block()    → §4 渲染表态块prompt文本（R2起追加到辩手prompt末尾）
-  parse_stance()           → §5 解析单个辩手一轮的表态块（容错，永不抛异常）
-  argument_cv()            → §6 单论点CV
-  round_cv()               → §6 轮级CV聚合
-  check_termination()      → §8 终止判定（影子模式）v2.2：轨道1收敛 / 轨道2a连续平台 /
-                             轨道2b高位僵持（复合僵局）+ 解析失败率门
-  write_stance_log()       → §7 写JSONL日志
+  extract_arguments()      → R1后抽取核心论点清单（需传入LLM调用函数）
+  render_stance_block()    → 渲染表态块prompt文本（R2起追加到辩手prompt末尾）
+  parse_stance()           → 解析单个辩手一轮的表态块（容错，永不抛异常）
+  argument_cv()            → 单论点CV
+  round_cv()               → 轮级CV聚合
+  check_termination()      → 终止判定：轨道1收敛 / 轨道2a连续平台 / 轨道2b高位僵持 + 解析失败率门
+  write_stance_log()       → 写JSONL日志
   StanceTracker            → 便捷封装：串联以上全部，维护状态
-
-
 """
 
 import json
@@ -47,15 +34,12 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────
-# 默认参数（）
+# 默认参数
 # ─────────────────────────────────────────────
 EPS1 = 0.07        # 收敛阈值：CV < ε1 判收敛
 EPS2 = 0.01        # 僵局阈值：|ΔCV| < ε2 视为走平
 N_PLATEAU = 2      # 连续 N 轮满足即判僵局（3轮制下N=2是上限）
-# v2.1（2026-→ 校准）：复合僵局阈值。最近间隔 (flat+up)/总论点 ≥ 0.75 且 CV > ε1
-# → 判「高位僵持」。依据  用例C实证：高位震荡型僵局会被一次显著下降打破
-# 连续性后反升，连续平台轨道（轨道2a）对其不敏感；flat计数 A/B/C = 1/3/5 单调可辨。
-# ✅ 校准完成 ：从占位 0.6 上调至 0.75（，ε1=0.07/ε2=0.01/flat_th=0.75）
+# 复合僵局阈值：最近间隔 (flat+up)/总论点 ≥ 0.75 且 CV > ε1 → 判「高位僵持」。
 FLAT_UP_RATIO_TH = 0.75
 MAX_PARSE_FAIL_RATE = 0.20  # 解析失败率门：最新轮失败率 ≥ 此值时，CV 信号不可信，跳过一切判定
 # v0.13.2: Kendall's W 联合收敛阈值（替代 α 作为交叉验证）。W 抗「打分高位压缩」，
