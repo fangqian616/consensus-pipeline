@@ -771,13 +771,17 @@ class StanceTracker:
         if not self.arg_ids or not llm_call_fn:
             return {}
         arg_list = "\n".join(f"{a['id']}: {a['text']}" for a in self.arguments)
+        # 示例动态覆盖全部论点 ID，避免模型只模仿示例输出前 2 个而漏评其余论点
+        example_stance = ", ".join(f'"{aid}": 3' for aid in self.arg_ids)
+        example_json = '{"stance": {' + example_stance + '}}'
         prompt = (
             "你是本场辩论的一名辩手。以下是核心论点清单和你本轮发言。"
             "请只输出你对每条论点的表态 JSON，不要输出任何其他内容。\n\n"
             f"核心论点清单：\n{arg_list}\n\n"
             f"你本轮发言（节选）：\n{speech_text[:1500]}\n\n"
-            "评分标尺（Likert 1-5，整数）：1=强烈反对 2=反对 3=中立/证据不足 4=支持 5=强烈支持\n\n"
-            '输出格式（严格 JSON，不要任何其他内容）：\n{"stance": {"P1": 3, "P2": 4}}\n'
+            "评分标尺（Likert 1-5，整数）：1=强烈反对 2=反对 3=中立/证据不足 4=支持 5=强烈支持\n"
+            "必须对清单中的每一个论点 ID 各打一个分，一个都不能遗漏。\n\n"
+            f"输出格式（严格 JSON，不要任何其他内容）：\n{example_json}\n"
         )
         try:
             raw = llm_call_fn(prompt)
@@ -790,8 +794,9 @@ class StanceTracker:
             retry_prompt = (
                 "请只输出一行 JSON，不要任何解释、不要代码块围栏、不要多余文字。\n"
                 f"论点 ID 列表：{self.arg_ids}\n"
-                '格式示例：{"stance": {"P1": 3, "P2": 4}}\n'
-                "现在请对每个论点打分（1-5 整数）并输出 JSON。"
+                f'格式示例：{example_json}\n'
+                "必须对上面列表中的每一个论点 ID 各打一个分（1-5 整数），"
+                "一个都不能遗漏，现在请输出完整 JSON。"
             )
             try:
                 raw2 = llm_call_fn(retry_prompt)
