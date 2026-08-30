@@ -499,16 +499,32 @@ def round_cv(stance_by_debater: dict[str, dict[str, int]], arg_ids: list[str]) -
 
 
 def kendall_w(stance_by_debater: dict, arg_ids: list) -> Optional[float]:
-    """Kendall's W 协调系数（0-1，排序一致，带并列秩校正）。"""
+    """Kendall's W 协调系数（0-1，排序一致，带并列秩校正）。
+
+    v0.13.3 容忍部分表态缺失，不再一票否决整体返回 None：
+      阶段1 优先剔除「缺失任一论元」的辩手（对应单个辩手整块 JSON 解析失败）；
+      若剔除后辩手仍不足 2 名，阶段2 退回剔除「任一辩手缺失」的论元列
+      （对应个别论元漏评）。两阶段后若 K<2 或 N<2 才返回 None。
+    """
     from collections import Counter
     debaters = list(stance_by_debater.keys())
-    matrix = []
-    for d in debaters:
-        vals = [stance_by_debater[d].get(aid) for aid in arg_ids]
-        if any(v is None for v in vals):
+    if len(debaters) < 2 or len(arg_ids) < 2:
+        return None
+
+    # 阶段1：剔除缺失任一论元的辩手（整块解析失败场景）
+    complete = [d for d in debaters
+                if all(stance_by_debater[d].get(aid) is not None for aid in arg_ids)]
+    if len(complete) >= 2:
+        debaters, cols = complete, list(arg_ids)
+    else:
+        # 阶段2：剔除任一辩手缺失的论元列（个别论元漏评场景）
+        cols = [aid for aid in arg_ids
+                if all(stance_by_debater[d].get(aid) is not None for d in debaters)]
+        if len(cols) < 2:
             return None
-        matrix.append(vals)
-    K, N = len(matrix), len(arg_ids)
+
+    matrix = [[stance_by_debater[d].get(aid) for aid in cols] for d in debaters]
+    K, N = len(matrix), len(cols)
     if K < 2 or N < 2:
         return None
 

@@ -1121,8 +1121,12 @@ def run_department_debate(
 
     def _shadow_llm(prompt_text: str) -> str:
         try:
+            # 环境修正：deepseek-v4-flash 为推理模型，reasoning_tokens 计入 completion
+            # 预算。max_tokens 太小会被推理耗尽导致 content 为空(finish_reason=length)。
+            # 表态/论点抽取都是短 JSON，但推理过程长，故显式给足预算；temperature 压低求稳定。
             _r = call_api([{"role": "user", "content": prompt_text}],
-                          api_url, api_key, model, temperature=0.2, stats=stats)
+                          api_url, api_key, model, temperature=0.1,
+                          max_tokens=16384, stats=stats)
             return _r if isinstance(_r, str) else ""
         except Exception:
             return ""
