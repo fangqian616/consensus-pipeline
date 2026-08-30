@@ -5,16 +5,15 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
+  <img src="https://img.shields.io/badge/Python-3.10+-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit" alt="Streamlit">
-  <img src="https://img.shields.io/badge/Latest-v0.12.18-brightgreen" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
 > **多 Agent 辩论驱动的学术研究框架。**
 > 不是单个 AI 替你写文献综述——是一支 AI 团队访谈你、辩论每条主张、达成共识、给每条结论标注置信度，并逐条校验引用与原文摘要的一致性。
 
-📖 [English](README.md) · 🌐 [在线试用](https://consensus-pipeline.streamlit.app) · 📦 [GitHub Releases](https://github.com/fang616/consensus-pipeline/releases)
+📖 [English](README.md) · 📦 [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases)
 
 ---
 
@@ -73,11 +72,11 @@ Consensus Pipeline 输入一个研究主题，通过多 Agent 辩论产出结构
 
 **与 Elicit/Consensus.app 的关键区别：** 那些工具是提取和总结，这个工具是**辩论**。每条结论在进入报告之前，必须经受多个 AI 智能体的对抗性质疑。
 
-### 实际可用功能（v0.12.18）：
+### 实际可用功能：
 - ✅ 多源论文检索（OpenAlex + Semantic Scholar + arXiv）
 - ✅ 三层 QC 过滤：硬过滤 → LLM 分类 → 重要性标注（219 → 77 篇，排除率 ~65%）
 - ✅ 10-11 个辩论部门，每部门 2-4 位辩手从不同视角辩论
-- ✅ 多轮辩论（每部门 2-3 轮）
+- ✅ 多轮辩论 + **动态终止**——表态量化（CV）+ Kendall's W 协调系数，辩手收敛即提前停，不再跑满固定轮次
 - ✅ 跨部门交叉验证（部门之间互相检查结论）
 - ✅ 逐条结论置信度标注（如"42/77 篇支撑，高置信度"）
 - ✅ NLI 引用校验——逐条论断判定（✅/⚠️/❌），不可判条目（📖需查全文/📭仅标题）显式排除、不计入置信度
@@ -90,8 +89,11 @@ Consensus Pipeline 输入一个研究主题，通过多 Agent 辩论产出结构
 - ✅ 自动生成可运行的研究方法代码
 - ✅ PDF/DOCX 导出
 - ✅ 双语输出（`--lang en` 或 `--lang zh`）
-- ✅ Streamlit 可视化界面，实时监控辩论进程
+- ✅ Streamlit 可视化界面，实时监控辩论进程 + 手动/自动收敛模式
 - ✅ DSH 控制台面板——原子校验卡片、全文批量上传、一键重跑校验（带进度条）、待导入清单（暂停/继续/跳过）
+- ✅ 一键安装脚本——`irm …install.ps1 | iex` / `curl …install.sh | bash`
+- ✅ DSH 插件 bundle——`dsh plugin add`，首次自动 clone 项目
+- ✅ 种子论文导入——你自己的 PDF 强制进辩论和报告
 
 ### 待改进：
 - ⚠️ 部分 UI 标签在英文模式下仍有中英混合
@@ -224,216 +226,152 @@ Consensus Pipeline 输入一个研究主题，通过多 Agent 辩论产出结构
 
 ---
 
-## 📖 使用教程
+## 📖 使用方式
 
-两种运行方式：**Streamlit 网页界面**（交互式、可视化）或**命令行直接启动**（无头、可脚本化）。两者产出相同——根据你的工作流选择。
+三种运行方式，任选其一：
 
-> 🌐 **不想安装？** 直接打开在线版 [consensus-pipeline.streamlit.app](https://consensus-pipeline.streamlit.app)——自备 API Key 即可使用。
+| 入口 | 适合 |
+|------|------|
+| **🚀 一键安装脚本** | 最快上手——一条命令完成 clone + 装依赖 + 输出配置 |
+| **🤖 DSH / MCP（AI agent）** | 让 AI agent 从聊天里驱动（DeepSeek Harness、Claude、Cursor…） |
+| **🖥️ Streamlit / 命令行（手动）** | 自己本地跑，实时看辩论、可脚本化 |
 
 ---
 
-### 🖥️ 方式一：Streamlit 网页界面
+### 🚀 方式一：一键安装脚本（推荐）
 
-适合：交互式探索主题、实时观看辩论、随时调整部门配置。
+发对方一条命令，自动装好。不用分步 clone / pip / 配置。
 
-#### 第一步：安装并启动
+**Windows（PowerShell）：**
+
+```powershell
+irm https://github.com/fangqian616/consensus-pipeline/raw/main/install.ps1 | iex
+```
+
+**macOS / Linux：**
 
 ```bash
-git clone https://github.com/fang616/consensus-pipeline.git
+curl -fsSL https://github.com/fangqian616/consensus-pipeline/raw/main/install.sh | bash
+```
+
+脚本会自动：`git clone` → `pip install -r requirements.txt` → 打印 MCP 客户端的 `mcp.json` 配置片段。
+
+然后把打印的片段粘进你的 MCP 客户端（`mcpServers.consensus-pipeline` → `python mcp_server.py`）。支持 Claude Desktop、Cursor、Codex 及任何 MCP 兼容 agent。
+
+> 💡 需要 `git` 和 `python3.10+`。首次 `pip install` 约 1-2 分钟。
+
+---
+
+### 🤖 方式二：AI Agent（DSH / MCP）
+
+#### DSH（DeepSeek Harness）——原生工具 + 控制台面板
+
+以 bundle 形式安装（自动注册原生工具 + 挂载 `/consensus-pipeline/` 面板）：
+
+```bash
+npx -p @deepseek-ai/dsh dsh plugin --profile web add github:fangqian616/consensus-pipeline#<commit>&path:dsh-plugin
+```
+
+本地开发则把插件目录链接进 DSH 的 `node_modules` 后重启。
+
+首次使用时插件会自动 clone 项目到 `~/.dsh/consensus-pipeline`（无需手动 clone）。右下角出现 **📊 控制台** 浮动按钮。
+
+**日常使用：**
+
+1. 在聊天里对 agent 说出研究方向 → agent 先做需求访谈，然后启动管线。
+2. 点 **📊 控制台** 打开面板——实时进度、原子校验、全文上传。
+3. Phase 5.5 断点出现 **⏳ 待导入清单**：暂停、拖入付费墙 PDF、继续。
+
+#### 任意 MCP 客户端（Claude Desktop / Cursor / Codex…）
+
+MCP 服务器零依赖（纯标准库）。任何 MCP 客户端指向它即可：
+
+```json
+{
+  "mcpServers": {
+    "consensus-pipeline": {
+      "command": "python",
+      "args": ["/path/to/consensus-pipeline/mcp_server.py"]
+    }
+  }
+}
+```
+
+上面的一键安装脚本会直接帮你打印这段配置。
+
+---
+
+### 🖥️ 方式三：Streamlit / 命令行（手动）
+
+自己本地跑——可视化界面或无头脚本。
+
+#### Streamlit 网页界面
+
+```bash
+git clone https://github.com/fangqian616/consensus-pipeline.git
 cd consensus-pipeline
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-浏览器自动打开 `http://localhost:8501`。左侧边栏是你的控制面板——一切从这里开始。
+浏览器打开 `http://localhost:8501`。在侧边栏粘贴 DeepSeek API Key、选择语言，然后启动学术管线——AI 访谈员会先问清你的课题，自动生成辩论部门，接着多轮辩论实时运行。
 
-#### 第二步：配置 API Key 和语言
-
-在左侧边栏中：
-
-1. **API Key** — 粘贴你的 DeepSeek API key（或任何 OpenAI 兼容的 key）。[点击获取](https://platform.deepseek.com/)。Key 仅保存在当前会话中，不会写入磁盘。
-2. **语言** — 在 🇨🇳 中文和 🇬🇧 English 之间切换。这控制**所有**输出：辩论内容、界面标签和最终报告。
-3. **模型** — 默认 `deepseek-chat`。如果使用其他服务商，可以修改 API 端点和模型名称。
-
-<img src="examples/01_requirement_interview_cn.png" alt="侧边栏配置" width="60%">
-
-#### 第三步：选择管线模式
-
-应用聚焦学术研究：
-
-| 模式 | 标签页 | 功能 |
-|------|--------|------|
-| **学术研究** | `📚 学术` | 论文检索 → 多 Agent 辩论 → 带置信度评分的文献综述 |
-
-> 💡 本教程聚焦学术管线。
-
-#### 第四步：启动学术管线
-
-1. 点击 **📚 学术** 标签页。
-2. 输入研究主题。尽量具体——AI 访谈员会追问以缩小范围。示例主题：
-   - `"机器学习在碳价预测中的应用"`
-   - `"能源政策评估的因果推断方法"`
-   - `"碳市场对电力价格的影响：系统性综述"`
-3. AI 访谈员会追问你的研究范围、约束条件和目标。认真回答——这决定整个管线的走向。
-4. 审阅**自动生成的部门配置**。AI 根据你的主题创建 10+ 个辩论部门及专业辩手。你可以在启动前编辑、添加或删除部门。
-
-#### 第五步：观看辩论
-
-确认配置后，管线自动运行：
-
-1. **论文检索**（1-2 分钟）— 多源检索 OpenAlex、Semantic Scholar、arXiv。
-2. **QC 过滤**（1-2 分钟）— 三层质量筛：硬过滤 → LLM 分类 → 重要性标注。约 65% 论文被排除。
-3. **部门辩论**（5-20 分钟）— 10+ 部门实时辩论。每部门 2-3 轮。你可以在 Streamlit 界面实时观看辩论过程。
-4. **跨部门验证**（2-5 分钟）— 部门之间互相检查结论。
-5. **报告生成**（1-2 分钟）— 最终文献综述，含置信度标注、已验证引用和可运行代码。
-
-#### 第六步：下载结果
-
-管线完成后，你可以获得：
-
-- **📄 文献综述**（PDF/DOCX）— 含逐条结论置信度评分
-- **💻 生成代码** — 关键方法的可运行 Python 脚本
-- **📊 辩论日志** — 完整辩论记录，可供审计
-
----
-
-### ⌨️ 方式二：命令行直接启动
-
-适合：批量处理、脚本化、CI/CD，或不需要可视化界面时。
-
-#### 第一步：安装依赖
+#### 命令行（无头）
 
 ```bash
-git clone https://github.com/fang616/consensus-pipeline.git
+git clone https://github.com/fangqian616/consensus-pipeline.git
 cd consensus-pipeline
 pip install -r requirements.txt
 ```
 
-#### 第二步：设置 API Key
+设置 API Key：
 
 ```bash
 # Linux/macOS
 export DEEPSEEK_API_KEY="sk-your-key-here"
-
-# Windows (PowerShell)
+# Windows（PowerShell）
 $env:DEEPSEEK_API_KEY="sk-your-key-here"
-
-# Windows (CMD)
-set DEEPSEEK_API_KEY=sk-your-key-here
+# …或在项目根目录创建 .env：DEEPSEEK_API_KEY=sk-your-key-here
 ```
 
-> 💡 也可以在项目根目录创建 `.env` 文件：`DEEPSEEK_API_KEY=sk-your-key-here`
-
-#### 第三步：运行管线
-
-**基础用法——中文输出（默认）：**
+运行 **v2 管线**（推荐——表态量化 + 动态终止）：
 
 ```bash
-python run_pipeline.py --topic "碳市场价格预测与能源转型关联机制研究"
+python run_pipeline_v2.py --topic "Machine Learning in Energy Economics" --lang en
+# 中文（默认）
+python run_pipeline_v2.py --topic "碳市场价格预测与能源转型关联机制研究"
 ```
 
-**英文输出：**
+可选先做需求调研（Phase 0-3 → 工作组配置）：
 
 ```bash
-python run_pipeline.py --topic "Machine Learning in Energy Economics" --lang en
-```
-
-**完整参数说明：**
-
-| 参数 | 必需 | 默认值 | 说明 |
-|------|------|--------|------|
-| `--topic` | ✅ 是 | — | 研究主题（任意语言） |
-| `--lang` | 否 | `zh` | 输出语言：`zh`（中文）或 `en`（英文） |
-
-#### 第四步：找到输出文件
-
-所有输出文件保存在 `output/` 目录：
-
-```
-output/
-├── report_<主题>_<时间戳>.docx    # Word 报告，含置信度标注
-├── report_<主题>_<时间戳>.pdf     # PDF 版本
-├── code_<主题>_<时间戳>.py        # 生成的可运行代码
-└── debate_logs/                   # 完整辩论记录
-```
-
-#### 第五步：自定义 API 端点（可选）
-
-使用其他模型服务商？设置端点和模型：
-
-```bash
-export DEEPSEEK_API_KEY="your-key"
-export DEEPSEEK_API_BASE="https://api.openai.com/v1"
-export DEEPSEEK_MODEL="gpt-4o"
-
-python run_pipeline.py --topic "你的主题" --lang zh
-```
-
-任何 OpenAI 兼容 API 均可使用——DeepSeek、OpenAI、Ollama/vLLM 本地模型等。
-
----
-
-### 🔄 我该选哪种？
-
-| 场景 | Streamlit | 命令行 |
-|------|-----------|--------|
-| 第一次探索工具 | ✅ 推荐 | — |
-| 想实时观看辩论 | ✅ | — |
-| 需要调整部门配置 | ✅ | — |
-| 批量处理多个主题 | — | ✅ |
-| 脚本/自动化 | — | ✅ |
-| 无头服务器运行 | — | ✅ |
-| CI/CD 集成 | — | ✅ |
-
-### 🚀 端到端操作流程（本地 / DSH）
-
-从课题到报告的两条完整路径，各含全文补录。
-
-#### 路径 A：本地部署（命令行）
-
-```bash
-# 1. 安装依赖
-pip install -r requirements.txt
-
-# 2. 配置 API key
-echo DEEPSEEK_API_KEY=sk-xxx > .env      # Linux/macOS
-
-# 3.（可选）需求调研 → 工作组配置
 python run_requirement_research.py --topic "你的课题"
+```
 
-# 4. 完整管线（Phase 0-7）
-python run_pipeline_v2.py --topic "你的课题" --lang zh
+补全文后只重跑报告+校验阶段：
 
-# 5. 辩论中途（Phase 5.5）断点：列出「缺失但必要」的论文
-#    → 下载那些付费墙 PDF，拖进 fulltext_papers/（文件名随便，DOI 自动识别）
-#    → 确认继续（或等超时自动跳过）
-
-# 6. 跑完后若仍有缺全文，只重跑报告+校验阶段：
+```bash
 python run_pipeline_v2.py --topic "你的课题" --output-dir "v2_run_output/<运行目录>" --rerun-67
 ```
 
-#### 路径 B：DSH（DeepSeek Harness）
+输出落在 `v2_run_output/<日期>_<课题>/`（v2）或 `run_output/`（v1）——Markdown + DOCX 报告、`citation_verification.json`、辩论日志和生成的图表。
 
-**安装（一次性）：** 把插件链接到 DSH 的 `node_modules`，启动时自动加载。
+#### 全文补录（付费墙论文）
+
+付费墙论文无法仅凭摘要校验。两种方式补齐：
+
+- **DSH 控制台面板**——批量上传付费墙 PDF（文件名随便，DOI 自动提取），一键重跑校验（带进度条），待导入清单支持暂停/继续/跳过。
+- **CLI `--rerun-67`**——把 PDF 拖进 `fulltext_papers/`，然后只重跑报告+校验阶段（复用已完成的辩论）。
+
+#### 自定义 API 端点（可选）
+
+任何 OpenAI 兼容 API 均可：
 
 ```bash
-# Windows（管理员 PowerShell）：junction 链接插件目录
-cd C:\path\to\dsh\node_modules\@deepseek-ai
-mklink /J dsh-consensus-pipeline C:\path\to\consensus-pipeline\dsh-plugin
-
-# Linux/macOS：symlink
-ln -s /path/to/consensus-pipeline/dsh-plugin /path/to/dsh/node_modules/@deepseek-ai/dsh-consensus-pipeline
+export DEEPSEEK_API_KEY="your-key"
+export DEEPSEEK_MODEL="deepseek-v4-flash"   # 或 deepseek-v4-pro
+python run_pipeline_v2.py --topic "你的主题" --lang zh
 ```
-
-然后配置插件的项目根目录（`cwd`）和 Python 路径（`python`），重启 DSH。右下角出现 **📊 控制台** 浮动按钮。
-
-**日常使用：**
-
-1. 在聊天里对 agent 说出研究方向 → agent 先做需求访谈，然后启动管线。
-2. 点右下角 **📊 控制台** 按钮打开面板。
-3. **原子校验卡片** 实时显示置信度 + 验证通过/缺全文/缺摘要分布。
-4. Phase 5.5 断点出现 **⏳ 待导入清单**：点 **⏸ 暂停**，下载付费墙 PDF，**批量上传**（或拖进 `fulltext_papers/`），再点 **▶ 继续**。
-5. 跑完后：点 **导出待补清单** 下载剩余缺口的 CSV，补上传 PDF 后点 **重跑校验**（带进度条）。
 
 ---
 
@@ -441,8 +379,9 @@ ln -s /path/to/consensus-pipeline/dsh-plugin /path/to/dsh/node_modules/@deepseek
 
 | 要求 | 说明 |
 |------|------|
-| Python 3.9+ | 推荐 3.11+ |
+| Python 3.10+ | 推荐 3.11+ |
 | DeepSeek API Key | [注册](https://platform.deepseek.com/) — 每次完整运行约 $0.05-0.10 |
+| git | 一键安装脚本 / clone 需要 |
 | 网络 | 需访问 DeepSeek API（支持自定义端点） |
 
 > 💡 不需要 GPU，不需要数据库。论文检索使用免费开放 API（arXiv / Semantic Scholar / OpenAlex）。
@@ -462,7 +401,7 @@ ln -s /path/to/consensus-pipeline/dsh-plugin /path/to/dsh/node_modules/@deepseek
 
 | 服务商 | API 地址 | 已测试 |
 |--------|---------|--------|
-| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat`（主力） |
+| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-v4-flash`（辩论）、`deepseek-v4-pro`（校验/报告） |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o`（兼容） |
 | 自定义 | 任意 OpenAI 兼容端点 | 任意模型 |
 
@@ -474,17 +413,22 @@ ln -s /path/to/consensus-pipeline/dsh-plugin /path/to/dsh/node_modules/@deepseek
 
 ```
 consensus-pipeline/
+├── install.ps1 / install.sh     # 一键安装脚本（clone + pip + mcp.json）
 ├── app.py                       # Streamlit 主界面
 ├── router.py                    # AI Router — 智能部门配置
 ├── debate_engine.py             # 核心辩论引擎
 ├── config_manager.py            # 配置持久化与预设
-├── run_pipeline.py              # CLI 无头运行器（v1）
-├── run_pipeline_v2.py           # CLI 运行器（v2）——表态量化 + 全文补录
-├── stance_quant_v2.py           # v2 表态量化（CV / Krippendorff's α / Kendall's W）
-├── mcp_server.py                # MCP 服务器（DSH 原生工具）
+├── run_pipeline.py              # CLI 运行器（v1）
+├── run_pipeline_v2.py           # CLI 运行器（v2）——表态量化 + 动态终止
+├── stance_quant_v2.py           # v2 表态量化（CV + Kendall's W 收敛）
+├── run_requirement_research.py  # 需求调研（Phase 0-3）
+├── paper_importer.py            # 种子论文导入（PDF → 元数据）
+├── consensus_meter.py           # 共识度仪表盘
+├── mcp_server.py                # MCP 服务器（零依赖）
 ├── panel.html                   # DSH 控制台面板（校验卡片 + 全文上传）
-├── dsh-plugin/                  # DSH 插件（挂载 /consensus-pipeline/ + 原生工具）
-│   └── index.js                 #   面板路由 + JSON-RPC 工具
+├── dsh-plugin/                  # DSH 插件 bundle（挂载 /consensus-pipeline/ + 原生工具）
+│   ├── index.js                 #   面板路由 + JSON-RPC 工具 + 自动 clone
+│   └── cordis.patch.yml         #   bundle patch
 ├── fulltext_papers/             # 用户上传的付费墙论文 PDF（gitignore）
 ├── quality_controller.py        # QC 审校部门（三层过滤）
 ├── domain_config_generator.py   # 动态领域配置

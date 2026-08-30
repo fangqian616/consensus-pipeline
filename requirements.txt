@@ -1,10 +1,20 @@
+# Consensus Pipeline 依赖清单
+# 需要 Python 3.10+（代码使用了 `str | Path` 等新语法）
+
+# ── Web UI（仅 streamlit run app.py 需要；CLI / DSH / MCP 可跳过）──────────
 streamlit>=1.30.0
-requests>=2.28.0
-fpdf2>=2.8
-python-dotenv>=1.0.0
-python-docx>=1.1.0
-pypdf>=4.0
-# PDF 全文提取（citation_verifier._extract_pdf_text 优先用 PyMuPDF，pypdf 兜底）
-PyMuPDF>=1.24
-# 图表生成（academic/report_visualizer.py）
+
+# ── 核心管线（必需）────────────────────────────────────────────────────────
+requests>=2.28.0          # LLM API 调用 + 文献检索 HTTP 请求
+python-dotenv>=1.0.0      # 从 .env 读取 DEEPSEEK_API_KEY
+
+# ── 报告导出 ────────────────────────────────────────────────────────────────
+python-docx>=1.1.0        # DOCX 报告导出
+fpdf2>=2.8                # PDF 报告导出（pdf_exporter.py）
+
+# ── PDF 全文提取（citation_verifier / paper_importer）──────────────────────
+PyMuPDF>=1.24             # 优先（import fitz），全文 NLI 校验用
+pypdf>=4.0                # 兜底
+
+# ── 图表生成（academic/report_visualizer.py）───────────────────────────────
 matplotlib>=3.7

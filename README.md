@@ -5,16 +5,15 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.9+-blue?logo=python" alt="Python">
+  <img src="https://img.shields.io/badge/Python-3.10+-blue?logo=python" alt="Python">
   <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit" alt="Streamlit">
-  <img src="https://img.shields.io/badge/Latest-v0.12.18-brightgreen" alt="Version">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
 > **Multi-agent debate framework for academic research.**
 > Instead of one AI writing a literature review for you — an AI team interviews you, debates each claim, reaches consensus with per-claim confidence scores, and verifies every citation against the source abstracts.
 
-📖 [中文文档](README_CN.md) · 🌐 [Try Online](https://consensus-pipeline.streamlit.app) · 📦 [GitHub Releases](https://github.com/fang616/consensus-pipeline/releases)
+📖 [中文文档](README_CN.md) · 📦 [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases)
 
 ---
 
@@ -73,11 +72,11 @@ Consensus Pipeline takes a research topic and produces a structured literature r
 
 **Key difference from tools like Elicit/Consensus:** Those tools extract and summarize. This tool *debates*. Each finding has to survive adversarial challenge from multiple AI agents before it makes it into the report.
 
-### What actually works (v0.12.18):
+### What actually works:
 - ✅ Multi-source paper search (OpenAlex + Semantic Scholar + arXiv)
 - ✅ 3-layer QC: hard filter → LLM classify → importance tagging (219 → 77 papers, ~65% exclusion)
 - ✅ 10-11 debate departments, each with 2-4 debaters arguing from different perspectives
-- ✅ Multi-round debate (2-3 rounds per department)
+- ✅ Multi-round debate with **dynamic termination** — stance quantification (CV) + Kendall's W agreement; debate stops early once debaters converge instead of running fixed rounds
 - ✅ Cross-department validation (one department checks another's work)
 - ✅ Per-claim confidence annotation (e.g., "42/77 papers, high confidence")
 - ✅ NLI citation verification — per-claim verdicts (✅/⚠️/❌), with unverifiable claims (📖 needs-fulltext / 📭 title-only) explicitly excluded from the confidence score, not silently counted
@@ -90,8 +89,11 @@ Consensus Pipeline takes a research topic and produces a structured literature r
 - ✅ Auto-generated runnable code for research methods
 - ✅ PDF/DOCX export
 - ✅ Bilingual output (`--lang en` or `--lang zh`)
-- ✅ Streamlit UI with real-time debate monitoring
+- ✅ Streamlit UI with real-time debate monitoring + manual/auto convergence modes
 - ✅ DSH control panel — atomic-verification card, full-text batch upload, one-click re-verify with progress bar, pending-import list (pause / continue / skip)
+- ✅ One-shot installer — `irm …install.ps1 | iex` / `curl …install.sh | bash`
+- ✅ DSH plugin bundle — `dsh plugin add` with auto-clone of the project
+- ✅ Seed-paper import — your own PDFs are force-included in the debate + report
 
 ### What's still rough:
 - ⚠️ Some UI labels are bilingual (Chinese/English mix) in English mode
@@ -225,231 +227,152 @@ No hardcoded keywords. The LLM generates everything based on your topic — excl
 
 ---
 
-## 📖 Usage Tutorial
+## 📖 Usage
 
-Two ways to run Consensus Pipeline: **Streamlit Web UI** (interactive, visual) or **Direct CLI** (headless, scriptable). Both produce the same output — pick based on your workflow.
+Three ways to run Consensus Pipeline. Pick one:
 
-> 🌐 **No install?** Try the live demo at [consensus-pipeline.streamlit.app](https://consensus-pipeline.streamlit.app) — bring your own API key.
+| Entry | Best for |
+|-------|----------|
+| **🚀 One-shot installer** | Fastest start — one command clones + installs + prints config |
+| **🤖 DSH / MCP (AI agent)** | Let an AI agent drive it from chat (DeepSeek Harness, Claude, Cursor…) |
+| **🖥️ Streamlit / CLI (manual)** | Run locally yourself, watch debates, script it |
 
 ---
 
-### 🖥️ Option A: Streamlit Web UI
+### 🚀 Way 1: One-Shot Installer (recommended)
 
-Best for: exploring topics interactively, watching debates in real-time, tweaking department configs on the fly.
+Send someone a single command and it self-installs. No separate clone / pip / config steps.
 
-#### Step 1: Install & Launch
+**Windows (PowerShell):**
+
+```powershell
+irm https://github.com/fangqian616/consensus-pipeline/raw/main/install.ps1 | iex
+```
+
+**macOS / Linux:**
 
 ```bash
-git clone https://github.com/fang616/consensus-pipeline.git
+curl -fsSL https://github.com/fangqian616/consensus-pipeline/raw/main/install.sh | bash
+```
+
+What it does: `git clone` → `pip install -r requirements.txt` → prints the `mcp.json` snippet for your MCP client.
+
+Then paste the printed snippet into your MCP client (`mcpServers.consensus-pipeline` → `python mcp_server.py`). Supported: Claude Desktop, Cursor, Codex, and any MCP-compatible agent.
+
+> 💡 Requires `git` and `python3.10+`. The first `pip install` takes 1-2 minutes.
+
+---
+
+### 🤖 Way 2: AI Agent (DSH / MCP)
+
+#### DSH (DeepSeek Harness) — native tools + control panel
+
+Install as a bundle (auto-registers native tools + the `/consensus-pipeline/` panel):
+
+```bash
+npx -p @deepseek-ai/dsh dsh plugin --profile web add github:fangqian616/consensus-pipeline#<commit>&path:dsh-plugin
+```
+
+Or, for local development, link the plugin dir into DSH's `node_modules` and restart.
+
+On first use, the plugin auto-clones the project to `~/.dsh/consensus-pipeline` (no manual clone needed). The **📊 控制台** floating button appears bottom-right.
+
+**Daily use:**
+
+1. Tell the agent your research direction in chat → it runs the requirement interview, then starts the pipeline.
+2. Click **📊 控制台** to open the panel — live progress, atomic verification, full-text upload.
+3. At the Phase 5.5 breakpoint, a **⏳ pending-import list** appears: pause, drop in paywalled PDFs, continue.
+
+#### Any MCP client (Claude Desktop / Cursor / Codex…)
+
+The MCP server is zero-dependency (pure stdlib). Point any MCP client at it:
+
+```json
+{
+  "mcpServers": {
+    "consensus-pipeline": {
+      "command": "python",
+      "args": ["/path/to/consensus-pipeline/mcp_server.py"]
+    }
+  }
+}
+```
+
+The one-shot installer above prints exactly this snippet for you.
+
+---
+
+### 🖥️ Way 3: Streamlit / CLI (manual)
+
+Run it yourself — visual UI or headless script.
+
+#### Streamlit Web UI
+
+```bash
+git clone https://github.com/fangqian616/consensus-pipeline.git
 cd consensus-pipeline
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Your browser opens to `http://localhost:8501`. The sidebar is your control panel — everything starts here.
+Browser opens to `http://localhost:8501`. In the sidebar: paste your DeepSeek API key, pick a language, then start the academic pipeline — the AI interviewer asks about your topic, generates the debate departments, and the multi-round debate runs with live monitoring.
 
-#### Step 2: Configure API Key & Language
-
-In the left sidebar:
-
-1. **API Key** — Paste your DeepSeek API key (or any OpenAI-compatible key). [Get one here](https://platform.deepseek.com/). The key stays in your session only, never saved to disk.
-2. **Language** — Toggle between 🇨🇳 中文 and 🇬🇧 English. This controls ALL output: debate content, UI labels, and the final report.
-3. **Model** — Defaults to `deepseek-chat`. You can change the API endpoint and model name if using a different provider.
-
-<img src="examples/01_requirement_interview.png" alt="Sidebar Config" width="60%">
-
-#### Step 3: Choose Your Pipeline Mode
-
-The app focuses on academic research:
-
-| Mode | Tab | What It Does |
-|------|-----|-------------|
-| **Academic Research** | `📚 Academic` | Literature search → multi-agent debate → literature review with confidence scores |
-
-> 💡 This tutorial focuses on the academic pipeline.
-
-#### Step 4: Start the Academic Pipeline
-
-1. Click the **📚 Academic** tab.
-2. Enter your research topic. Be specific — the AI interviewer will ask follow-up questions to narrow scope. Example topics:
-   - `"Machine learning in carbon price forecasting"`
-   - `"Causal inference methods for energy policy evaluation"`
-   - `"The impact of carbon markets on electricity prices: a systematic review"`
-3. The AI interviewer asks clarifying questions about your scope, constraints, and goals. Answer them — this shapes the entire pipeline.
-4. Review the **auto-generated department config**. The AI creates 10+ debate departments with specialized debaters based on your topic. You can edit, add, or remove departments before starting.
-
-#### Step 5: Watch the Debate
-
-Once you confirm the config, the pipeline runs automatically:
-
-1. **Paper Search** (1-2 min) — Multi-source retrieval from OpenAlex, Semantic Scholar, and arXiv.
-2. **QC Filter** (1-2 min) — 3-layer quality sieve: hard filter → LLM classify → importance tagging. ~65% of papers get excluded.
-3. **Department Debate** (5-20 min) — 10+ departments debate in real-time. Each department runs 2-3 rounds. You can watch the debate unfold in the Streamlit UI.
-4. **Cross-Department Validation** (2-5 min) — Departments check each other's conclusions.
-5. **Report Generation** (1-2 min) — Final literature review with confidence annotations, verified citations, and runnable code.
-
-#### Step 6: Download Results
-
-When the pipeline finishes, you get:
-
-- **📄 Literature Review** (PDF/DOCX) — with per-claim confidence scores
-- **💻 Generated Code** — runnable Python scripts for key methods discussed
-- **📊 Debate Logs** — full debate transcripts for audit
-
----
-
-### ⌨️ Option B: Direct CLI (Headless)
-
-Best for: batch processing, scripting, CI/CD, or when you don't need the visual UI.
-
-#### Step 1: Install Dependencies
+#### CLI (headless)
 
 ```bash
-git clone https://github.com/fang616/consensus-pipeline.git
+git clone https://github.com/fangqian616/consensus-pipeline.git
 cd consensus-pipeline
 pip install -r requirements.txt
 ```
 
-#### Step 2: Set API Key
+Set the API key:
 
 ```bash
 # Linux/macOS
 export DEEPSEEK_API_KEY="sk-your-key-here"
-
 # Windows (PowerShell)
 $env:DEEPSEEK_API_KEY="sk-your-key-here"
-
-# Windows (CMD)
-set DEEPSEEK_API_KEY=sk-your-key-here
+# …or create a .env in the project root: DEEPSEEK_API_KEY=sk-your-key-here
 ```
 
-> 💡 You can also create a `.env` file in the project root: `DEEPSEEK_API_KEY=sk-your-key-here`
-
-#### Step 3: Run the Pipeline
-
-**Basic usage — English output:**
+Run the **v2 pipeline** (recommended — stance quantification + dynamic termination):
 
 ```bash
-python run_pipeline.py --topic "Machine Learning in Energy Economics" --lang en
+python run_pipeline_v2.py --topic "Machine Learning in Energy Economics" --lang en
+# 中文（默认）
+python run_pipeline_v2.py --topic "碳市场价格预测与能源转型关联机制研究"
 ```
 
-**Chinese output (default):**
+Optional requirement research first (Phase 0-3 → department config):
 
 ```bash
-python run_pipeline.py --topic "碳市场价格预测与能源转型关联机制研究"
-```
-
-**Full parameter reference:**
-
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| `--topic` | ✅ Yes | — | Research topic (any language) |
-| `--lang` | No | `zh` | Output language: `zh` (Chinese) or `en` (English) |
-
-#### Step 4: Find Your Output
-
-All output files are saved to the `output/` directory:
-
-```
-output/
-├── report_<topic>_<timestamp>.docx    # Word report with confidence annotations
-├── report_<topic>_<timestamp>.pdf     # PDF version
-├── code_<topic>_<timestamp>.py        # Generated runnable code
-└── debate_logs/                       # Full debate transcripts
-```
-
-#### Step 5: Custom API Endpoint (Optional)
-
-Using a different model provider? Set the endpoint and model:
-
-```bash
-export DEEPSEEK_API_KEY="your-key"
-export DEEPSEEK_API_BASE="https://api.openai.com/v1"
-export DEEPSEEK_MODEL="gpt-4o"
-
-python run_pipeline.py --topic "Your Topic" --lang en
-```
-
-Any OpenAI-compatible API works — DeepSeek, OpenAI, local models via Ollama/vLLM, etc.
-
-#### Step 6: Full-Text Supplementation (paywalled papers)
-
-Papers behind paywalls can't be verified from their abstract alone. Two ways to close the gap:
-
-**A. DSH control panel** — when running inside DeepSeek Harness, a 📊 控制台 button opens the panel with an "atomic verification" card: batch-upload paywalled PDFs (any filename, DOI auto-extracted), one-click re-verify with a progress bar, and a pending-import list with pause / continue / skip.
-
-**B. CLI `--rerun-67`** — drop PDFs into `fulltext_papers/`, then regenerate only the report + verification stage (reuses the finished debate, no need to re-run the whole pipeline):
-
-```bash
-python run_pipeline_v2.py --topic "用能权交易政策对工业企业绿色转型的影响" \
-  --output-dir "v2_run_output/<your-run-dir>" --rerun-67
-```
-
-`--rerun-67` scans `fulltext_papers/`, marks imported papers `weight=core` (force-included in the report), re-fetches their full text, and re-runs Phase 6-7 only.
-
----
-
-### 🔄 Which Should I Use?
-
-| Scenario | Streamlit | CLI |
-|----------|-----------|-----|
-| First time exploring the tool | ✅ Recommended | — |
-| Want to watch debates in real-time | ✅ | — |
-| Need to tweak department config | ✅ | — |
-| Batch processing multiple topics | — | ✅ |
-| Scripting / automation | — | ✅ |
-| Running on a headless server | — | ✅ |
-| CI/CD pipeline integration | — | ✅ |
-
-### 🚀 End-to-End Workflow (Local / DSH)
-
-Two complete paths from topic to report — each with full-text supplementation.
-
-#### Path A: Local deployment (CLI)
-
-```bash
-# 1. Install
-pip install -r requirements.txt
-
-# 2. Configure API key
-echo DEEPSEEK_API_KEY=sk-xxx > .env      # Linux/macOS
-
-# 3. (Optional) Requirement research → department config
 python run_requirement_research.py --topic "你的课题"
+```
 
-# 4. Full pipeline (Phase 0-7)
-python run_pipeline_v2.py --topic "你的课题" --lang zh
+Re-run only the report + verification stage (after adding full-text PDFs):
 
-# 5. Debate-midway breakpoint (Phase 5.5): the run lists "missing-but-necessary" papers
-#    → download those paywalled PDFs, drop them into fulltext_papers/ (any filename; DOI auto-extracted)
-#    → confirm to continue (or let it time out to skip)
-
-# 6. After the run, if some claims still need full text, re-run only the report + verify stage:
+```bash
 python run_pipeline_v2.py --topic "你的课题" --output-dir "v2_run_output/<run-dir>" --rerun-67
 ```
 
-#### Path B: DSH (DeepSeek Harness)
+Output lands in `v2_run_output/<date>_<topic>/` (v2) or `run_output/` (v1) — Markdown + DOCX reports, `citation_verification.json`, debate logs, and generated charts.
 
-**Setup (once):** link the plugin into DSH's `node_modules` so it loads on startup.
+#### Full-Text Supplementation (paywalled papers)
+
+Papers behind paywalls can't be verified from their abstract alone. Two ways to close the gap:
+
+- **DSH control panel** — batch-upload paywalled PDFs (any filename; DOI auto-extracted), one-click re-verify with a progress bar, pending-import list with pause / continue / skip.
+- **CLI `--rerun-67`** — drop PDFs into `fulltext_papers/`, then regenerate only the report + verification stage (reuses the finished debate).
+
+#### Custom API Endpoint (optional)
+
+Any OpenAI-compatible API works:
 
 ```bash
-# Windows (admin PowerShell): junction the plugin dir
-cd C:\path\to\dsh\node_modules\@deepseek-ai
-mklink /J dsh-consensus-pipeline C:\path\to\consensus-pipeline\dsh-plugin
-
-# Linux/macOS: symlink
-ln -s /path/to/consensus-pipeline/dsh-plugin /path/to/dsh/node_modules/@deepseek-ai/dsh-consensus-pipeline
+export DEEPSEEK_API_KEY="your-key"
+export DEEPSEEK_MODEL="deepseek-v4-flash"   # or deepseek-v4-pro
+python run_pipeline_v2.py --topic "Your Topic" --lang en
 ```
-
-Then configure the plugin with the project root (`cwd`) and Python path (`python`), and restart DSH. The **📊 控制台** floating button appears bottom-right.
-
-**Daily use:**
-
-1. Tell the agent your research direction in chat → it runs the requirement interview, then starts the pipeline.
-2. Click the **📊 控制台** button (bottom-right) to open the panel.
-3. The **atomic-verification card** shows live confidence + verified / needs-fulltext / title-only breakdown.
-4. At the Phase 5.5 breakpoint, a **⏳ pending-import list** appears: click **⏸ pause**, download the paywalled PDFs, **batch-upload** them (or drop into `fulltext_papers/`), then click **▶ continue**.
-5. After the run: click **导出待补清单** to export a CSV of remaining gaps, upload those PDFs, then click **重跑校验** (progress bar included).
 
 ---
 
@@ -457,8 +380,9 @@ Then configure the plugin with the project root (`cwd`) and Python path (`python
 
 | Requirement | Details |
 |-------------|---------|
-| Python 3.9+ | 3.11+ recommended |
+| Python 3.10+ | 3.11+ recommended |
 | DeepSeek API Key | [Register](https://platform.deepseek.com/) — ~$0.05-0.10 per full run |
+| git | For the one-shot installer / clone |
 | Internet | Access to DeepSeek API (custom endpoints supported) |
 
 > 💡 No GPU needed. No database needed. Paper retrieval uses free open APIs (arXiv / Semantic Scholar / OpenAlex).
@@ -478,7 +402,7 @@ Then configure the plugin with the project root (`cwd`) and Python path (`python
 
 | Provider | API URL | Tested With |
 |----------|--------|-------------|
-| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` (primary) |
+| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-v4-flash` (debate), `deepseek-v4-pro` (verify/report) |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o` (compatible) |
 | Custom | Any OpenAI-compatible endpoint | Any model |
 
@@ -490,17 +414,22 @@ Set API key and model in the Streamlit sidebar, or via environment variables.
 
 ```
 consensus-pipeline/
+├── install.ps1 / install.sh     # One-shot installers (clone + pip + mcp.json)
 ├── app.py                       # Streamlit main app
 ├── router.py                    # AI Router — smart department config
 ├── debate_engine.py             # Core debate engine
 ├── config_manager.py            # Config persistence & presets
-├── run_pipeline.py              # CLI runner (v1) for headless execution
-├── run_pipeline_v2.py           # CLI runner (v2) — stance-aware + full-text supplementation
-├── stance_quant_v2.py           # v2 stance quantification (CV / Krippendorff's α / Kendall's W)
-├── mcp_server.py                # MCP server (DSH native tools)
+├── run_pipeline.py              # CLI runner (v1)
+├── run_pipeline_v2.py           # CLI runner (v2) — stance quantification + dynamic termination
+├── stance_quant_v2.py           # v2 stance quantification (CV + Kendall's W convergence)
+├── run_requirement_research.py  # Requirement research (Phase 0-3)
+├── paper_importer.py            # Seed-paper import (PDF → metadata)
+├── consensus_meter.py           # Consensus gauge dashboard
+├── mcp_server.py                # MCP server (zero-dependency)
 ├── panel.html                   # DSH control panel (verification card + full-text upload)
-├── dsh-plugin/                  # DSH plugin (mounts /consensus-pipeline/ + native tools)
-│   └── index.js                 #   panel routes + JSON-RPC tools
+├── dsh-plugin/                  # DSH plugin bundle (mounts /consensus-pipeline/ + native tools)
+│   ├── index.js                 #   panel routes + JSON-RPC tools + auto-clone
+│   └── cordis.patch.yml         #   bundle patch
 ├── fulltext_papers/             # User-uploaded paywalled-paper PDFs (gitignored)
 ├── quality_controller.py        # QC department (3-layer filter)
 ├── domain_config_generator.py   # Dynamic domain config
