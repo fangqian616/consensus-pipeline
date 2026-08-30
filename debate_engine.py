@@ -1076,7 +1076,8 @@ def run_department_debate(
     progress_callback: Callable = None,
     carry_forward: str = "",
     debater_filter: list = None,  # 只激活这些辩手，None=全部
-    shadow_cv: bool = False,  # v2影子CV：只记录不截停（校准中）
+    shadow_cv: bool = False,  # v2影子CV：采集 CV/W（只记录，不截停）
+    auto_converge: bool = False,  # v2自动收敛：采集 CV/W 且达标即停
     stats: dict = None,  # Token statistics累加器
 ) -> Dict:
     """
@@ -1099,10 +1100,14 @@ def run_department_debate(
     debate_log = []
     all_arguments = []
 
-    # === v2 shadow CV（影子模式：只记录不截停，校准中）===
+    # === v2 shadow CV（采集 CV/W；auto_converge 额外开启达标即停）===
     _shadow_tracker = None
     _shadow_cv_history = []
-    if shadow_cv:
+    _auto_stopped = False
+    _auto_stop_round = None
+    _auto_stop_reason = None
+    _collect_cv = shadow_cv or auto_converge
+    if _collect_cv:
         try:
             from stance_quant_v2 import StanceTracker
             _shadow_tracker = StanceTracker(
@@ -1257,8 +1262,18 @@ This is Round {round_num}. Respond to other debaters—what do you agree with? D
                                           f"cv:{_cv_val:.3f}" if _cv_val is not None else "cv:n/a")
             except Exception as _e:
                 print(f"[shadow_cv] round {round_num} finish failed: {_e}")
-    
+
+        # v2 自动收敛：CV/W 达标即停（auto_converge 模式）
+        if auto_converge and _shadow_cv_history and _shadow_cv_history[-1].get("shadow_stop"):
+            _auto_stopped = True
+            _auto_stop_round = round_num
+            _auto_stop_reason = _shadow_cv_history[-1].get("shadow_reason")
+            print(f"[shadow_cv] auto-stop at round {round_num}: {_auto_stop_reason}")
+            break
+
     # Final consensus
+    # 自动收敛提前停止时，共识提示词/进度按实际完成的轮数而非上限
+    rounds = _auto_stop_round if _auto_stopped else rounds
     all_args_text = "\n\n---\n\n".join(all_arguments)
     template = STRUCTURED_TEMPLATES.get(department_key, {}).get(lang, "")
     
@@ -1325,6 +1340,9 @@ Synthesize a final consensus. Requirements:
             "debate_log": debate_log,
             "consensus": f"⚠️ 共识生成失败：{consensus}",
             "shadow_cv_history": _shadow_cv_history,
+            "auto_stopped": _auto_stopped,
+            "auto_stop_round": _auto_stop_round,
+            "auto_stop_reason": _auto_stop_reason,
         }
     
     return {
@@ -1332,6 +1350,9 @@ Synthesize a final consensus. Requirements:
         "debate_log": debate_log,
         "consensus": consensus or "辩论未能达成共识",
         "shadow_cv_history": _shadow_cv_history,
+        "auto_stopped": _auto_stopped,
+        "auto_stop_round": _auto_stop_round,
+        "auto_stop_reason": _auto_stop_reason,
     }
 
 # ============ New Architecture Mode Functions ============

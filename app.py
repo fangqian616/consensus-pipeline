@@ -85,6 +85,19 @@ def _safe_filename(name: str, fallback: str = "download") -> str:
     safe = _re.sub(r'_+', '_', safe).strip('_')   # collapse multiple _
     return safe if safe else fallback
 
+
+# ============ Auto Convergence Mode ============
+AUTO_MAX_ROUNDS = 10  # auto mode ceiling
+
+def _effective_rounds():
+    """Return effective debate rounds respecting auto mode ceiling.
+    auto 模式：固定用上限 AUTO_MAX_ROUNDS（自动截停逻辑接入前先跑满上限，记录影子 CV）。
+    manual 模式：用侧边栏用户指定的轮数。
+    """
+    if st.session_state.get('convergence_mode') == 'auto':
+        return AUTO_MAX_ROUNDS
+    return int(st.session_state.get('debate_rounds', 2) or 2)
+
 # ============ Pipeline Mode Detection ============
 
 def _detect_pipeline_mode(cfg=None):
@@ -742,6 +755,7 @@ def init_state():
         "api_key": "",
         "model_name": "deepseek-v4-flash",
         "debate_rounds": 3,
+        "convergence_mode": "manual",  # manual 固定轮次 / auto 自动收敛（上限 AUTO_MAX_ROUNDS）
         "extra_instructions": "",
         "step_mode": True,
         # Debate result
@@ -891,11 +905,16 @@ def render_sidebar():
         
         # Debate parameters
         st.subheader("⚙️ " + ("辩论参数" if st.session_state.lang == "zh" else "Parameters"))
-        st.session_state.debate_rounds = st.slider(
-            t("debate_rounds"),
-            min_value=1, max_value=10, value=st.session_state.debate_rounds,
-            help=t("debate_rounds_hint"),
-        )
+        if st.session_state.get('convergence_mode') == 'auto':
+            st.info("🔁 " + (f"自动收敛模式：轮次上限 {AUTO_MAX_ROUNDS}，辩论后自动停止（CV 达标即停，否则跑满上限）"
+                            if st.session_state.lang == "zh" else
+                            f"Auto-converge mode: ceiling {AUTO_MAX_ROUNDS} rounds, stops on CV convergence"))
+        else:
+            st.session_state.debate_rounds = st.slider(
+                t("debate_rounds"),
+                min_value=1, max_value=10, value=st.session_state.debate_rounds,
+                help=t("debate_rounds_hint"),
+            )
         st.session_state.extra_instructions = st.text_area(
             t("extra_instructions"),
             value=st.session_state.extra_instructions,
@@ -1172,7 +1191,7 @@ _CK_KEYS = [
     # deliberately excluded — credentials never touch the disk)
     "script", "positive_prompt", "negative_prompt", "character_refs",
     "extra_instructions", "carry_forward", "lang", "api_url", "model_name",
-    "debate_rounds", "architecture_mode", "step_mode",
+    "debate_rounds", "convergence_mode", "architecture_mode", "step_mode",
     "model_profile", "custom_api_url", "custom_model_name",
     "workgroup_config", "workgroup_name", "pipeline_mode",
 ]
@@ -1730,7 +1749,7 @@ def run_all_debates(progress_callback=None):
     api_url = st.session_state.api_url
     api_key = st.session_state.api_key
     model = st.session_state.model_name
-    rounds = st.session_state.debate_rounds
+    rounds = _effective_rounds()
     lang = st.session_state.lang
     extra = st.session_state.extra_instructions
     
@@ -1844,6 +1863,7 @@ def run_all_debates(progress_callback=None):
                 rounds=rounds, lang=lang, extra_instructions=_lit_extra,
                 progress_callback=None,
                 carry_forward=st.session_state.carry_forward,
+                auto_converge=st.session_state.get('convergence_mode') == 'auto',
                 stats=stats,
             )
             dept_results[_LIT] = result
@@ -1945,6 +1965,7 @@ def run_all_debates(progress_callback=None):
                 rounds=rounds, lang=lang, extra_instructions=extra,
                 progress_callback=on_progress,
                 carry_forward=st.session_state.carry_forward,
+                auto_converge=st.session_state.get('convergence_mode') == 'auto',
                 stats=stats,
             )
             dept_results[dept_key] = result
@@ -2824,8 +2845,14 @@ def render_debate_tab():
             # v2 影子 CV + α/W 共识度面板（有 shadow_cv_history 数据才渲染）
             _cv_hist = result.get("shadow_cv_history") or []
             if _cv_hist:
-                st.markdown("**" + ("🧭 共识度曲线（影子 CV + α/W · 只记录不截停）" if is_zh
-                                     else "🧭 Consensus curve (shadow CV + α/W · advisory only)") + "**")
+                _auto_label = ("🛑 自动收敛已触发" if is_zh else "🛑 Auto-convergence triggered") if result.get("auto_stopped") else ("只记录不截停" if is_zh else "record-only")
+                st.markdown("**" + (f"🧭 共识度曲线（CV + W · {_auto_label}）" if is_zh
+                                     else f"🧭 Consensus curve (CV + W · {_auto_label})") + "**")
+                if result.get("auto_stopped"):
+                    _r = result.get("auto_stop_round")
+                    _reason = result.get("auto_stop_reason") or ""
+                    st.success(("✅ 第 " + str(_r) + " 轮 CV/W 达标，辩论提前停止" if is_zh
+                                else f"✅ Converged at round {_r} (CV/W threshold met)") + (f" — {_reason}" if _reason else ""))
                 _cv_series = {}
                 _alpha_series = {}
                 _w_series = {}
@@ -2922,7 +2949,7 @@ def render_step_mode():
         )
         
         col1, col2 = st.columns(2)
-        max_rounds = st.session_state.debate_rounds
+        max_rounds = _effective_rounds()
         is_last_round = st.session_state.step_round >= max_rounds
         
         with col1:
@@ -3064,10 +3091,11 @@ def rerun_single_dept(dept_key: str, revision_note: str):
         api_url=st.session_state.api_url,
         api_key=st.session_state.api_key,
         model=st.session_state.model_name,
-        rounds=st.session_state.debate_rounds,
+        rounds=_effective_rounds(),
         lang=st.session_state.lang,
         extra_instructions=extra,
         carry_forward=st.session_state.carry_forward,
+        auto_converge=st.session_state.get('convergence_mode') == 'auto',
         stats=st.session_state.get("current_stats"),
     )
     st.session_state.dept_results[dept_key] = result
@@ -5726,6 +5754,43 @@ def main():
                 st.session_state._lang_selected = True
                 st.rerun()
         st.stop()
+
+    # --- Mode Gate: manual vs auto convergence ---
+    if not st.session_state.get('_restored_from_disk'):
+        _is_zh_mg = st.session_state.get('lang', 'zh') == 'zh'
+        st.markdown('---')
+        _mg_col1, _mg_col2, _mg_col3 = st.columns([1, 3, 1])
+        with _mg_col2:
+            st.markdown('#### ' + ('\U0001f3af \u6536\u655b\u6a21\u5f0f' if _is_zh_mg else '\U0001f3af Convergence Mode'))
+            _mg_mode = st.radio(
+                '\u6536\u655b\u6a21\u5f0f' if _is_zh_mg else 'Convergence Mode',
+                options=['manual', 'auto'],
+                format_func=lambda x: (
+                    '\U0001f590\ufe0f \u624b\u52a8\u6a21\u5f0f \u2014 \u6211\u6307\u5b9a\u8f6e\u6b21\uff0c\u8dd1\u5b8c\u5373\u6b62' if _is_zh_mg
+                    else '\U0001f590\ufe0f Manual \u2014 fixed rounds, stop when done'
+                ) if x == 'manual' else (
+                    '\U0001f504 \u81ea\u52a8\u6536\u655b \u2014 \u76d1\u63a7CV\u66f2\u7ebf\uff0c\u8fbe\u6807\u81ea\u52a8\u505c' if _is_zh_mg
+                    else '\U0001f504 Auto-converge \u2014 monitor CV curve, stop on threshold'
+                ),
+                horizontal=True,
+                index=0 if st.session_state.get('convergence_mode', 'manual') == 'manual' else 1,
+                key='_mode_gate_radio',
+                label_visibility='collapsed',
+            )
+            st.session_state.convergence_mode = _mg_mode
+            if _mg_mode == 'auto':
+                st.info(
+                    '\u2699\ufe0f \u81ea\u52a8\u6536\u655b\u6a21\u5f0f\u8bf4\u660e\n'
+                    '\u2022 \u03b5 \u6821\u51c6\u8fdb\u884c\u4e2d\uff0c\u5f53\u524d\u4ec5\u5c55\u793a CV \u66f2\u7ebf\uff0c\u4e0d\u622a\u505c\u8fa9\u8bba\n'
+                    f'\u2022 \u4e0a\u9650 {AUTO_MAX_ROUNDS} \u8f6e\uff0c\u89e6\u9876\u8f93\u51fa\u300c\u672a\u6536\u655b\u300d+ CV \u66f2\u7ebf\n'
+                    '\u2022 \u540e\u7eed\u7248\u672c\u5c06\u63a5\u5165\u81ea\u52a8\u622a\u505c\u903b\u8f91'
+                    if _is_zh_mg else
+                    '\u2699\ufe0f Auto-converge mode notes\n'
+                    '\u2022 \u03b5 calibration in progress; CV curve shown, no auto-stop yet\n'
+                    f'\u2022 Ceiling at {AUTO_MAX_ROUNDS} rounds; outputs "not converged" + CV curve on hit\n'
+                    '\u2022 Auto-stop logic coming in next version'
+                )
+        st.markdown('---')
 
     # v0.11.6: extend checkpoint protection to the pre-debate phase — the run
     # id now attaches to the URL the moment the main UI is entered, and every
