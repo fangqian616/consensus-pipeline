@@ -1015,7 +1015,18 @@ def call_api(
             choice = data["choices"][0]
             content = choice["message"]["content"]
             finish_reason = choice.get("finish_reason", "stop")
-            
+
+            # v0.13.2: 空 content 重试——LLM 偶发返回空 content（网络波动/模型空响应），
+            # 此前只对 429/5xx/超时/网络重试，空 content 直接 return ""，导致表态采集 30% 空。
+            if not content or not content.strip():
+                if attempt < max_retries:
+                    last_error = f"ERROR: 空响应(等待{retry_delay * attempt}s后重试, 第{attempt}次)"
+                    time.sleep(retry_delay * attempt)
+                    continue
+                else:
+                    last_error = "ERROR: 空响应(已达最大重试次数)"
+                    break
+
             # Auto-continue if response was truncated
             if auto_continue and finish_reason == "length" and max_continuations > 0:
                 continued_messages = messages + [{"role": "assistant", "content": content}, {"role": "user", "content": "继续"}]
