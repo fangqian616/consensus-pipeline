@@ -883,6 +883,18 @@ def _run_phases_6_to_7(config, papers, preprints, dept_outputs, relevance_log,
         prog_output=prog_output, tut_output=tut_output,
         relevance_log=relevance_log)
 
+    # v0.13.2: 追加「辩论收敛诊断」（CV/W/mean_stance + 分档 + W 缺失标注）
+    try:
+        from stance_quant_v2 import render_convergence_diagnostic
+        _diag = render_convergence_diagnostic(
+            os.path.join(v1.OUTPUT_DIR, "debate_stance_log.jsonl"))
+        if _diag:
+            report = report.rstrip() + "\n\n" + _diag + "\n"
+            v1.save_text(report, "final_report.md")  # 覆盖，未校验报告也含诊断
+            log("Phase7", "辩论收敛诊断已追加到报告")
+    except Exception as _diag_err:
+        log("Phase7", f"收敛诊断生成失败: {_diag_err}")
+
     # Phase 7.5: 引用验证
     log("Phase7.5", "Citation validation...")
     from quality_controller import QualityController

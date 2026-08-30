@@ -58,6 +58,10 @@ N_PLATEAU = 2      # 连续 N 轮满足即判僵局（3轮制下N=2是上限）
 # ✅ 校准完成 ：从占位 0.6 上调至 0.75（，ε1=0.07/ε2=0.01/flat_th=0.75）
 FLAT_UP_RATIO_TH = 0.75
 MAX_PARSE_FAIL_RATE = 0.20  # 解析失败率门：最新轮失败率 ≥ 此值时，CV 信号不可信，跳过一切判定
+# v0.13.2: Kendall's W 联合收敛阈值（替代 α 作为交叉验证）。W 抗「打分高位压缩」，
+# 与 CV 互补（CV 看离散度，W 看排序一致）。W 缺失(None)时退化为只看 CV。
+W_THRESHOLD = 0.5   # W > 0.5 判「偏强一致」→ 与 CV<ε1 联合判收敛
+W_STRONG = 0.7      # W > 0.7 判「强一致」→ 仅报告分档标注，不参与判定
 
 # ─────────────────────────────────────────────
 # §3 核心论点清单抽取
@@ -506,44 +510,8 @@ def round_cv(stance_by_debater: dict[str, dict[str, int]], arg_ids: list[str]) -
 
 
 # ─────────────────────────────────────────────
-# §6.5 一致性度量（Krippendorff's α / Kendall's W）——影子对照指标
+# §6.5 一致性度量（Kendall's W）——影子对照指标（v0.13.2: α 已移除，改用 W）
 # ─────────────────────────────────────────────
-
-
-def krippendorff_alpha(stance_by_debater: dict, arg_ids: list) -> Optional[float]:
-    """Krippendorff's alpha（interval 度量，平方差）。1=完全一致，0=随机一致，<0=系统性对立。"""
-    from collections import Counter
-    from itertools import combinations
-    debaters = list(stance_by_debater.keys())
-    rows = []
-    for aid in arg_ids:
-        vals = [stance_by_debater[d].get(aid) for d in debaters]
-        if any(v is None for v in vals):
-            return None
-        rows.append(vals)
-    if len(rows) < 1 or len(debaters) < 2:
-        return None
-
-    o = Counter()
-    for row in rows:
-        for a, b in combinations(range(len(row)), 2):
-            va, vb = row[a], row[b]
-            o[(va, vb)] += 1
-            o[(vb, va)] += 1
-    total = sum(o.values())
-    if total == 0:
-        return None
-    Do = sum(cnt * (c - k) ** 2 for (c, k), cnt in o.items()) / total
-
-    all_vals = [v for row in rows for v in row]
-    n = Counter(all_vals)
-    total_ratings = sum(n.values())
-    values = sorted(set(all_vals))
-    De = sum((n[c] / total_ratings) * (n[k] / total_ratings) * (c - k) ** 2
-             for c in values for k in values)
-    if De == 0:
-        return 1.0 if Do == 0 else 0.0
-    return 1.0 - Do / De
 
 
 def kendall_w(stance_by_debater: dict, arg_ids: list) -> Optional[float]:
@@ -654,6 +622,7 @@ def check_termination(
     per_arg_history: Optional[list[dict]] = None,
     flat_up_ratio_th: float = FLAT_UP_RATIO_TH,
     fail_rate: float = None,
+    w: Optional[float] = None,
 ) -> tuple[bool, Optional[str]]:
     """
     双轨终止判定 v2.1（2026- 修订）。返回 (should_stop, reason)。
@@ -686,9 +655,18 @@ def check_termination(
     if fail_rate is not None and fail_rate >= MAX_PARSE_FAIL_RATE:
         return False, f"blocked_by_parse_fail_gate: fail_rate={fail_rate:.2%} >= {MAX_PARSE_FAIL_RATE:.0%}"
 
-    # 轨道1：收敛
+    # 轨道1：收敛（CV < ε1 且 W 达标；W 缺失退化为只看 CV）
     if hist[-1] < eps1:
-        return True, f"converged: CV={hist[-1]:.4f} < eps1={eps1}"
+        if w is None:
+            # W 无法计算（LLM 表态缺失/网络波动）→ 退化为只看 CV，但标注缺失
+            return True, (f"converged: CV={hist[-1]:.4f} < eps1={eps1} "
+                          f"(W 无法计算: LLM 表态缺失/网络波动, 退化为只看 CV)")
+        if w > W_THRESHOLD:
+            return True, (f"converged: CV={hist[-1]:.4f} < eps1={eps1} "
+                          f"且 W={w:.3f} > {W_THRESHOLD}")
+        # CV 达标但 W 分歧 → 疑似假收敛，不判收敛，继续辩论
+        return False, (f"cv_low_but_w_low: CV={hist[-1]:.4f} < eps1={eps1} "
+                       f"但 W={w:.3f} <= {W_THRESHOLD}（疑似假收敛，继续）")
 
     # 轨道2b：高位僵持（复合僵局，优先于 2a —— ）
     if per_arg_history is not None and len(per_arg_history) >= 2 and hist[-1] > eps1:
@@ -740,7 +718,7 @@ class StanceTracker:
         self.arguments: list[dict] = []
         self.arg_ids: list[str] = []
         self.cv_history: list[Optional[float]] = []
-        self.alpha_history: list[Optional[float]] = []  # 影子 α 历史
+        self.w_history: list[Optional[float]] = []  # v0.13.2: 影子 W 历史（联合收敛用）
         self.per_arg_history: list[dict] = []  # v2.1：每轮 cv_per_argument，供轨道2b
         self.round_fail_rates: list[float] = []  # 每轮解析失败率（供失败率门）
         self.current_round_stances: dict[str, dict[str, int]] = {}
@@ -848,17 +826,16 @@ class StanceTracker:
         if fail_rate is not None:
             self.round_fail_rates.append(fail_rate)
 
-        # 影子一致性指标（α / W / 平均分）——只记录，不参与 CV 主判定
-        alpha = krippendorff_alpha(self.current_round_stances, self.arg_ids)
+        # 影子一致性指标（W / 平均分）——W 参与联合收敛判定，mean_stance 只记录
         w = kendall_w(self.current_round_stances, self.arg_ids)
         mu = mean_stance(self.current_round_stances, self.arg_ids)
-        self.alpha_history.append(alpha)
+        self.w_history.append(w)
 
-        # 影子判定（v2.1：传入 per_arg_history 启用轨道2b 高位僵持；传入 fail_rate 启用失败率门）
+        # 影子判定（v2.1：轨道2b 高位僵持；v0.13.2：轨道1 用 CV+W 联合收敛；fail_rate 门）
         latest_fail_rate = self.round_fail_rates[-1] if self.round_fail_rates else None
         should_stop, reason = check_termination(
             self.cv_history, per_arg_history=self.per_arg_history,
-            fail_rate=latest_fail_rate)
+            fail_rate=latest_fail_rate, w=w)
 
         # 写轮次CV日志
         write_stance_log(self.log_path, {
@@ -867,7 +844,6 @@ class StanceTracker:
             "round": round_num,
             "cv_overall": cv_result["overall"],
             "cv_per_argument": cv_result["per_argument"],
-            "alpha": alpha,
             "kendall_w": w,
             "mean_stance": mu,
             "termination_shadow": {
@@ -880,7 +856,6 @@ class StanceTracker:
             "round": round_num,
             "overall": cv_result["overall"],
             "per_argument": cv_result["per_argument"],
-            "alpha": alpha,
             "kendall_w": w,
             "mean_stance": mu,
             "cv_history": list(self.cv_history),
@@ -910,14 +885,87 @@ class StanceTracker:
                     trend = valid[-1] - valid[0]
                     lines.append(f"  trend={trend:+.4f} ({'↓收敛' if trend < -0.05 else '↑发散' if trend > 0.05 else '→走平'})")
 
-        # 最终判定（v2.1：传入 per_arg_history + fail_rate）
+        # 最终判定（v2.1：传入 per_arg_history + fail_rate；v0.13.2：加 W 联合判定）
         latest_fail_rate = self.round_fail_rates[-1] if self.round_fail_rates else None
+        latest_w = self.w_history[-1] if self.w_history else None
         should_stop, reason = check_termination(
             self.cv_history, per_arg_history=self.per_arg_history,
-            fail_rate=latest_fail_rate)
+            fail_rate=latest_fail_rate, w=latest_w)
         lines.append(f"Shadow verdict: {'STOP' if should_stop else 'CONTINUE'} — {reason or 'no trigger'}")
 
         return "\n".join(lines)
+
+
+def render_convergence_diagnostic(log_path: str) -> str:
+    """v0.13.2: 从 debate_stance_log.jsonl 生成「辩论收敛诊断」markdown 文本。
+
+    展示最终收敛状态（CV / W / 平均表态分）+ 最近轮次轨迹 + W 分档解读。
+    W=None 时标注「LLM 表态缺失（网络波动/解析失败），该轮退化为只看 CV」。
+    供报告生成时追加到报告末尾。
+    """
+    try:
+        with open(log_path, encoding="utf-8") as f:
+            raw = f.read().strip().split("\n")
+    except (OSError, IOError):
+        return ""
+    rounds = []
+    for line in raw:
+        try:
+            j = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if j.get("event") == "round_cv":
+            rounds.append(j)
+    if not rounds:
+        return ""
+
+    last = rounds[-1]
+    cv = last.get("cv_overall")
+    w = last.get("kendall_w")
+    mu = last.get("mean_stance")
+    term = (last.get("termination_shadow") or {}).get("reason", "")
+
+    def w_label(wv):
+        if wv is None:
+            return "N/A（LLM 表态缺失，退化为只看 CV）"
+        if wv > W_STRONG:
+            return f"{wv:.3f}（强一致）"
+        if wv > W_THRESHOLD:
+            return f"{wv:.3f}（偏强一致）"
+        return f"{wv:.3f}（不一致）"
+
+    lines = ["## 辩论收敛诊断", ""]
+    lines.append("辩论收敛由两个独立指标联合判定：**CV（变异系数，看打分离散度）** 与 **Kendall's W（协调系数，看排序一致性）**。")
+    lines.append("")
+    lines.append("| 指标 | 最终值 | 判定标准 |")
+    lines.append("|------|--------|---------|")
+    cv_cell = f"{cv:.4f}" if cv is not None else "N/A"
+    lines.append(f"| CV（变异系数） | {cv_cell} | < 0.07 判收敛 |")
+    lines.append(f"| W（Kendall's W） | {w_label(w)} | > 0.5 偏强一致，> 0.7 强一致 |")
+    mu_cell = f"{mu:.3f}" if mu is not None else "N/A"
+    lines.append(f"| 平均表态分 | {mu_cell} | 远离 3（中立）才是实质立场 |")
+    lines.append("")
+    if term:
+        lines.append(f"**收敛判定**：`{term}`")
+        lines.append("")
+
+    recent = rounds[-8:]
+    lines.append("**最近轮次轨迹**：")
+    lines.append("")
+    lines.append("| 轮次 | CV | W | 平均表态分 |")
+    lines.append("|------|----|----|-----------|")
+    for j in recent:
+        r = j.get("round")
+        c = j.get("cv_overall")
+        wj = j.get("kendall_w")
+        mj = j.get("mean_stance")
+        c_s = f"{c:.4f}" if c is not None else "N/A"
+        w_s = f"{wj:.3f}" if wj is not None else "N/A（缺失）"
+        m_s = f"{mj:.3f}" if mj is not None else "N/A"
+        lines.append(f"| R{r} | {c_s} | {w_s} | {m_s} |")
+    lines.append("")
+    lines.append("> 说明：W=N/A 表示该轮 LLM 表态缺失（网络波动/解析失败），该轮退化为只看 CV。")
+    return "\n".join(lines)
 
 
 # ─────────────────────────────────────────────
