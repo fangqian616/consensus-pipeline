@@ -578,7 +578,7 @@ def write_stance_log(log_path: Path, event_data: dict):
 
 def _interval_down_flat_up(prev: dict, cur: dict, eps2: float) -> tuple[int, int, int, int]:
     """
-    逐论点相邻轮转移分类计数（v2.1）。
+    逐论点相邻轮转移分类计数。
     ΔCV < -eps2 = down（收敛中）；|ΔCV| <= eps2 = flat（持平）；ΔCV > +eps2 = up（反升）。
     返回 (down, flat, up, total)。
     """
@@ -609,14 +609,14 @@ def check_termination(
     w: Optional[float] = None,
 ) -> tuple[bool, Optional[str]]:
     """
-    双轨终止判定 v2.1（2026- 修订）。返回 (should_stop, reason)。
+    双轨终止判定。返回 (should_stop, reason)。
 
     轨道1  收敛：最新一轮 CV < ε1
-    轨道2a 软性僵局（连续平台，旧规则保留）：最近 n 个 |ΔCV| 全部 < ε2
-    轨道2b 软性僵局（高位僵持，v2.1 新增）：当前 CV > ε1 且最近间隔
+    轨道2a 软性僵局（连续平台）：最近 n 个 |ΔCV| 全部 < ε2
+    轨道2b 软性僵局（高位僵持）：当前 CV > ε1 且最近间隔
            (flat+up)/总论点 ≥ flat_up_ratio_th —— 多数论点无收敛动作且总体
-           分歧仍高位。解决高位震荡型僵局会被一次
-           显著下降打破连续性后反升，连续平台轨道对其不敏感。
+           分歧仍高位：高位震荡型僵局会被一次显著下降打破连续性后反升，
+           连续平台轨道对其不敏感。
 
     参数：
       cv_history: 各轮CV列表（从R2开始，长度=rounds-1）
@@ -652,7 +652,7 @@ def check_termination(
         return False, (f"cv_low_but_w_low: CV={hist[-1]:.4f} < eps1={eps1} "
                        f"但 W={w:.3f} <= {W_THRESHOLD}（疑似假收敛，继续）")
 
-    # 轨道2b：高位僵持（复合僵局，优先于 2a —— ）
+    # 轨道2b：高位僵持（复合僵局，优先于 2a）
     if per_arg_history is not None and len(per_arg_history) >= 2 and hist[-1] > eps1:
         prev, cur = per_arg_history[-2], per_arg_history[-1]
         down, flat, up, total = _interval_down_flat_up(prev, cur, eps2)
@@ -703,7 +703,7 @@ class StanceTracker:
         self.arg_ids: list[str] = []
         self.cv_history: list[Optional[float]] = []
         self.w_history: list[Optional[float]] = []  # v0.13.2: 影子 W 历史（联合收敛用）
-        self.per_arg_history: list[dict] = []  # v2.1：每轮 cv_per_argument，供轨道2b
+        self.per_arg_history: list[dict] = []  # ：每轮 cv_per_argument，供轨道2b
         self.round_fail_rates: list[float] = []  # 每轮解析失败率（供失败率门）
         self.current_round_stances: dict[str, dict[str, int]] = {}
         self.round_results: list[dict] = []
@@ -815,7 +815,7 @@ class StanceTracker:
         mu = mean_stance(self.current_round_stances, self.arg_ids)
         self.w_history.append(w)
 
-        # 影子判定（v2.1：轨道2b 高位僵持；v0.13.2：轨道1 用 CV+W 联合收敛；fail_rate 门）
+        # 影子判定（：轨道2b 高位僵持；v0.13.2：轨道1 用 CV+W 联合收敛；fail_rate 门）
         latest_fail_rate = self.round_fail_rates[-1] if self.round_fail_rates else None
         should_stop, reason = check_termination(
             self.cv_history, per_arg_history=self.per_arg_history,
@@ -869,7 +869,7 @@ class StanceTracker:
                     trend = valid[-1] - valid[0]
                     lines.append(f"  trend={trend:+.4f} ({'↓收敛' if trend < -0.05 else '↑发散' if trend > 0.05 else '→走平'})")
 
-        # 最终判定（v2.1：传入 per_arg_history + fail_rate；v0.13.2：加 W 联合判定）
+        # 最终判定（：传入 per_arg_history + fail_rate；v0.13.2：加 W 联合判定）
         latest_fail_rate = self.round_fail_rates[-1] if self.round_fail_rates else None
         latest_w = self.w_history[-1] if self.w_history else None
         should_stop, reason = check_termination(
@@ -1040,7 +1040,7 @@ if __name__ == "__main__":
     stop6, reason6 = check_termination(hist_low_cv)
     assert stop6 is True and "converged" in reason6
 
-    # ── v2.1 轨道2b 复合僵局：用合成数据回放 ──
+    # ── 轨道2b 复合僵局：用合成数据回放 ──
 
     # 用例 C（高位震荡僵局）：连续平台轨道全程抓不到，2b 应在 R3 即触发
     c_cv = [0.4698, 0.4606, 0.3900, 0.4177]
@@ -1052,15 +1052,15 @@ if __name__ == "__main__":
     ]
     # 旧规则（无 per_arg）：全程不触发
     stop_c_old, _ = check_termination(list(c_cv))
-    assert stop_c_old is False, "旧轨道2a 对高位震荡型僵局应抓不到（还原用例C实证）"
-    # v2.1 逐轮回放：R3 起应触发 composite_deadlock
+    assert stop_c_old is False, "旧轨道2a 对高位震荡型僵局应抓不到"
+    # 逐轮回放：R3 起应触发 composite_deadlock
     fired_at = None
     for i in range(len(c_cv)):
         s, r = check_termination(c_cv[:i + 1], per_arg_history=c_per_arg[:i + 1])
         if s:
             fired_at, fired_reason = i, r
             break
-    print(f"termination (用例C真僵局 v2.1): fired_at_index={fired_at}, reason={fired_reason}")
+    print(f"termination (用例C 高位僵局): fired_at_index={fired_at}, reason={fired_reason}")
     assert fired_at == 1, f"用例C应在第2个CV点(R3)触发，实际 {fired_at}"
     assert "composite_deadlock" in fired_reason
 
@@ -1073,8 +1073,8 @@ if __name__ == "__main__":
     s_a1, _ = check_termination(a_cv[:1], per_arg_history=a_per_arg[:1])
     assert s_a1 is False, "用例AR1 不应触发（仍在移动）"
     s_a2, r_a2 = check_termination(a_cv, per_arg_history=a_per_arg)
-    print(f"termination (用例A 校准后): stop={s_a2}, reason={r_a2}")
-    assert s_a2 is False, "校准后 ε1=0.07，用例A CV=0.1312 > ε1，不再假收敛"
+    print(f"termination (用例A): stop={s_a2}, reason={r_a2}")
+    assert s_a2 is False, "ε1=0.07 下用例A CV=0.1312 > ε1，不再假收敛"
 
     # 用例 B：R2 CV=0.1353 > ε1=0.07 → 轨道1 不再判收敛
     b_cv = [0.1627, 0.1353]
@@ -1083,8 +1083,8 @@ if __name__ == "__main__":
         {"P1": 0.129, "P2": 0.177, "P3": 0.000, "P4": 0.141, "P5": 0.109, "P6": 0.283, "P7": 0.109},
     ]
     s_b, r_b = check_termination(b_cv, per_arg_history=b_per_arg)
-    print(f"termination (用例B 校准后): stop={s_b}, reason={r_b}")
-    assert s_b is False, "校准后 ε1=0.07，用例B CV=0.1353 > ε1，不再假收敛"
+    print(f"termination (用例B): stop={s_b}, reason={r_b}")
+    assert s_b is False, "ε1=0.07 下用例B CV=0.1353 > ε1，不再假收敛"
 
     # 合成用例：高位健康移动不应触发 2b（多数论点 down）
     h_cv = [0.4500, 0.3300]
@@ -1093,7 +1093,7 @@ if __name__ == "__main__":
         {"P1": 0.300, "P2": 0.300, "P3": 0.300, "P4": 0.350},
     ]
     s_h, r_h = check_termination(h_cv, per_arg_history=h_per_arg)
-    print(f"termination (高位移动中 v2.1): stop={s_h}, reason={r_h}")
+    print(f"termination (高位移动中): stop={s_h}, reason={r_h}")
     assert s_h is False, "高位但多数论点在收敛中，不应判僵局"
 
-    print("\n✓ 全部自测通过（含 v2.1 复合僵局 合成数据回放）")
+    print("\n✓ 全部自测通过")

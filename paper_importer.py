@@ -34,7 +34,7 @@ DOI_PATTERN = re.compile(
 
 CROSSREF_API = "https://api.crossref.org/works/{doi}"
 
-# 合法权重档位（0）
+# 合法权重档位
 VALID_WEIGHTS = ("normal", "core", "anchor")
 
 
@@ -79,7 +79,7 @@ class SeedPaperImporter:
             except Exception as e:
                 logger.error(f"  ❌ {pdf_path.name}: {e}")
 
-        # === 权重系统：manifest 注入（3.1）===
+        # === 权重系统：manifest 注入===
         self._inject_weights(papers)
         return papers
 
@@ -103,8 +103,8 @@ class SeedPaperImporter:
         """
         按 manifest 给每篇论文注入 weight + seed_profile。
 
-        解析优先级: paper.weight → default_weight → "core"（2）
-        anchor 本期降级 core（0 决策8），标记 _anchor_downgraded。
+        解析优先级: paper.weight → default_weight → "core"
+        anchor 本期降级 core，标记 _anchor_downgraded。
         manifest 中列出但文件不存在的条目: 忽略 + warning。
         """
         manifest = self._load_manifest()
@@ -128,7 +128,7 @@ class SeedPaperImporter:
                 logger.warning(f"{fname}: 非法 weight '{w}'，回退 core")
                 w = "core"
             if w == "anchor":
-                # 0 决策8：anchor 本期未实现，降级 core
+                #  决策8：anchor 本期未实现，降级 core
                 paper["_anchor_downgraded"] = True
                 logger.info(f"[seed] anchor 档本期未实现，降级 core: {fname}")
                 w = "core"
@@ -209,7 +209,7 @@ class SeedPaperImporter:
         search_papers: list[dict],
     ) -> list[dict]:
         """
-        合并种子论文与搜索结果，按档位分支去重（3.2）。
+        合并种子论文与搜索结果，按档位分支去重。
 
         normal 档（普通参考）:
         - DOI/hash 撞 → 跳过种子版

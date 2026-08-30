@@ -424,7 +424,7 @@ DEPT_PAPER_FILTERS = {
 def _is_core_seed(p):
     """判断是否核心种子论文（享受保活/前置待遇）。
 
-    仅 weight=='core' 享受特权；normal 档按普通论文对待（4.2）。
+    仅 weight=='core' 享受特权；normal 档按普通论文对待。
     向后兼容：无 weight 字段时，source=='user_seed' 视为 core（无 manifest 默认）。
     """
     from academic.search_engine import is_core_seed
@@ -1293,7 +1293,7 @@ def self_evaluation(report, papers, dept_outputs):
 
 # ============ Seed Paper Import (Phase 4.8) ============
 def merge_seed_papers(papers):
-    """导入 seed_papers/ 文件夹的种子论文并合并到 papers（按档位分支去重，3.2）。
+    """导入 seed_papers/ 文件夹的种子论文并合并到 papers（按档位分支去重，）。
 
     种子论文由 paper_importer 解析（PDF → Crossref 元数据 + manifest 权重注入）。
     core 档：DOI/title 撞 → 搜索版继承种子身份（保留真实分级/引用数）；
@@ -1395,7 +1395,7 @@ def merge_seed_papers(papers):
     return papers
 
 
-# ============ Phase 7.6: 种子论文引用检查（D层，5）============
+# ============ Phase 7.6: 种子论文引用检查（D层，）============
 def _norm_text(s):
     """归一化文本：去全部空白+小写，用于标题模糊匹配"""
     import re as _re
@@ -1421,7 +1421,7 @@ def _seed_cited(report_raw, report_norm, sp):
 
 
 def check_seed_citations(report, papers):
-    """种子论文引用存在性检查（5）。
+    """种子论文引用存在性检查。
 
     core 档未被引用 → 报告头部插入 WARNING 块（不阻塞输出）。
     anchor 档未被引用 → FAIL（本期无 anchor，逻辑预留）。
@@ -1598,7 +1598,7 @@ def main():
         qc_validate = QualityController(llm_call_fn=llm_call, domain_config=domain_config, output_dir=OUTPUT_DIR)
         csv_path = os.path.join(OUTPUT_DIR, "papers_metadata.csv")
         report = qc_validate.validate_citations(report, csv_path)
-        # Phase 7.6: 种子论文引用存在性检查（D层，5）
+        # Phase 7.6: 种子论文引用存在性检查（D层，）
         report = check_seed_citations(report, papers)
         # Save validated report
         save_text(report, "final_report_validated.md")
