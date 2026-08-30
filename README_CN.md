@@ -269,12 +269,13 @@ curl -fsSL https://github.com/fangqian616/consensus-pipeline/raw/main/install.sh
 以 bundle 形式安装（自动注册原生工具 + 挂载 `/consensus-pipeline/` 面板）：
 
 ```bash
-npx -p @deepseek-ai/dsh dsh plugin --profile web add github:fangqian616/consensus-pipeline#3d42c5f&path:dsh-plugin
+git clone --depth 1 https://github.com/fangqian616/consensus-pipeline.git
+npx -p @deepseek-ai/dsh dsh plugin --profile web add file:./consensus-pipeline/dsh-plugin
 ```
 
 本地开发则把插件目录链接进 DSH 的 `node_modules` 后重启。
 
-首次使用时插件会自动 clone 项目到 `~/.dsh/consensus-pipeline`（无需手动 clone）。右下角出现 **📊 控制台** 浮动按钮。
+首次使用时插件会自动 clone 完整项目到 `~/.dsh/consensus-pipeline`（保证 Python `mcp_server.py` 始终存在，无需手动 clone）。右下角出现 **📊 控制台** 浮动按钮。
 
 **日常使用：**
 
