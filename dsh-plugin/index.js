@@ -10,8 +10,9 @@
 // regardless of hoisted dependency versions and needs no bundled node_modules.
 import readline from 'node:readline';
 import { readFile, readdir, stat, mkdir } from 'node:fs/promises';
-import { readFileSync, writeFileSync, existsSync, realpathSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, realpathSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { homedir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -21,6 +22,10 @@ export const inject = ['tools', 'subprocess', 'systemPrompt', 'webServer', 'skil
 const REQUEST_TIMEOUT_MS = 30_000;
 const TOOL_CALL_TIMEOUT_MS = 3600_000;
 const POLL_INTERVAL_MS = 15_000;
+
+// 自动 clone 用的仓库与目标目录（config 可覆盖）。目录固定，避免每次重启重复 clone。
+const DEFAULT_REPO = 'https://github.com/fangqian616/consensus-pipeline.git';
+const DEFAULT_CLONE_DIR = () => join(homedir(), '.dsh', 'consensus-pipeline');
 
 function detectProjectRoot() {
   // Walk up from this plugin file (resolving symlinks for pnpm) to find mcp_server.py
@@ -37,13 +42,74 @@ function detectProjectRoot() {
     if (parent === here) break;
     here = parent;
   }
-  return process.cwd();
+  return null; // 未找到 → 由 resolveProjectRoot 走 clone 兜底
+}
+
+// 解析项目根目录：显式 config > 插件邻近目录 > 已有 clone 目录 > 自动 git clone。
+function resolveProjectRoot(config) {
+  // 1. 用户显式指定 cwd / script
+  if (config.cwd || config.script) {
+    const root = config.cwd ?? dirname(config.script);
+    return { root, script: config.script ?? join(root, 'mcp_server.py'), cloned: false };
+  }
+
+  // 2. 插件文件邻近目录（本地 file:/junction 安装的常规路径）
+  const detected = detectProjectRoot();
+  if (detected) {
+    return { root: detected, script: join(detected, 'mcp_server.py'), cloned: false };
+  }
+
+  // 3. 已有 clone 目录（重启复用）
+  const cloneDir = config.cloneDir ?? DEFAULT_CLONE_DIR();
+  const cloneScript = join(cloneDir, 'mcp_server.py');
+  if (existsSync(cloneScript)) {
+    return { root: cloneDir, script: cloneScript, cloned: true };
+  }
+
+  // 3.5 清理上一次 clone 失败留下的残留空目录（否则 git 会报 "already exists"）
+  try {
+    if (existsSync(cloneDir)) rmSync(cloneDir, { recursive: true, force: true });
+  } catch { /* 忽略清理失败，交给 git clone 报错 */ }
+
+  // 4. 自动 git clone
+  const repo = config.repo ?? DEFAULT_REPO;
+  const ref = config.ref ? [config.ref] : [];
+  const result = spawnSync('git', ['clone', '--depth', '1', ...ref, repo, cloneDir], {
+    stdio: 'pipe', encoding: 'utf8', timeout: 180_000,
+  });
+
+  if (result.status === 0 && existsSync(cloneScript)) {
+    return { root: cloneDir, script: cloneScript, cloned: true };
+  }
+  // 再次清理失败残留，避免下次启动撞上 "already exists"
+  try { if (existsSync(cloneDir)) rmSync(cloneDir, { recursive: true, force: true }); } catch {}
+
+  // 克隆失败：给出中英文提示（git 不可用 / 网络失败 / 仓库地址错误等）
+  const errDetail = (result.stderr || result.stdout || '').trim().slice(0, 400);
+  console.error('\n[dsh-consensus-pipeline] ⚠️ 未能自动获取 Consensus Pipeline 项目代码。');
+  console.error('  插件本身已安装，但缺少 Python 管线（mcp_server.py）。请手动执行：');
+  console.error('    git clone ' + repo);
+  console.error('  然后将 clone 目录通过插件配置 cwd/script 指定，或放到：' + cloneDir);
+  console.error('  （原因：' + (errDetail || 'git clone 失败') + '）\n');
+  console.error('[dsh-consensus-pipeline] ⚠️ Failed to auto-clone the Consensus Pipeline project.');
+  console.error('  The plugin is installed but the Python pipeline (mcp_server.py) is missing.');
+  console.error('  Run manually: git clone ' + repo);
+  console.error('  Then point the plugin config cwd/script at it, or place it at: ' + cloneDir);
+  console.error('  (reason: ' + (errDetail || 'git clone failed') + ')\n');
+
+  return null;
 }
 
 export function apply(ctx, config = {}) {
   const python = config.python ?? 'python';
-  const _root = config.cwd ?? detectProjectRoot();
-  const script = config.script ?? join(_root, 'mcp_server.py');
+
+  const project = resolveProjectRoot(config);
+  if (!project) {
+    // 项目代码缺失：不注册任何工具，但保持插件挂载（web 面板也不注册，避免空转）。
+    return () => {};
+  }
+  const _root = project.root;
+  const script = project.script;
   const cwd = _root;
   const graceMs = config.graceMs ?? 5000;
 

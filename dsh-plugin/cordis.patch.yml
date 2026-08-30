@@ -1,0 +1,7 @@
+# dsh-consensus-pipeline bundle patch: inserts the native tool plugin that
+# spawns the Python MCP server (mcp_server.py) over stdio and exposes the
+# research-pipeline tools. The plugin auto-detects the project root from its
+# own resolved location; config below is optional and only overrides it.
+- insert:
+    - id: consensus-pipeline
+      name: '@deepseek-ai/dsh-consensus-pipeline'
