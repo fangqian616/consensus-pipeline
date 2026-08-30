@@ -725,11 +725,14 @@ function registerWebPanel(ctx, { cwd, callTool, disposers, python }) {
 const FLOAT_PANEL_HTML = `<style>
 .cp-fab{position:fixed;right:18px;bottom:18px;z-index:999999;background:#4f8cff;color:#fff;border:none;border-radius:999px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.45);font-family:system-ui,sans-serif;}
 .cp-fab:hover{background:#3b74d9;}
+.cp-big{position:fixed;right:18px;bottom:60px;z-index:999999;background:#171a21;color:#4f8cff;border:1px solid #262b36;border-radius:999px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.45);font-family:system-ui,sans-serif;text-decoration:none;}
+.cp-big:hover{background:#262b36;}
 .cp-panel{position:fixed;right:18px;bottom:68px;z-index:999998;width:480px;max-width:92vw;height:72vh;max-height:760px;background:#0f1115;border:1px solid #262b36;border-radius:12px;box-shadow:0 10px 34px rgba(0,0,0,.55);display:none;overflow:hidden;}
 .cp-panel.open{display:block;}
 .cp-panel iframe{width:100%;height:100%;border:0;display:block;}
 </style>
 <button id="cp-fab" class="cp-fab" type="button">📊 控制台</button>
+<a class="cp-big" href="/consensus-pipeline/" target="_blank" rel="noopener">🖥️ 大屏版</a>
 <div id="cp-panel" class="cp-panel"><iframe data-src="/consensus-pipeline/" title="Consensus Pipeline" allow="clipboard-write"></iframe></div>
 <script>
 (function(){var b=document.getElementById("cp-fab");var p=document.getElementById("cp-panel");var f=p?p.querySelector("iframe"):null;if(b&&p){b.addEventListener("click",function(){var o=p.classList.toggle("open");if(o&&f&&!f.src){f.src=f.getAttribute("data-src");}b.textContent=o?"✕ 关闭":"📊 控制台";});}})();
