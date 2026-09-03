@@ -19,34 +19,43 @@
 
 ## ⚡ Quick Start
 
-The fastest way from zero to your first debate:
+Pick one of three paths (start with 1 or 2):
 
-**1. Install**
+**🚀 1. One-shot installer (fastest)**
+
+```bash
+# Windows PowerShell
+irm https://github.com/fangqian616/consensus-pipeline/raw/main/install.ps1 | iex
+# macOS / Linux
+curl -fsSL https://github.com/fangqian616/consensus-pipeline/raw/main/install.sh | bash
+```
+
+One command clones + installs deps + prints your MCP config.
+
+**🤖 2. DSH plugin (AI-driven, recommended)**
+
+```bash
+git clone --depth 1 https://github.com/fangqian616/consensus-pipeline.git
+npx -p @deepseek-ai/dsh dsh plugin --profile web add file:./consensus-pipeline/dsh-plugin
+```
+
+Then tell DSH "共识管线开始需求调研" — it runs the requirement interview → department config → multi-round debate → confidence-annotated report. The 📊 控制台 floating button (bottom-right) shows live progress, atomic verification, and full-text upload.
+
+**🖥️ 3. Streamlit / CLI (manual)**
 
 ```bash
 git clone https://github.com/fangqian616/consensus-pipeline.git
 cd consensus-pipeline
 pip install -r requirements.txt
-```
 
-**2. Set API key**
-
-```bash
-# Linux / macOS
+# Set the key (export on Linux/macOS, $env: on PowerShell)
 export DEEPSEEK_API_KEY="sk-your-key-here"
-# Windows PowerShell
-$env:DEEPSEEK_API_KEY="sk-your-key-here"
+
+streamlit run app.py                              # web UI, browser opens
+python run_pipeline_v2.py --topic "Your Topic"    # headless CLI
 ```
 
-**3. Run**
-
-```bash
-streamlit run app.py
-```
-
-Browser opens → enter your research topic → the AI interviewer asks about your scope → debate departments auto-generate → multi-round debate runs → report with confidence annotations. **Done in 10-30 minutes, costs ~$0.05-0.10.**
-
-> 💡 Or install with one command: `irm https://github.com/fangqian616/consensus-pipeline/raw/main/install.ps1 | iex` (Windows) / `curl -fsSL ... | bash` (macOS/Linux)
+A full run takes 10-30 minutes, costs ~$0.05-0.10. Full details on all three paths (MCP config, full-text upload, custom endpoints) → [📖 Usage](#-usage)
 
 ---
 

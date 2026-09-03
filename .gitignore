@@ -70,3 +70,13 @@ Thumbs.db
 
 # Logs
 *.log
+# 本地 Coze → OpenAI 兼容代理（含硬编码 token / 平台凭证，严禁提交）
+coze_proxy.mjs
+coze_openai_proxy.py
+start_coze_proxy.bat
+
+# 根目录 Node 依赖
+node_modules/
+
+# Coze 平台自建插件（独立平台产物，不进本仓库）
+coze-plugin/

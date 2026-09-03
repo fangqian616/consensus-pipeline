@@ -26,12 +26,16 @@ irm https://github.com/fangqian616/consensus-pipeline/raw/main/install.ps1 | iex
 #    macOS / Linux：
 curl -fsSL https://github.com/fangqian616/consensus-pipeline/raw/main/install.sh | bash
 
-# 2) …或自己跑 —— Streamlit 界面
+# 2) DSH 插件（AI 对话驱动，最推荐）—— 对 DSH 说「共识管线开始需求调研」即开始
+git clone --depth 1 https://github.com/fangqian616/consensus-pipeline.git
+npx -p @deepseek-ai/dsh dsh plugin --profile web add file:./consensus-pipeline/dsh-plugin
+
+# 3) …或自己跑 —— Streamlit 界面
 git clone https://github.com/fangqian616/consensus-pipeline.git && cd consensus-pipeline
 pip install -r requirements.txt
 streamlit run app.py          # → http://localhost:8501
 
-# 3) …或无头命令行（v2，推荐）
+# 4) …或无头命令行（v2，推荐）
 export DEEPSEEK_API_KEY="sk-your-key"   # Windows：$env:DEEPSEEK_API_KEY="..."
 python run_pipeline_v2.py --topic "你的课题"
 ```
