@@ -17,6 +17,39 @@
 
 ---
 
+## ⚡ Quick Start
+
+The fastest way from zero to your first debate:
+
+**1. Install**
+
+```bash
+git clone https://github.com/fangqian616/consensus-pipeline.git
+cd consensus-pipeline
+pip install -r requirements.txt
+```
+
+**2. Set API key**
+
+```bash
+# Linux / macOS
+export DEEPSEEK_API_KEY="sk-your-key-here"
+# Windows PowerShell
+$env:DEEPSEEK_API_KEY="sk-your-key-here"
+```
+
+**3. Run**
+
+```bash
+streamlit run app.py
+```
+
+Browser opens → enter your research topic → the AI interviewer asks about your scope → debate departments auto-generate → multi-round debate runs → report with confidence annotations. **Done in 10-30 minutes, costs ~$0.05-0.10.**
+
+> 💡 Or install with one command: `irm https://github.com/fangqian616/consensus-pipeline/raw/main/install.ps1 | iex` (Windows) / `curl -fsSL ... | bash` (macOS/Linux)
+
+---
+
 ## ❓ Why Not Just Ask ChatGPT?
 
 A single LLM produces confident-sounding answers with no cross-validation — hallucinations slip through, conflicting perspectives get flattened, and you can't tell which conclusions are solid vs. speculative.
@@ -40,7 +73,7 @@ Based on your topic, the AI auto-generates 10+ specialized debate departments wi
 <img src="examples/04_department_config.png" alt="Department Configuration" width="80%">
 
 ### Step 3: Multi-Round Debate
-Watch debaters argue in real-time. Each round, debaters present their position, challenge others' assumptions, and refine their arguments. The pipeline runs 2-3 rounds per department before reaching consensus.
+Watch debaters argue in real-time. Each round, debaters present their position, challenge others' assumptions, and refine their arguments. The pipeline runs 3-8 rounds per department (default), stopping early once debaters converge via dynamic termination.
 
 <img src="examples/03_debate_content.png" alt="Debate Content" width="80%">
 
@@ -62,17 +95,38 @@ The pipeline also generates runnable Python code for key methods and compiles a 
   <img src="examples/07_references.png" alt="References" width="45%">
 </p>
 
+### Example Output
+
+Here's what a real report excerpt looks like — note the per-claim confidence annotations:
+
+> **Deep learning methods dominate short-term energy load forecasting** *(42/77 papers, high confidence)*
+>
+> LSTM and Transformer-based models consistently outperform traditional ARIMA methods by 10-40% in MAE metrics across multiple benchmark datasets. However, the **methodology review department flagged** widespread data leakage concerns — several studies used overlapping train/test splits that inflated apparent accuracy gains.
+>
+> **Graph neural networks show emerging potential in energy network optimization** *(3/77 papers, low confidence — trend not established)*
+>
+> While GNNs demonstrate structural advantages for modeling grid topology, current evidence is limited to small-scale test networks (< 100 nodes). Cross-department validation rated this claim as "promising but insufficiently validated."
+
+Each claim survives adversarial challenge from multiple AI agents before appearing in the report. Claims that can't be verified from available abstracts are explicitly separated rather than silently scored.
+
 ---
 
 ## 🎯 What It Does
 
 Consensus Pipeline takes a research topic and produces a structured literature review through multi-agent debate.
 
-**The pipeline in one sentence:** Search papers → 3-layer QC filter → 10 departments debate each claim → cross-department validation → generate report with confidence scores.
+**The pipeline in one sentence:** Search papers → 3-layer QC filter → 11 departments debate each claim → cross-department validation → generate report with confidence scores.
 
 **Key difference from tools like Elicit/Consensus:** Those tools extract and summarize. This tool *debates*. Each finding has to survive adversarial challenge from multiple AI agents before it makes it into the report.
 
-### What actually works:
+**Core capabilities:**
+- 🔍 **Multi-source paper search** — OpenAlex + Semantic Scholar + arXiv, auto-deduplication
+- 🏛️ **11-department multi-agent debate** — each department has 2-4 debaters arguing from different perspectives
+- 📊 **Per-claim confidence annotation** — every conclusion tagged with evidence count (e.g., "42/77 papers, high confidence")
+- ✅ **NLI citation verification** — every claim checked against source abstracts, unverifiable claims excluded from scoring
+- 📄 **Structured report output** — Markdown + DOCX + PDF export, bilingual (CN/EN)
+
+**Full feature list:**
 - ✅ Multi-source paper search (OpenAlex + Semantic Scholar + arXiv)
 - ✅ 3-layer QC: hard filter → LLM classify → importance tagging (219 → 77 papers, ~65% exclusion)
 - ✅ 10-11 debate departments, each with 2-4 debaters arguing from different perspectives
@@ -104,61 +158,23 @@ Consensus Pipeline takes a research topic and produces a structured literature r
 
 ## 🏗️ How It Works
 
-```
-Research Topic
-     │
-     ▼
-┌─────────────────────────┐
-│ Phase 0: Requirement    │  ← AI agent interviews you about scope & goals
-│ Interview               │
-└────────────┬────────────┘
-             │
-             ▼
-┌─────────────────────────┐
-│ Phase 1: Smart Config   │  ← AI generates debate departments & debaters
-│ (auto or manual)        │     based on your topic — zero hardcoding
-└────────────┬────────────┘
-             │
-             ▼
-┌─────────────────────────┐
-│ Phase 2: Paper Search   │  ← OpenAlex (primary) + Semantic Scholar + arXiv
-│ & Retrieval             │     Deduplication, abstract backfill
-└────────────┬────────────┘
-             │
-             ▼
-┌─────────────────────────┐
-│ Phase 3: QC Department  │  ← 3-layer sieve:
-│ Quality Control         │     hard_filter → LLM_classify → tag_layer
-│                         │     219 papers → 77 relevant (core/method/background)
-└────────────┬────────────┘
-             │
-             ▼
-┌─────────────────────────┐
-│ Phase 4: Department     │  ← 10+ research departments debate
-│ Debate (multi-round)    │     Each dept: 2-4 debaters → 2-3 rounds → consensus
-│                         │     Debaters argue from different perspectives
-└────────────┬────────────┘
-             │
-             ▼
-┌─────────────────────────┐
-│ Phase 5: Cross-Dept     │  ← Departments check each other's conclusions
-│ Validation              │     Catches blind spots & groupthink
-└────────────┬────────────┘
-             │
-             ▼
-┌─────────────────────────┐
-│ Phase 6: Report         │  ← Literature review with confidence annotations
-│ Generation              │     Citation validation, code generation, PDF/DOCX export
-└────────────┬────────────┘
-             │
-             ▼
-┌─────────────────────────┐
-│ Phase 7: Citation       │  ← NLI verifier checks every claim against
-│ Verification            │     source abstracts (see below)
-└─────────────────────────┘
-```
+| Phase | Stage | What happens |
+|-------|-------|-------------|
+| **0** | Requirement Interview | AI interviews you about scope, constraints & goals |
+| **0.5** | Domain Config | AI generates the domain config (zero hardcoding) |
+| **1** | Structuring | Scope & constraint extraction |
+| **2** | Discussion | Multi-angle requirement discussion |
+| **3** | Config Recommendation | Department configuration recommendation |
+| **3.5** | QC Gate | 3-layer quality filter: `hard_filter → LLM_classify → tag_layer` |
+| **4** | Paper Search | OpenAlex + Semantic Scholar + arXiv — dedup, abstract backfill |
+| **4.9** | Full-text Fetch | Auto-fetch OA full text (Unpaywall → Semantic Scholar → OpenAlex) |
+| **5** | Department Debate (v2) | 11 departments debate; stance quantification (CV) + Kendall's W → dynamic termination |
+| **5.5** | Full-text Gate | Interactive breakpoint — import the few missing-but-necessary paywalled PDFs |
+| **6** | Cross-Debate | Departments validate each other's conclusions |
+| **7** | Report Generation | Literature review + confidence annotations + code + PDF/DOCX export |
+| **7.5** | Citation Verification | NLI verification of every claim against source abstracts / full text |
 
-### 10 Research Departments
+### 11 Research Departments
 
 | Department | What They Debate |
 |-----------|-----------------|
@@ -170,6 +186,7 @@ Research Topic
 | Counter-Evidence | Anti-mainstream findings, controversy identification |
 | Topic Clustering | Thematic grouping, trend detection, gap identification |
 | Visualization | Chart analysis, distribution patterns, data representation |
+| Report Integration | Synthesize department conclusions into the final structured report |
 | Programming | Which tools/methods to recommend, runnable code generation |
 | Tutorial | How to use research tools, methodological guidance |
 
@@ -283,6 +300,8 @@ On first use, the plugin auto-clones the full project to `~/.dsh/consensus-pipel
 1. Tell the agent your research direction in chat → it runs the requirement interview, then starts the pipeline.
 2. Click **📊 控制台** to open the panel — live progress, atomic verification, full-text upload.
 3. At the Phase 5.5 breakpoint, a **⏳ pending-import list** appears: pause, drop in paywalled PDFs, continue.
+
+> 💡 **Tip:** To start the pipeline via DSH, try saying: **"共识管线开始需求调研"** — DSH will launch the requirement interview and guide you through the full pipeline and ~$0.05-0.10 in API costs
 
 #### Any MCP client (Claude Desktop / Cursor / Codex…)
 
@@ -480,7 +499,7 @@ consensus-pipeline/
 A: 10-30 minutes depending on topic and paper count. The debate phase is the bottleneck — more departments = more API calls.
 
 **Q: How much does it cost?**
-A: With DeepSeek pricing, a full run (148 papers, 10 departments, 2-3 rounds each) costs ~$0.05-0.10.
+A: With DeepSeek pricing, a full run (148 papers, 11 departments, 3-8 rounds each) costs ~$0.05-0.10.
 
 **Q: Which models are supported?**
 A: Any OpenAI-compatible API. Tested primarily with DeepSeek. Should work with local models via custom endpoints — haven't tested yet.
@@ -520,5 +539,3 @@ MIT License
 ---
 
 If Consensus Pipeline helps your research, a ⭐ on GitHub means a lot — it helps others find the project.
-
-
