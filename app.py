@@ -5970,12 +5970,12 @@ def main():
     _ft_zh = st.session_state.get("lang", "zh") == "zh"
     st.divider()
     st.markdown(
-        ("⭐ 觉得这个工具有用？[去 GitHub 仓库点个 Star 支持一下](https://github.com/fang616/consensus-pipeline)　"
-         "[![GitHub stars](https://img.shields.io/github/stars/fang616/consensus-pipeline?style=social)]"
-         "(https://github.com/fang616/consensus-pipeline)" if _ft_zh else
-         "⭐ Found this tool helpful? [Star the repo on GitHub](https://github.com/fang616/consensus-pipeline)　"
-         "[![GitHub stars](https://img.shields.io/github/stars/fang616/consensus-pipeline?style=social)]"
-         "(https://github.com/fang616/consensus-pipeline)"))
+        ("⭐ 觉得这个工具有用？[去 GitHub 仓库点个 Star 支持一下](https://github.com/fangqian616/consensus-pipeline)　"
+         "[![GitHub stars](https://img.shields.io/github/stars/fangqian616/consensus-pipeline?style=social)]"
+         "(https://github.com/fangqian616/consensus-pipeline)" if _ft_zh else
+         "⭐ Found this tool helpful? [Star the repo on GitHub](https://github.com/fangqian616/consensus-pipeline)　"
+         "[![GitHub stars](https://img.shields.io/github/stars/fangqian616/consensus-pipeline?style=social)]"
+         "(https://github.com/fangqian616/consensus-pipeline)"))
 
 
 if __name__ == "__main__":
