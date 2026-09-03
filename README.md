@@ -55,7 +55,7 @@ streamlit run app.py                              # web UI, browser opens
 python run_pipeline_v2.py --topic "Your Topic"    # headless CLI
 ```
 
-A full run takes 10-30 minutes, costs ~$0.05-0.10. Full details on all three paths (MCP config, full-text upload, custom endpoints) → [📖 Usage](#-usage)
+A full run is an offline batch job — start it and let it run in the background, no need to watch. Full details on all three paths (MCP config, full-text upload, custom endpoints) → [📖 Usage](#-usage)
 
 ---
 
@@ -160,7 +160,7 @@ Consensus Pipeline takes a research topic and produces a structured literature r
 
 ### What's still rough:
 - ⚠️ Some UI labels are bilingual (Chinese/English mix) in English mode
-- ⚠️ No GPU needed, but a full run takes 10-30 minutes and ~$0.05-0.10 in API costs
+- ⚠️ No GPU needed, but a full run takes a while (time and cost vary by topic and paper count)
 - ⚠️ Cross-department pairing logic is basic (two-layer fallback, not optimized)
 
 ---
@@ -310,7 +310,7 @@ On first use, the plugin auto-clones the full project to `~/.dsh/consensus-pipel
 2. Click **📊 控制台** to open the panel — live progress, atomic verification, full-text upload.
 3. At the Phase 5.5 breakpoint, a **⏳ pending-import list** appears: pause, drop in paywalled PDFs, continue.
 
-> 💡 **Tip:** To start the pipeline via DSH, try saying: **"共识管线开始需求调研"** — DSH will launch the requirement interview and guide you through the full pipeline and ~$0.05-0.10 in API costs
+> 💡 **Tip:** To start the pipeline via DSH, try saying: **"共识管线开始需求调研"** — DSH will launch the requirement interview and guide you through the full pipeline.
 
 #### Any MCP client (Claude Desktop / Cursor / Codex…)
 
@@ -410,7 +410,7 @@ python run_pipeline_v2.py --topic "Your Topic" --lang en
 | Requirement | Details |
 |-------------|---------|
 | Python 3.10+ | 3.11+ recommended |
-| DeepSeek API Key | [Register](https://platform.deepseek.com/) — ~$0.05-0.10 per full run |
+| DeepSeek API Key | [Register](https://platform.deepseek.com/) — required for LLM calls |
 | git | For the one-shot installer / clone |
 | Internet | Access to DeepSeek API (custom endpoints supported) |
 
@@ -505,10 +505,10 @@ consensus-pipeline/
 ## ❓ FAQ
 
 **Q: How long does a full run take?**
-A: 10-30 minutes depending on topic and paper count. The debate phase is the bottleneck — more departments = more API calls.
+A: It takes a while — the exact time depends on topic and paper count. The debate phase is the bottleneck; more departments = more API calls.
 
 **Q: How much does it cost?**
-A: With DeepSeek pricing, a full run (148 papers, 11 departments, 3-8 rounds each) costs ~$0.05-0.10.
+A: It varies with topic, paper count, and current DeepSeek pricing. A full run is inexpensive — check the latest pricing for an exact number.
 
 **Q: Which models are supported?**
 A: Any OpenAI-compatible API. Tested primarily with DeepSeek. Should work with local models via custom endpoints — haven't tested yet.
