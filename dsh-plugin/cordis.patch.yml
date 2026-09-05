@@ -4,4 +4,4 @@
 # own resolved location; config below is optional and only overrides it.
 - insert:
     - id: consensus-pipeline
-      name: '@deepseek-ai/dsh-consensus-pipeline'
+      name: '@fangqian616/dsh-consensus-pipeline'

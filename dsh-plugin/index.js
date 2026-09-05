@@ -1,4 +1,4 @@
-// @deepseek-ai/dsh-consensus-pipeline
+// @fangqian616/dsh-consensus-pipeline
 // Native tool plugin: spawns the Python MCP server (mcp_server.py) over stdio
 // JSON-RPC 2.0 (newline-framed), discovers its tools via tools/list, and
 // re-registers them as native DSH tools with background-job progress for the

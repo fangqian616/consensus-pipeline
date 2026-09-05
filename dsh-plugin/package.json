@@ -1,10 +1,18 @@
 {
-  "name": "@deepseek-ai/dsh-consensus-pipeline",
+  "name": "@fangqian616/dsh-consensus-pipeline",
   "description": "Consensus Pipeline native tool plugin: spawns the Python MCP server and exposes research-pipeline tools with progress + report preview",
   "version": "0.2.0",
   "type": "module",
   "main": "index.js",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fangqian616/consensus-pipeline.git"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
