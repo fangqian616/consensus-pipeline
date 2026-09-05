@@ -15,7 +15,7 @@ import sys
 import json
 import time
 
-REPO_OWNER = "fang616"
+REPO_OWNER = "fangqian616"
 REPO_NAME = "consensus-pipeline"
 BRANCH = "main"
 BASE_RAW = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/{BRANCH}"

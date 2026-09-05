@@ -713,7 +713,7 @@ class ReferenceResolver:
 
             url = f"https://api.crossref.org/works/{doi}"
             req = urllib.request.Request(url, headers={
-                'User-Agent': 'ConsensusPipeline/1.0 (mailto:fang616@users.noreply.github.com)',
+                'User-Agent': 'ConsensusPipeline/1.0 (mailto:your_email@example.com)',
                 'Accept': 'application/json',
             })
             with urllib.request.urlopen(req, timeout=15) as resp:
@@ -829,7 +829,7 @@ class ReferenceResolver:
         """Unpaywall by DOI: find an OA PDF location and extract its abstract."""
         try:
             import urllib.request
-            url = f"https://api.unpaywall.org/v2/{doi}?email=fang616@users.noreply.github.com"
+            url = f"https://api.unpaywall.org/v2/{doi}?email=your_email@example.com"
             req = urllib.request.Request(url, headers={'User-Agent': 'ConsensusPipeline/1.0'})
             with urllib.request.urlopen(req, timeout=15) as resp:
                 data = json.loads(resp.read().decode())
@@ -973,7 +973,7 @@ class ReferenceResolver:
         """Unpaywall by DOI → OA PDF URL → full body text."""
         try:
             import urllib.request
-            url = f"https://api.unpaywall.org/v2/{doi}?email=fang616@users.noreply.github.com"
+            url = f"https://api.unpaywall.org/v2/{doi}?email=your_email@example.com"
             req = urllib.request.Request(url, headers={'User-Agent': 'ConsensusPipeline/1.0'})
             with urllib.request.urlopen(req, timeout=15) as resp:
                 data = json.loads(resp.read().decode())

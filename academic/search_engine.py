@@ -102,7 +102,7 @@ def classify_dynamic(paper: "PaperCandidate") -> str:
     return "U"
 
 
-def openalex_batch_abstracts(dois: List[str], mailto: str = "fang616@users.noreply.github.com") -> Dict[str, str]:
+def openalex_batch_abstracts(dois: List[str], mailto: str = "your_email@example.com") -> Dict[str, str]:
     """Batch-fetch abstracts from OpenAlex by DOI (one request per 25 DOIs).
 
     Returns {doi: abstract_text}. Best-effort: network/rate-limit failures
@@ -607,7 +607,7 @@ class AcademicSearchEngine:
             # mailto enters the OpenAlex polite pool (separate, more generous rate
             # limit). Without it, shared-IP deployments (e.g. cloud free tier) get
             # throttled hard — observed fetch collapse from ~30/query to ~4/query.
-            url = f"https://api.openalex.org/works?search={_urlp.quote_plus(query)}&per_page={max_results}&mailto=fang616@users.noreply.github.com&select=id,doi,title,publication_year,cited_by_count,cited_by_percentile_year,authorships,primary_location,type,abstract_inverted_index"
+            url = f"https://api.openalex.org/works?search={_urlp.quote_plus(query)}&per_page={max_results}&mailto=your_email@example.com&select=id,doi,title,publication_year,cited_by_count,cited_by_percentile_year,authorships,primary_location,type,abstract_inverted_index"
             req = urllib.request.Request(url, headers={"User-Agent": "ConsensusPipeline/4.4"})
             with urllib.request.urlopen(req, timeout=20) as resp:
                 data = json.loads(resp.read())
@@ -687,12 +687,12 @@ class AcademicSearchEngine:
             url = (
                 f"https://api.crossref.org/works?query={_urlp.quote_plus(query)}"
                 f"&rows={max_results}&filter=type:journal-article"
-                f"&mailto=fang616@users.noreply.github.com"
+                f"&mailto=your_email@example.com"
                 f"&select=DOI,title,author,issued,container-title,is-referenced-by-count,abstract,type"
             )
             req = urllib.request.Request(
                 url,
-                headers={"User-Agent": "ConsensusPipeline/4.4 (mailto:fang616@users.noreply.github.com)"},
+                headers={"User-Agent": "ConsensusPipeline/4.4 (mailto:your_email@example.com)"},
             )
             with urllib.request.urlopen(req, timeout=25) as resp:
                 data = json.loads(resp.read())

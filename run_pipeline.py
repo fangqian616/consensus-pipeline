@@ -865,7 +865,7 @@ def backfill_abstracts(papers):
                     oa_url = f"https://api.openalex.org/works?search={_urlp.quote_plus(p.title[:200])}&per_page=1&select=id,abstract_inverted_index"
                 oa_req = urllib.request.Request(oa_url, headers={
                     "User-Agent": "ConsensusPipeline/0.7.0",
-                    "mailto": "fang616@users.noreply.github.com"  # 礼貌池
+                    "mailto": "your_email@example.com"  # 礼貌池
                 })
                 with urllib.request.urlopen(oa_req, timeout=15) as resp:
                     oa_data = json.loads(resp.read())
