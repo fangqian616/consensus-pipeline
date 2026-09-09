@@ -80,3 +80,18 @@ node_modules/
 
 # Coze 平台自建插件（独立平台产物，不进本仓库）
 coze-plugin/
+
+# 本地开发杂物（第三方仓库 clone / 封面图生成物 / npm 残留，非本项目内容）
+dsh-market/
+dsh-web/
+/package.json
+pnpm-lock.yaml
+.research/
+scripts/
+brain_emoji_*.png
+deepseek_harness_cover_*
+deepseek_whale_*.png
+render_brain_emoji.py
+render_dsh_cover.py
+render_dsh_whale_transparent.py
+ds_market_score.py
