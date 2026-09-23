@@ -13,7 +13,7 @@
 > **Multi-agent debate framework for academic research.**
 > Instead of one AI writing a literature review for you — an AI team interviews you, debates each claim, reaches consensus with per-claim confidence scores, and verifies every citation against the source abstracts.
 
-📖 [中文文档](README_CN.md) · 📦 [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases)
+📖 [中文文档](README_CN.md) · 📦 [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases) · 🔗 [Related project: Multivest](https://github.com/fangqian616/multivest)
 
 ---
 
@@ -524,6 +524,24 @@ A: Those tools extract and summarize. This tool debates — each finding has to 
 
 **Q: Is the debate actually worth it?**
 A: Yes, clearly. I ran both modes. Without debate, the report just summarizes what papers claim. With debate, agents from different perspectives challenge each other — and those challenges make it into the report. Example: the "accuracy" agent reported decomposition methods achieve 10-40% error reduction. The "methodology rigor" agent flagged widespread data leakage in those same papers. Both perspectives are in the final report. Without debate, only the accuracy claim would've survived. What I can't quantify yet is *how much* better the overall report is — working on evaluation metrics.
+
+---
+
+## 🔗 Related Projects
+
+### [Multivest · 智能多维投资系统](https://github.com/fangqian616/multivest)
+
+A desktop research tool for Chinese household asset allocation, by the same author. It carries over two design elements from this pipeline — quantifying each debate participant's stance on a Likert scale, and terminating the debate once the coefficient of variation across stances falls below `ε1` while Kendall's W confirms rank agreement — and applies them to a different setting: a fixed panel of analysts reviewing a household portfolio, rather than a per-topic set of research departments reviewing a literature question.
+
+| | Consensus Pipeline | Multivest |
+|---|---|---|
+| Input | A research question | A household portfolio + daily market data |
+| Agents | Departments generated per topic | A fixed analyst panel + an investment officer |
+| Where numbers come from | Produced by the model, annotated with confidence | Computed by the system; the model only judges |
+| Output | Literature review with citation verification | Allocation advice, risk report, daily market review |
+| Delivery | Streamlit UI + MCP server | Standalone Windows desktop app (PyInstaller + WebView2) |
+
+The two repositories share no code and no dependency. The convergence mechanism is the only common design element, and it is reimplemented in each.
 
 ---
 
