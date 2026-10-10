@@ -39,7 +39,7 @@ git clone --depth 1 https://github.com/fangqian616/consensus-pipeline.git
 npx -p @deepseek-ai/dsh dsh plugin --profile web add file:./consensus-pipeline/dsh-plugin
 ```
 
-Then tell DSH "consensus-pipeline start" — it runs the requirement interview → department config → multi-round debate → confidence-annotated report. The 📊 控制台 floating button (bottom-right) shows live progress, atomic verification, and full-text upload.
+Then tell DSH "consensus-pipeline start" — it runs the requirement interview → department config → multi-round debate → confidence-annotated report. The 📊  floating button (bottom-right) shows live progress, atomic verification, and full-text upload.
 
 **🖥️ 3. Streamlit / CLI (manual)**
 
