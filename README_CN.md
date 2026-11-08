@@ -1,282 +1,230 @@
-# 🧠 Consensus Pipeline 共识管线
+# 🧠 Consensus Pipeline（学术共识辩论管线）
 
 <p align="center">
   <img src="banner.png" alt="Consensus Pipeline" width="100%">
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.10+-blue?logo=python" alt="Python">
-  <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit" alt="Streamlit">
+  <img src="https://img.shields.io/badge/Python-3.10+-blue?logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/MCP-Compatible-8A2BE2" alt="MCP">
+  <img src="https://img.shields.io/badge/DeepSeek_%2F_OpenAI-Supported-00A67E" alt="LLM">
+  <img src="https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit&logoColor=white" alt="Streamlit">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
 </p>
 
-> **多 Agent 辩论驱动的学术研究框架。**
-> 不是单个 AI 替你写文献综述——是一支 AI 团队访谈你、辩论每条主张、达成共识、给每条结论标注置信度，并逐条校验引用与原文摘要的一致性。
-
-📖 [English](README.md) · 📦 [GitHub Releases](https://github.com/fangqian616/consensus-pipeline/releases) · 🔗 [相关项目：Multivest](https://github.com/fangqian616/multivest)
-
----
-
-## ⚡ 快速上手
-
-```bash
-# 1) 一键安装（推荐）—— 自动 clone + 装依赖 + 打印 MCP 配置
-#    Windows PowerShell：
-irm https://github.com/fangqian616/consensus-pipeline/raw/main/install.ps1 | iex
-#    macOS / Linux：
-curl -fsSL https://github.com/fangqian616/consensus-pipeline/raw/main/install.sh | bash
-
-# 2) DSH 插件（AI 对话驱动，最推荐）—— 对 DSH 说「共识管线开始需求调研」即开始
-git clone --depth 1 https://github.com/fangqian616/consensus-pipeline.git
-npx -p @deepseek-ai/dsh dsh plugin --profile web add file:./consensus-pipeline/dsh-plugin
-
-# 3) …或自己跑 —— Streamlit 界面
-git clone https://github.com/fangqian616/consensus-pipeline.git && cd consensus-pipeline
-pip install -r requirements.txt
-streamlit run app.py          # → http://localhost:8501
-
-# 4) …或无头命令行（v2，推荐）
-export DEEPSEEK_API_KEY="sk-your-key"   # Windows：$env:DEEPSEEK_API_KEY="..."
-python run_pipeline_v2.py --topic "你的课题"
-```
-
-完整说明（DSH / MCP / CLI、全文上传、自定义端点）→ [📖 使用方式](#-使用方式)
-
----
-
-## ❓ 为什么不直接问 ChatGPT？
-
-单个 LLM 产出的答案听起来很自信，但没有交叉验证——幻觉混入其中，冲突视角被压平，你分不清哪些结论可靠、哪些是推测。
-
-Consensus Pipeline 用**结构化多 Agent 辩论作为质量门控**替代一次性生成：每条主张都被独立"部门"挑战，矛盾被显式暴露，最终结论带有**置信度标注**（如"42/77 篇支撑，高置信度"）。
-
-相当于自带同行评审——不是一个作者，而是一个对抗性委员会。
-
----
-
-## 📸 效果展示
-
-### 第一步：需求访谈
-AI 智能体会先访谈你，了解研究范围、约束条件和目标。
-
-<img src="examples/01_requirement_interview_cn.png" alt="需求访谈" width="80%">
-
-### 第二步：智能部门配置
-AI 根据你的主题自动生成 10+ 个专业辩论部门，每个部门配备多位辩手，从不同方法论角度展开辩论。
-
-<img src="examples/04_department_config_cn.png" alt="部门配置" width="80%">
-
-### 第三步：多轮辩论
-实时观看辩手辩论。每轮辩手陈述立场、挑战他人假设、完善论证。每个部门默认运行 3-8 轮，收敛后提前停止（动态终止）。
-
-<img src="examples/03_debate_content_cn.png" alt="辩论内容" width="80%">
-
-### 第四步：结构化输出
-辩论结果结构化输出为 JSON，清晰标注角色、立场和共识点，为报告生成做好准备。
-
-<img src="examples/02_structured_output_cn.png" alt="结构化输出" width="80%">
-
-### 第五步：带置信度标注的综述报告
-最终报告包含逐条结论的置信度评分、方法论对比矩阵和已验证的引用文献。每条结论都标注支撑论文数量。
-
-完整报告示例（148 篇论文，能源经济学方向）：见 `examples/final_report.md`
-
-### 附加产出：自动生成代码与参考文献
-管线还会生成可运行的 Python 代码和经过校验的参考文献列表。
-
-<p float="left">
-  <img src="examples/06_code_output_cn.png" alt="代码输出" width="45%">
-  <img src="examples/07_references_cn.png" alt="参考文献" width="45%">
+<p align="center">
+  📖 <a href="README.md">English README</a> ·
+  ⚡ <a href="#-快速开始">快速开始</a> ·
+  🏗️ <a href="#️-核心架构与工作流">核心架构</a> ·
+  📖 <a href="#-使用指南">使用指南</a> ·
+  📦 <a href="https://github.com/fangqian616/consensus-pipeline/releases">版本发布</a> ·
+  🔗 <a href="https://github.com/fangqian616/multivest">关联项目: Multivest</a>
 </p>
 
----
-
-## 🎯 功能概述
-
-Consensus Pipeline 输入一个研究主题，通过多 Agent 辩论产出结构化文献综述。
-
-**一句话总结：** 检索论文 → 三层 QC 过滤 → 11 个部门辩论每条主张 → 跨部门交叉验证 → 生成带置信度评分的综述报告。
-
-**与 Elicit/Consensus.app 的关键区别：** 那些工具是提取和总结，这个工具是**辩论**。每条结论在进入报告之前，必须经受多个 AI 智能体的对抗性质疑。
-
-### 实际可用功能：
-- ✅ 多源论文检索（OpenAlex + Semantic Scholar + arXiv）
-- ✅ 三层 QC 过滤：硬过滤 → LLM 分类 → 重要性标注（219 → 77 篇，排除率 ~65%）
-- ✅ 10-11 个辩论部门，每部门 2-4 位辩手从不同视角辩论
-- ✅ 多轮辩论 + **动态终止**——表态量化（CV）+ Kendall's W 协调系数，辩手收敛即提前停，不再跑满固定轮次
-- ✅ 跨部门交叉验证（部门之间互相检查结论）
-- ✅ 逐条结论置信度标注（如"42/77 篇支撑，高置信度"）
-- ✅ NLI 引用校验——逐条论断判定（✅/⚠️/❌），不可判条目（📖需查全文/📭仅标题）显式排除、不计入置信度
-- ✅ 引用错位 vs 断言拔高区分——摘要和全文都中性时，校验器会告诉你*原因*：⚠️ 引用错位（论文不对）还是 ✂️ 断言拔高（措辞过强）
-- ✅ 全文 NLI 升级——摘要中性的论断自动抓全文重验（Unpaywall/Semantic Scholar 的 OA 全文，或你上传的 PDF）
-- ✅ 元叙述断言过滤——报告自我统计（"本综述纳入 215 篇"）被排除校验，不再污染置信度
-- ✅ 部门间共识传递——后续部门看到前序部门结论（不再是孤岛式辩论）
-- ✅ 转述忠实性约束——报告只转述论文明确写出的内容（不编造数据层级/机制方向）
-- ✅ 全文补录系统——上传付费墙论文 PDF，辩论中断点询问"缺失但必要"的论文，导入后强制进报告
-- ✅ 自动生成可运行的研究方法代码
-- ✅ PDF/DOCX 导出
-- ✅ 双语输出（`--lang en` 或 `--lang zh`）
-- ✅ Streamlit 可视化界面，实时监控辩论进程 + 手动/自动收敛模式
-- ✅ DSH 控制台面板——原子校验卡片、全文批量上传、一键重跑校验（带进度条）、待导入清单（暂停/继续/跳过）
-- ✅ 一键安装脚本——`irm …install.ps1 | iex` / `curl …install.sh | bash`
-- ✅ DSH 插件 bundle——`dsh plugin add`，首次自动 clone 项目
-- ✅ 种子论文导入——你自己的 PDF 强制进辩论和报告
-
-### 待改进：
-- ⚠️ 部分 UI 标签在英文模式下仍有中英混合
-- ⚠️ 跨部门配对逻辑较基础（两层回退，未优化）
-- ⚠️ 完整运行耗时较长（时间与费用视主题和论文数量而定）
+> **面向严谨学术研究的多智能体对抗辩论框架（Multi-Agent Debate Framework）。**
+> 告别“单一 AI 替你盲写文献综述”——在这里，AI 团队会先对你进行需求访谈，随后由 11 个专业方法论部门对每项学术论断展开多轮对抗辩论，通过数学收敛机制达成共识，并对每一条结论标注置信度、逐一比对原文摘要与全文进行 NLI 引文核验。
 
 ---
 
-## 🏗️ 工作原理
+## ⚡ 快速开始
 
-| Phase | 阶段 | 说明 |
-|-------|------|------|
-| **0** | 需求调研 | AI 访谈你的研究范围、约束与目标 |
-| **0.5** | 域配置生成 | AI 生成域配置（零硬编码） |
-| **1** | 需求结构化 | 范围与约束提取 |
-| **2** | 需求讨论 | 多角度需求讨论 |
-| **3** | 配置推荐 | 部门配置推荐 |
-| **3.5** | QC 质量门控 | 三层过滤：`hard_filter → LLM_classify → tag_layer` |
-| **4** | 文献检索 | OpenAlex + Semantic Scholar + arXiv — 去重、摘要回填 |
-| **4.9** | 全文抓取 | 自动抓取 OA 全文（Unpaywall → Semantic Scholar → OpenAlex） |
-| **5** | 部门辩论（v2） | 11 个部门辩论；表态量化（CV）+ Kendall's W → 动态终止 |
-| **5.5** | 全文补录断点 | 交互式断点——只导入缺失但必要的付费墙 PDF |
-| **6** | 交叉辩论 | 部门之间互相验证结论 |
-| **7** | 报告生成 | 综述报告 + 置信度标注 + 代码 + PDF/DOCX 导出 |
-| **7.5** | 引用校验 | NLI 逐条核对论断与原文摘要/全文 |
+任选以下三种方式之一即可启动（完整配置、付费文献断点补传与自定义接口详见 [📖 使用指南](#-使用指南)）：
 
-### 11 个研究部门
+**🚀 1. 一键安装脚本（最省心：自动克隆 + 安装依赖 + 输出 MCP 配置）**
 
-| 部门 | 辩论内容 |
-|------|---------|
-| 文献检索 | 检索哪些数据库、用什么关键词、广度 vs 精度 |
-| 元数据检查 | DOI 验证、元数据完整性、来源可靠性 |
-| 引用网络 | 引用分析、影响力指标、影响力图谱 |
-| 方法论评审 | 7 维度评估：准确度、效率、可解释性等 |
-| 数据验证 | 数据源质量、可复现性、潜在偏差 |
-| 反证部门 | 反主流发现、争议识别 |
-| 主题聚类 | 主题分组、趋势检测、空白识别 |
-| 可视化 | 图表分析、分布模式、数据呈现 |
-| 报告整合 | 将各部门结论综合为最终结构化报告 |
-| 编程 | 推荐工具/方法，生成可运行代码 |
-| 教程 | 教授研究工具使用方法，提供方法论指导 |
+```bash
+# Windows PowerShell
+irm https://github.com/fangqian616/consensus-pipeline/raw/main/install.ps1 | iex
 
-### 置信度标注
+# macOS / Linux
+curl -fsSL https://github.com/fangqian616/consensus-pipeline/raw/main/install.sh | bash
+```
 
-报告中每条结论都带有置信度标签：
+**🤖 2. DSH 插件模式（AI 驱动，自带右下角可视化悬浮控制台）**
 
-> 深度学习方法主导短期能源负荷预测 **（42/77 篇支撑，高置信度）**
+```bash
+git clone --depth 1 https://github.com/fangqian616/consensus-pipeline.git
+npx -p @deepseek-ai/dsh dsh plugin --profile web add file:./consensus-pipeline/dsh-plugin
+```
+安装后直接对 DSH 说 **“共识管线开始需求调研”**（或 `"consensus-pipeline start"`），即可自动执行“需求访谈 → 部门配置 → 多轮辩论 → 置信度标注报告”，并通过右下角 **📊 控制台** 实时查看原子级核验与上传全文 PDF。
+
+**🖥️ 3. 本地 Streamlit 网页端 / 命令行 CLI**
+
+```bash
+git clone https://github.com/fangqian616/consensus-pipeline.git && cd consensus-pipeline
+pip install -r requirements.txt
+export DEEPSEEK_API_KEY="sk-your-key-here"        # PowerShell: $env:DEEPSEEK_API_KEY="sk-..."
+
+streamlit run app.py                              # 启动可视化网页端
+python run_pipeline_v2.py --topic "你的研究课题"   # 运行 v2 无头命令行管线
+```
+
+---
+
+## ❓ 为什么不直接问 ChatGPT 或用 Elicit？
+
+单一 LLM 生成的综述听起来自信满满，实则缺乏交叉验证——幻觉难以察觉、对立学术观点被强行抹平，研究者根本无法区分哪些结论是学界共识、哪些只是个别文献的孤证。
+
+Consensus Pipeline 将**结构化多智能体对抗辩论作为质量门禁（Quality Gate）**：每一条结论都必须经受独立“方法论部门”的质询与挑刺，争议焦点被显式保留，且最终结论全部附带**证据数量与置信度标注**（例如：`42/77 篇文献支持，高置信度`）。
+
+| 对比维度 | 单一模型 (ChatGPT) | Elicit / Consensus.app | **Consensus Pipeline** |
+|---|---|---|---|
+| **核心生成机制** | 单次直接生成 | 单轮检索提取与摘要 | **11 个专业部门多轮对抗辩论** |
+| **停止与收敛准则** | 单回合结束 | 固定 Top-$k$ 截断 | **动态数学收敛（变异系数 $CV$ + Kendall's $W$）** |
+| **学术争议处理** | 模糊折中 / 抹平冲突 | 简单罗列摘要片段 | **跨方法论视角交叉质询，显式暴露数据与识别缺陷** |
+| **引文真实性核验** | 极易产生伪造引文 | 仅匹配摘要关键词 | **两阶段 NLI 核验（摘要+全文），精准区分“引错文献”与“表述夸大”** |
+
+---
+
+## 📸 运行界面与输出预览
+
+### Step 1: 需求访谈（Requirement Interview）
+管线启动后，AI 访谈智能体会先向你提问，精准界定研究范围、纳入排除标准与核心关注问题。
+
+<img src="examples/01_requirement_interview.png" alt="Requirement Interview" width="80%">
+
+### Step 2: 智能部门配置（Smart Department Configuration）
+根据研究课题，系统零硬编码自动生成 10+ 个专业辩论部门，每个部门配备多名持不同方法论立场的辩手。
+
+<img src="examples/04_department_config.png" alt="Department Configuration" width="80%">
+
+### Step 3: 多轮对抗辩论与动态收敛（Multi-Round Debate）
+实时观测各部门辩手交锋。辩手在每轮阐述立场、质疑对方假设并修正论点。默认运行 3–8 轮，一旦立场变异系数（$CV$）与肯德尔和谐系数（Kendall's $W$）达标即触发动态早停。
+
+<img src="examples/03_debate_content.png" alt="Debate Content" width="80%">
+
+### Step 4: 结构化共识输出（Structured Output）
+辩论结果被结构化封装为 JSON，清晰记录各方角色、争鸣焦点与最终共识，直接驱动报告合成。
+
+<img src="examples/02_structured_output.png" alt="Structured Output" width="80%">
+
+### Step 5: 附带置信度标注的综述报告（Confidence-Annotated Report）
+最终报告包含逐条结论的置信度评分、方法论对比矩阵以及经过核验的参考文献列表（完整 148 篇能源经济学示例报告见 `examples/final_report.md`）。
+
+### Bonus: 自动生成可运行代码与核验引文库
+管线还会针对核心研究方法自动生成可运行的 Python 示例代码，并输出核验通过的文献列表。
+
+<p align="center">
+  <img src="examples/06_code_output.png" alt="Code Output" width="48%">
+  <img src="examples/07_references.png" alt="References" width="48%">
+</p>
+
+### 真实报告片段示例
+
+> **深度学习方法在短期能源负荷预测中占主导地位** *(42/77 篇文献，高置信度)*
 >
-> 图神经网络在能源网络优化中显示新兴潜力 **（3/77 篇支撑，低置信度——趋势未建立）**
-
-不再有无支撑的断言。
-
-### 引用校验报告（NLI）
-
-报告生成后，独立校验器把**每条论断与检索到的原文摘要逐条比对**（自然语言推理）——没有任何论断免检出厂。
-
-每条论断获得显式判定：
-- ✅ **已验证**——摘要直接支撑该论断
-- ⚠️ **部分验证**——仅部分内容被支撑
-- ❌ **矛盾**——摘要与该论断相悖
-- ❓ **未验证**——证据不足（计入置信度分母）
-
-仅凭摘要**无法判定**的论断会被**诚实分桶，而非静默计入**：
-- 📖 **需查全文**——摘要未覆盖该论断（不计入评分）
-- 📭 **仅标题**——无摘要可用（不计入评分）
-
-因此总体置信度只反映校验器真正可判的论断。校验时注入作者元数据，先确认*就是这篇论文*再判内容——抓住那些看起来像样的张冠李戴。
-
-### 全文补录系统
-
-付费墙论文是诚实的缺口：校验器只能凭摘要判断论断，而很多论断需要真正的全文。管线用两步补齐这个缺口：
-
-1. **Phase 4.9——自动（零用户参与）。** 辩论前，管线自动爬取每篇检索论文的 OA 全文（Unpaywall → Semantic Scholar → OpenAlex），并匹配你放进 `fulltext_papers/` 的任何 PDF。
-2. **Phase 5.5——交互式断点。** 前几个辩论部门跑完后，管线提取辩论*实际引用*的每篇论文，找出**既缺全文又必要**（共识引用或跨部门）的那几篇，只问你导入这几篇。
-3. **全文 NLI 升级。** 摘要中性时，校验器抓全文重验：entail → ✅ 已验证；contradict → ❌ 矛盾；仍中性 → 分类为 ⚠️ **引用错位**（论文不对）或 ✂️ **断言拔高**（论文对但措辞过强）。
-4. **强制进报告。** 你导入的论文标记 `weight=core`，保证进报告——上传不白费。
-
-上传 PDF 的两种方式：
-- **DSH 控制台面板**——批量上传（文件名随便，DOI 自动从 PDF 内部提取），然后一键重跑校验
-- **直接拖进 `fulltext_papers/`**，然后跑 `--rerun-67` 只重跑报告+校验阶段
-
-### QC 审校部门（三层过滤）
-
-最大的质量关口。三层过滤确保零污染：
-- **第一层——硬过滤**：通过 LLM 生成的排除信号直接剔除明显不相关论文
-- **第二层——LLM 分类**：LLM 逐篇判定论文的领域归属
-- **第三层——重要性标注**：将论文分为 core / method / background 三级
-
-能源经济学实测：219 → 77 篇，排除率 64.8%。
-
-### 动态领域配置
-
-零硬编码关键词。LLM 根据你的主题生成一切——排除信号、搜索词轮换、分级定义。从"能源经济学中的 ML"换到"医疗中的 LLM"？零代码改动。
+> 在多个基准数据集上，基于 LSTM 和 Transformer 的模型在 MAE 指标上比传统 ARIMA 方法稳定降低 10%–40%。然而，**方法论审查部门（Methodology Review）指出**存在普遍的数据泄露隐患——多篇文献使用了重叠的训练/测试集划分，人为夸大了表观精度增益。
+>
+> **图神经网络（GNN）在能源网络优化中展现出新兴潜力** *(3/77 篇文献，低置信度 — 趋势尚未确立)*
+>
+> 尽管 GNN 在刻画电网拓扑结构上具备天然优势，但现有实证证据仅局限于小规模测试网络（< 100 个节点）。跨部门交叉验证将该结论评定为“前景可期但验证不足”。
 
 ---
 
-## 📖 使用方式
+## 🎯 核心能力
 
-三种运行方式，任选其一：
+**一句话概括管线流程：** 多源文献检索 → 3 层 QC 质量过滤 → 11 个部门逐条辩论 → 跨部门交叉验证 → 生成带置信度标注与 NLI 引文核验的结构化综述。
 
-| 入口 | 适合 |
-|------|------|
-| **🚀 一键安装脚本** | 最快上手——一条命令完成 clone + 装依赖 + 输出配置 |
-| **🤖 DSH / MCP（AI agent）** | 让 AI agent 从聊天里驱动（DeepSeek Harness、Claude、Cursor…） |
-| **🖥️ Streamlit / 命令行（手动）** | 自己本地跑，实时看辩论、可脚本化 |
+- 🔍 **多源检索与 3 层 QC 过滤** — 聚合 OpenAlex + Semantic Scholar + arXiv 并自动去重，经由 `硬过滤 → LLM 领域分类 → 核心度分层` 三道筛子剔除约 65% 偏题文献。
+- 🏛️ **11 部门多智能体对抗辩论** — 打破部门孤岛，支持跨部门共识传递（前序部门结论向后序公开）与基于 $CV$ + Kendall's $W$ 的动态终止。
+- 📊 **逐条置信度标注与忠实转述准则** — 每项结论标注文献支撑数；严格执行忠实转述规则（Faithful-Paraphrase），杜绝模型脑补数据层级或机制方向。
+- ✅ **两阶段 NLI 引文核验（区分错引与夸大）** — 注入作者元数据核对文献身份，对摘要中立的论断自动抓取全文二次核验；精准区分 **⚠️ 文献错引（Citation Mismatch）** 与 **✂️ 表述夸大（Overstatement）**，并将无法仅靠摘要判断的条目（📖 需全文 / 📭 仅标题）诚实剥离，绝不污染置信度得分。
+- 📄 **付费文献断点补传与多格式导出** — Phase 4.9 自动拉取 OA 全文，Phase 5.5 交互式断点精准提示需手动补传的少量核心付费 PDF（支持拖拽上传自动解析 DOI），用户导入文献标记 `weight=core` 强制纳入报告，支持中英双语 Markdown / DOCX / PDF 导出。
+
+<details>
+<summary><b>📋 点击展开完整 18 项技术特性清单</b></summary>
+
+- ✅ 多源文献检索（OpenAlex + Semantic Scholar + arXiv 自动去重与摘要回填）
+- ✅ 3 层 QC 质量门禁：硬规则过滤 → LLM 领域分类 → 重要性分层（能源经济学实测 219 → 77 篇，剔除率 64.8%）
+- ✅ 10–11 个专业辩论部门，每部门 2–4 名不同视角辩手
+- ✅ 动态终止机制：基于立场变异系数（$CV$）+ 肯德尔和谐系数（Kendall's $W$）自动判定收敛
+- ✅ 跨部门交叉验证（Cross-Department Validation）
+- ✅ 逐条结论置信度标注（如 `42/77 papers, high confidence`）
+- ✅ NLI 自然语言推理引文核验（✅ 验证通过 / ⚠️ 部分支持 / ❌ 矛盾 / 📖 需全文排除计分）
+- ✅ 错引（⚠️ Wrong Paper）与夸大（✂️ Overstated Wording）细粒度归因
+- ✅ 全文 NLI 自动升级：摘要中立条目自动调取 OA 全文或用户上传 PDF 重新核验
+- ✅ 元叙事过滤：自动剔除报告自述性统计句（如“本综述共纳入 215 篇文献”），防止干扰核验分母
+- ✅ 部门间共识接力（Consensus Handoff）：后序部门可读取前序部门共识，消除辩论孤岛
+- ✅ 忠实转述铁律：严禁捏造原文未提及的样本层级或因果机制方向
+- ✅ Phase 5.5 交互式全文补传断点：仅筛选“被共识实际引用且缺失全文”的关键文献请求补传
+- ✅ 种子文献强制纳入：用户上传的 PDF 自动标记 `weight=core`，确保进入最终综述
+- ✅ 核心研究方法可运行 Python 代码自动生成
+- ✅ 中英双语输出（`--lang zh` / `--lang en`）及 Markdown / Word (DOCX) / PDF 导出
+- ✅ Streamlit 实时辩论监控面板（支持自动/手动收敛切换）
+- ✅ 零依赖原生 MCP Server + DSH 悬浮控制台 + 跨平台一键安装脚本
+
+</details>
+
+### 当前局限与待打磨项
+- ⚠️ 英文模式下部分 UI 标签仍存在中英混排（正在清理中）。
+- ⚠️ 无需 GPU，但完整跑通 11 个部门属于后台批处理任务（耗时与 Token 消耗随文献数量线性增长）。
+- ⚠️ 跨部门配对审查目前采用基础的双层回退逻辑，尚未做自适应图路由优化。
 
 ---
+
+## 🏗️ 核心架构与工作流
+
+```mermaid
+flowchart TD
+    A[🎯 输入研究课题] --> B[Phase 0–3: AI 需求访谈与动态领域配置]
+    B --> C[Phase 3.5–4: 多源文献检索与 3 层 QC 质量过滤]
+    C --> D[Phase 4.9: 自动拉取 OA 开放获取全文]
+    D --> E[Phase 5: 11 部门多轮对抗辩论<br/>基于 CV + Kendall's W 动态收敛早停]
+    E --> F{Phase 5.5: 全文门禁断点<br/>是否缺失核心付费文献 PDF?}
+    F -- 补传 PDF --> G[Phase 6: 跨部门交叉验证]
+    F -- 直接继续 --> G
+    G --> H[Phase 7: 生成带置信度标注综述 + 可运行代码]
+    H --> I["Phase 7.5: 两阶段 NLI 引文核验<br/>✅ 通过 | ⚠️ 错引 | ✂️ 夸大 | 📖 诚实排除"]
+```
+
+| 阶段 (Phase) | 名称 | 核心执行内容 |
+|-------|-------|-------------|
+| **0** | 需求访谈 | AI 智能体围绕研究范围、约束条件与核心目标进行多轮提问 |
+| **0.5** | 动态领域配置 | 根据课题动态生成检索词轮转、排除信号与分层标准（零硬编码） |
+| **1–3** | 结构化与部门推荐 | 提取范围约束、多视角需求研讨、生成辩论部门配置方案 |
+| **3.5** | QC 质量门禁 | 3 层过滤：`hard_filter → LLM_classify → tag_layer` |
+| **4** | 多源文献检索 | OpenAlex + Semantic Scholar + arXiv 检索、去重与缺失摘要回填 |
+| **4.9** | 全文自动抓取 | 按 Unpaywall → Semantic Scholar → OpenAlex 顺序自动获取 OA 全文 |
+| **5** | 部门对抗辩论 (v2) | 11 个部门展开多轮辩论；实时计算立场 $CV$ 与 Kendall's $W$ 实现动态早停 |
+| **5.5** | 付费全文补传门禁 | 交互式断点——提取辩论实际引用但缺失全文的核心付费文献，提示用户按需补传 |
+| **6** | 跨部门交叉辩论 | 部门间交叉复核结论，识别前后矛盾与过度推论 |
+| **7** | 综述报告生成 | 生成文献综述 + 置信度标注 + 可运行代码 + DOCX/PDF 导出 |
+| **7.5** | NLI 引文核验 | 将每条结论与源文献摘要/全文进行自然语言推理比对，输出核验报告 |
+
+---
+
+## 📖 使用指南
 
 ### 🚀 方式一：一键安装脚本（推荐）
 
-发对方一条命令，自动装好。不用分步 clone / pip / 配置。
-
-**Windows（PowerShell）：**
+一条命令自动完成仓库克隆、依赖安装并打印 MCP 配置文件片段（需预装 `git` 与 `Python 3.10+`）：
 
 ```powershell
+# Windows (PowerShell)
 irm https://github.com/fangqian616/consensus-pipeline/raw/main/install.ps1 | iex
 ```
 
-**macOS / Linux：**
-
 ```bash
+# macOS / Linux
 curl -fsSL https://github.com/fangqian616/consensus-pipeline/raw/main/install.sh | bash
 ```
 
-脚本会自动：`git clone` → `pip install -r requirements.txt` → 打印 MCP 客户端的 `mcp.json` 配置片段。
-
-然后把打印的片段粘进你的 MCP 客户端（`mcpServers.consensus-pipeline` → `python mcp_server.py`）。支持 Claude Desktop、Cursor、Codex 及任何 MCP 兼容 agent。
-
-> 💡 需要 `git` 和 `python3.10+`。首次 `pip install` 约 1-2 分钟。
-
 ---
 
-### 🤖 方式二：AI Agent（DSH / MCP）
+### 🤖 方式二：AI 智能体驱动（DSH / MCP）
 
-#### DSH（DeepSeek Harness）——原生工具 + 控制台面板
-
-以 bundle 形式安装（自动注册原生工具 + 挂载 `/consensus-pipeline/` 面板）：
-
+#### 1. DSH (DeepSeek Harness) 插件与控制台
 ```bash
 git clone --depth 1 https://github.com/fangqian616/consensus-pipeline.git
 npx -p @deepseek-ai/dsh dsh plugin --profile web add file:./consensus-pipeline/dsh-plugin
 ```
+首次调用时插件会自动将完整项目克隆至 `~/.dsh/consensus-pipeline`：
+1. **对话启动**：在聊天框输入 **“共识管线开始需求调研”**，AI 将自动开启访谈并推进管线。
+2. **实时监控**：点击右下角 **📊 控制台** 悬浮按钮，查看实时辩论进度、原子级引文核验卡片，或批量拖拽上传全文 PDF（无论文件名如何，系统会自动从 PDF 内文提取 DOI 进行匹配）。
+3. **Phase 5.5 断点续传**：在待导入列表（⏳ pending-import list）中可随时暂停、补传核心付费 PDF 并一键重新核验。
 
-本地开发则把插件目录链接进 DSH 的 `node_modules` 后重启。
-
-首次使用时插件会自动 clone 完整项目到 `~/.dsh/consensus-pipeline`（保证 Python `mcp_server.py` 始终存在，无需手动 clone）。右下角出现 **📊 控制台** 浮动按钮。
-
-**日常使用：**
-
-1. 在聊天里对 agent 说出研究方向 → agent 先做需求访谈，然后启动管线。
-2. 点 **📊 控制台** 打开面板——实时进度、原子校验、全文上传。
-3. Phase 5.5 断点出现 **⏳ 待导入清单**：暂停、拖入付费墙 PDF、继续。
-
-#### 任意 MCP 客户端（Claude Desktop / Cursor / Codex…）
-
-MCP 服务器零依赖（纯标准库）。任何 MCP 客户端指向它即可：
+#### 2. 任意 MCP 客户端（Claude Desktop / Cursor / Codex）
+本项目 `mcp_server.py` 采用纯 Python 标准库编写（零外部依赖），直接将以下配置加入客户端即可：
 
 ```json
 {
@@ -289,260 +237,52 @@ MCP 服务器零依赖（纯标准库）。任何 MCP 客户端指向它即可�
 }
 ```
 
-上面的一键安装脚本会直接帮你打印这段配置。
-
 ---
 
-### 🖥️ 方式三：Streamlit / 命令行（手动）
-
-自己本地跑——可视化界面或无头脚本。
-
-#### Streamlit 网页界面
+### 🖥️ 方式三：Streamlit 网页端 / 命令行 CLI
 
 ```bash
-git clone https://github.com/fangqian616/consensus-pipeline.git
-cd consensus-pipeline
-pip install -r requirements.txt
+# 启动 Streamlit 交互式网页端（浏览器自动打开 http://localhost:8501）
 streamlit run app.py
-```
 
-浏览器打开 `http://localhost:8501`。在侧边栏粘贴 DeepSeek API Key、选择语言，然后启动学术管线——AI 访谈员会先问清你的课题，自动生成辩论部门，接着多轮辩论实时运行。
-
-#### 命令行（无头）
-
-```bash
-git clone https://github.com/fangqian616/consensus-pipeline.git
-cd consensus-pipeline
-pip install -r requirements.txt
-```
-
-设置 API Key：
-
-```bash
-# Linux/macOS
-export DEEPSEEK_API_KEY="sk-your-key-here"
-# Windows（PowerShell）
-$env:DEEPSEEK_API_KEY="sk-your-key-here"
-# …或在项目根目录创建 .env：DEEPSEEK_API_KEY=sk-your-key-here
-```
-
-运行 **v2 管线**（推荐——表态量化 + 动态终止）：
-
-```bash
-python run_pipeline_v2.py --topic "Machine Learning in Energy Economics" --lang en
-# 中文（默认）
+# 运行 v2 命令行管线（默认中文，支持 --lang en 切换英文）
 python run_pipeline_v2.py --topic "碳市场价格预测与能源转型关联机制研究"
+python run_pipeline_v2.py --topic "Machine Learning in Energy Economics" --lang en
+
+# 可选：仅单独运行 Phase 0-3 需求调研与部门配置生成
+python run_requirement_research.py --topic "你的研究课题"
+
+# 将付费 PDF 放入 fulltext_papers/ 目录后，仅重跑“报告合成 + NLI 核验”阶段（复用已完成辩论）
+python run_pipeline_v2.py --topic "你的研究课题" --output-dir "v2_run_output/<run-dir>" --rerun-67
 ```
 
-可选先做需求调研（Phase 0-3 → 工作组配置）：
-
-```bash
-python run_requirement_research.py --topic "你的课题"
-```
-
-补全文后只重跑报告+校验阶段：
-
-```bash
-python run_pipeline_v2.py --topic "你的课题" --output-dir "v2_run_output/<运行目录>" --rerun-67
-```
-
-输出落在 `v2_run_output/<日期>_<课题>/`（v2）或 `run_output/`（v1）——Markdown + DOCX 报告、`citation_verification.json`、辩论日志和生成的图表。
-
-#### 全文补录（付费墙论文）
-
-付费墙论文无法仅凭摘要校验。两种方式补齐：
-
-- **DSH 控制台面板**——批量上传付费墙 PDF（文件名随便，DOI 自动提取），一键重跑校验（带进度条），待导入清单支持暂停/继续/跳过。
-- **CLI `--rerun-67`**——把 PDF 拖进 `fulltext_papers/`，然后只重跑报告+校验阶段（复用已完成的辩论）。
-
-#### 自定义 API 端点（可选）
-
-任何 OpenAI 兼容 API 均可：
-
-```bash
-export DEEPSEEK_API_KEY="your-key"
-export DEEPSEEK_MODEL="deepseek-v4-flash"   # 或 deepseek-v4-pro
-python run_pipeline_v2.py --topic "你的主题" --lang zh
-```
+所有运行产物保存在 `v2_run_output/<日期>_<课题>/` 目录下，包含 Markdown/DOCX/PDF 报告、`citation_verification.json` 核验账本、完整辩论日志及可视化图表。
 
 ---
 
-## 📋 前提条件
+## ⚙️ 环境要求与配置说明
 
-| 要求 | 说明 |
-|------|------|
-| Python 3.10+ | 推荐 3.11+ |
-| DeepSeek API Key | [注册](https://platform.deepseek.com/) — LLM 调用必需 |
-| git | 一键安装脚本 / clone 需要 |
-| 网络 | 需访问 DeepSeek API（支持自定义端点） |
+- **基础环境**：Python 3.10+（推荐 3.11+）、`git`、正常网络连接（无需 GPU，无需配置本地数据库，文献检索全部基于免费开放学术 API）。
+- **环境变量**：
 
-> 💡 不需要 GPU，不需要数据库。论文检索使用免费开放 API（arXiv / Semantic Scholar / OpenAlex）。
-
----
-
-## ⚙️ 配置
-
-### API 密钥
-
-| 变量 | 必需 | 说明 |
-|------|------|------|
-| `DEEPSEEK_API_KEY` | ✅ 是 | LLM 调用的 API 密钥 |
-| `EASYSCHOLAR_SECRET_KEY` | 否 | 增强期刊排名（可选，默认使用 209 期刊本地注册表） |
-
-### 支持的模型
-
-| 服务商 | API 地址 | 已测试 |
-|--------|---------|--------|
-| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-v4-flash`（辩论）、`deepseek-v4-pro`（校验/报告） |
-| OpenAI | `https://api.openai.com/v1` | `gpt-4o`（兼容） |
-| 自定义 | 任意 OpenAI 兼容端点 | 任意模型 |
-
-在 Streamlit 侧边栏或环境变量中设置 API 密钥和模型。
+| 变量名 | 是否必填 | 说明 |
+|----------|----------|-------------|
+| `DEEPSEEK_API_KEY` | ✅ 必填 | 用于驱动 LLM 的 API 密钥（[前往注册](https://platform.deepseek.com/)，或使用任意 OpenAI 兼容密钥） |
+| `DEEPSEEK_MODEL` | 选填 | 自定义模型名称（如辩论用 `deepseek-v4-flash`，核验与报告用 `deepseek-v4-pro`） |
+| `EASYSCHOLAR_SECRET_KEY` | 选填 | 增强期刊等级查询（不填则自动回退至内置的 209 本核心期刊本地注册表） |
 
 ---
 
-## 📁 项目结构
-
-```
-consensus-pipeline/
-├── install.ps1 / install.sh     # 一键安装脚本（clone + pip + mcp.json）
-├── app.py                       # Streamlit 主界面
-├── router.py                    # AI Router — 智能部门配置
-├── debate_engine.py             # 核心辩论引擎
-├── config_manager.py            # 配置持久化与预设
-├── run_pipeline.py              # CLI 运行器（v1）
-├── run_pipeline_v2.py           # CLI 运行器（v2）——表态量化 + 动态终止
-├── stance_quant_v2.py           # v2 表态量化（CV + Kendall's W 收敛）
-├── run_requirement_research.py  # 需求调研（Phase 0-3）
-├── paper_importer.py            # 种子论文导入（PDF → 元数据）
-├── consensus_meter.py           # 共识度仪表盘
-├── mcp_server.py                # MCP 服务器（零依赖）
-├── panel.html                   # DSH 控制台面板（校验卡片 + 全文上传）
-├── dsh-plugin/                  # DSH 插件 bundle（挂载 /consensus-pipeline/ + 原生工具）
-│   ├── index.js                 #   面板路由 + JSON-RPC 工具 + 自动 clone
-│   └── cordis.patch.yml         #   bundle patch
-├── fulltext_papers/             # 用户上传的付费墙论文 PDF（gitignore）
-├── quality_controller.py        # QC 审校部门（三层过滤）
-├── domain_config_generator.py   # 动态领域配置
-├── docx_exporter.py             # Word 导出
-├── pdf_exporter.py              # PDF 导出
-├── academic/                    # 学术研究模块
-│   ├── search_engine.py         # 多源论文检索
-│   ├── journal_classifier.py   # 期刊质量筛
-│   ├── journal_registry.py     # 209 期刊本地注册表
-│   ├── cross_validator.py       # 交叉验证与主题聚类
-│   ├── report_generator.py      # 带置信度的报告生成
-│   ├── report_visualizer.py     # 报告图表
-│   └── visualizer.py            # 学术图表（趋势、分布）
-├── requirement/                 # 需求与校验模块
-│   ├── interviewer.py           # AI 访谈智能体
-│   ├── structurer.py            # 范围与约束提取
-│   ├── discussion_group.py      # 多角度需求讨论
-│   ├── config_recommender.py    # 部门配置推荐
-│   ├── citation_verifier.py     # NLI 引用校验
-│   └── fact_checker.py          # 关键结论事实核查
-├── templates/                   # 辩论提示词模板
-├── presets/                     # 内置预设
-├── docs/                        # 快速上手与预设指南
-├── examples/                    # 截图与示例输出
-└── user_profiles/               # 访谈档案
-```
-
----
-
-## 🗺️ 版本历史
-
-| 版本 | 日期 | 变更 |
-|------|------|------|
-| **v0.12.18** | 2026-07-30 | NLI 逐条引用校验报告（✅/⚠️/❌ 判定，📖/📭 不可判条目显式排除不计分）、作者元数据注入、Streamlit Cloud 在线版上线 |
-| v0.8 ~ v0.12.17 | 2026-07-22~29 | 校验体系多轮迭代加固（版本探针、断点恢复、互斥分层等），详见 commit 历史 |
-| **v0.7.8** | 2026-07-21 | 修复中英文语言输出对称性（9 处英文 + 13 处中文强制指令）、最终报告语言泄漏修复、双语全链路测试通过 |
-| **v0.7.7** | 2026-07-20 | 回退 daemon 线程方案为同步执行，修复辩论中断 bug |
-| **v0.7.5** | 2026-07-17 | UI 9→4 Tab 重组、easyScholar 降级、README 全面重写、语言选择前置 |
-| **v0.7.3** | 2026-07-17 | 修复辩论轮次参数处理（多轮辩论循环） |
-| **v0.7.2** | 2026-07-17 | 英文报告输出（`--lang en`）、GitHub 旧 tag 清理 |
-| **v0.7.1** | 2026-07-17 | 首个开源版本：QC 审校部门、动态领域配置、引用校验、置信度标注、OpenAlex 优先 |
-
-> v0.7.1 之前的版本为内部开发版，未公开发布。
-
----
-
-## 🗺️ 路线图
-
-| 优先级 | 功能 | 状态 |
-|--------|------|------|
-| P0 | 修复英文模式 UI 标签中英混合 | 进行中 |
-| P1 | 语义引用校验 | ✅ 已上线（NLI 方案，v0.12） |
-| P1 | 子主题 query 拆分 | 规划中 |
-| P1 | 发表偏倚检测（漏斗图） | 规划中 |
-| P2 | 跨语言检索（知网 + 双语对齐） | 规划中 |
-| P2 | 增量更新能力 | 规划中 |
-| P2 | 辩论质量评估指标 | 规划中 |
-
----
-
-## ❓ 常见问题
-
-**Q: 完整运行需要多长时间？**
-A: 耗时较长，具体时间取决于主题和论文数量。辩论阶段是瓶颈——部门越多，API 调用越多。
-
-**Q: 费用多少？**
-A: 视主题、论文数量和 DeepSeek 当时定价而定。完整运行成本不高，具体以官方最新价格为准。
-
-**Q: 支持哪些模型？**
-A: 任何 OpenAI 兼容 API。主力测试使用 DeepSeek。理论上支持本地模型（通过自定义端点），尚未充分测试。
-
-**Q: 输出支持哪些语言？**
-A: 学术管线：中文（`--lang zh`，默认）和英文（`--lang en`）。Streamlit 界面支持中英文。
-
-**Q: 可以自定义部门吗？**
-A: 可以。AI 根据你的主题自动生成部门，你可以在 Streamlit 界面中编辑、添加或删除部门后再启动辩论。
-
-**Q: 和 Elicit 或 Consensus.app 有什么区别？**
-A: 那些工具是提取和总结。这个工具是**辩论**——每条结论在进入报告之前，必须经受多个 AI 智能体的对抗性质疑。代价是更慢、更贵，但能发现单次摘要遗漏的矛盾。
-
-**Q: 辩论真的有用吗？**
-A: 有用，而且很明显。我们跑了对比测试：不开辩论，报告只是总结论文声称的内容。开辩论后，不同视角的智能体互相挑战——这些挑战会进入最终报告。例如，"准确度"部门报告分解方法可降低 10-40% 误差，"方法论严谨性"部门则指出这些论文普遍存在数据泄漏。两个视角都出现在最终报告中。不开辩论，只有准确度那条会留下来。目前还无法量化整体报告质量提升了多少——评估指标正在开发中。
-
----
-
-## 🔗 相关项目
+## 🔗 关联项目
 
 ### [Multivest · 智能多维投资系统](https://github.com/fangqian616/multivest)
 
-同一作者开发的、面向中国家庭资产配置的桌面端投研工具。它沿用本管线的两项设计要素——以 Likert 量表量化每个辩论参与者的立场，以及在立场变异系数低于 `ε1` 且 Kendall's W 表明排序一致时终止辩论——并将其迁移到另一类场景：由固定的分析师小组评审家庭投资组合，而非由按主题动态生成的研究部门评审文献议题。
-
-| | Consensus Pipeline | Multivest |
-|---|---|---|
-| 输入 | 研究问题 | 家庭投资组合 + 每日行情数据 |
-| 智能体 | 按主题动态生成的部门 | 固定分析师小组 + 投资决策官 |
-| 数字来源 | 由模型产出并标注置信度 | 由系统计算，模型只做判断 |
-| 产出 | 带引用校验的文献综述 | 配置建议、风险报告、每日行情研判 |
-| 交付形态 | Streamlit 界面 + MCP 服务 | 独立 Windows 桌面应用（PyInstaller + WebView2） |
-
-两个仓库不共享代码，也不共享依赖；收敛机制是唯一共用的设计要素，且在各自仓库中独立实现。
+同一作者开发的中国家庭资产配置桌面端研究工具。该项目复用了本管线的两项核心收敛机制设计——在李克特量表（Likert scale）上量化每位辩论参与者的立场，并在立场变异系数低于阈值 $\varepsilon_1$ 且 Kendall's $W$ 确认排序一致性时触发收敛早停——将其迁移至固定金融分析师委员会对家庭投资组合的审阅场景中。两个仓库代码与依赖完全独立。
 
 ---
 
-## 🤝 贡献
+## 🤝 参与贡献与开源协议
 
-欢迎 PR！特别需要：
-- 🐛 Bug 修复
-- 📝 文档改进
-- 🎭 新辩手视角
-- 📊 多 Agent 辩论质量的评估基准
+非常欢迎提交 PR、Bug 反馈、新增辩手方法论视角或提供多智能体辩论质量的评估基准！本项目基于 **MIT License** 开源。
 
----
-
-## 📄 许可证
-
-MIT License
-
----
-
-> 这是一个学生项目，正在积极开发和测试中。欢迎反馈、Bug 报告和建议。
-
----
-
-如果这个项目对你有帮助，欢迎点个 ⭐——这能让更多人看到它。
-
+> 本项目专为严谨的实证研究与文献综述工作流持续迭代打磨。如果 Consensus Pipeline 对你的学术研究有所帮助，欢迎在 GitHub 点亮一颗 ⭐ Star，让更多研究者看到它！
