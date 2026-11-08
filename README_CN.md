@@ -191,6 +191,35 @@ flowchart TD
 | **7** | 综述报告生成 | 生成文献综述 + 置信度标注 + 可运行代码 + DOCX/PDF 导出 |
 | **7.5** | NLI 引文核验 | 将每条结论与源文献摘要/全文进行自然语言推理比对，输出核验报告 |
 
+### 11 个研究部门
+
+| 部门 | 辩论内容 |
+|------|---------|
+| **文献检索** | 数据库选择、检索词构造、召回率与精确率的权衡 |
+| **元数据审查** | DOI 验证、元数据完整性、来源可靠性 |
+| **引文网络** | 引文拓扑、影响力指标、奠基性工作梳理 |
+| **方法论评审** | 7 维度评估：准确度、效率、可解释性、数据泄漏等 |
+| **数据验证** | 数据集质量、可复现性、样本偏差 |
+| **反证部门** | 反主流发现、零结果、争议识别 |
+| **主题聚类** | 主题分组、范式转变、研究空白识别 |
+| **可视化** | 图表设计、分布模式、数据可视化表达 |
+| **报告整合** | 将跨部门共识综合为连贯叙事 |
+| **编程** | 工具/库选型、可运行的实证/建模代码生成 |
+| **教程** | 方法论指导与工作流复现步骤 |
+
+### 引文核验报告（NLI）与全文补录
+
+报告生成后，独立的 NLI 校验器会**逐条将结论与检索到的摘要及可获取的全文比对**，并注入作者元数据先确认文献身份：
+- ✅ **已验证（Verified）**——源文本直接蕴含该结论
+- ⚠️ **部分验证（Partially verified）**——仅部分被支撑，或细分为 **⚠️ 文献错引（Citation Mismatch，引错了论文）** / ✂️ **表述夸大（Overstated Claim，论文对但措辞过强）**
+- ❌ **矛盾（Contradicted）**——源文本直接反驳该结论
+- ❓ **未验证（Unverified）**——证据不足（计入置信度分母）
+- 📖 **需全文（Needs full-text）** / 📭 **仅标题（Title-only）**——诚实剥离并**不计入评分**，避免摘要缺失悄悄扭曲置信度指标。
+
+**两步补齐付费墙缺口：**
+1. **Phase 4.9（自动）：** 通过 Unpaywall、Semantic Scholar、OpenAlex 抓取 OA 全文，并匹配 `fulltext_papers/` 中的本地 PDF。
+2. **Phase 5.5（交互式断点）：** 识别被共识引用但缺失全文的论文，暂停并提示定向补传 PDF（可通过 DSH 控制台面板自动提取 DOI 上传，或把文件放入 `fulltext_papers/` 后运行 `--rerun-67`）。所有用户导入的论文标记 `weight=core`，保证纳入报告。
+
 ---
 
 ## 📖 使用指南
@@ -270,6 +299,58 @@ python run_pipeline_v2.py --topic "你的研究课题" --output-dir "v2_run_outp
 | `DEEPSEEK_API_KEY` | ✅ 必填 | 用于驱动 LLM 的 API 密钥（[前往注册](https://platform.deepseek.com/)，或使用任意 OpenAI 兼容密钥） |
 | `DEEPSEEK_MODEL` | 选填 | 自定义模型名称（如辩论用 `deepseek-v4-flash`，核验与报告用 `deepseek-v4-pro`） |
 | `EASYSCHOLAR_SECRET_KEY` | 选填 | 增强期刊等级查询（不填则自动回退至内置的 209 本核心期刊本地注册表） |
+
+---
+
+## 📁 项目结构
+
+```text
+consensus-pipeline/
+├── install.ps1 / install.sh     # 一键安装脚本（clone + pip + mcp.json）
+├── app.py                       # Streamlit 主界面
+├── router.py                    # AI Router —— 智能部门配置
+├── debate_engine.py             # 多智能体辩论引擎
+├── run_pipeline_v2.py           # CLI 运行器（v2）—— 表态量化 + 动态终止
+├── stance_quant_v2.py           # v2 表态量化（CV + Kendall's W 收敛）
+├── run_requirement_research.py  # 独立需求调研（Phase 0-3）
+├── paper_importer.py            # 种子论文导入（PDF → 元数据 + DOI 提取）
+├── mcp_server.py                # 零依赖 MCP 服务器
+├── panel.html                   # DSH 控制台面板（核验卡片 + 全文上传）
+├── dsh-plugin/                  # DSH 插件 bundle（挂载 /consensus-pipeline/ + 原生工具）
+├── fulltext_papers/             # 用户上传的付费墙 PDF（gitignored）
+├── quality_controller.py        # 3 层 QC 质量过滤部门
+├── domain_config_generator.py   # 零硬编码动态领域生成器
+├── docx_exporter.py / pdf_exporter.py
+├── academic/                    # 多源检索、209 期刊注册表、交叉验证与图表
+└── requirement/                 # 访谈、结构化、NLI 引文校验与事实核查
+```
+
+---
+
+## 🗺️ 路线图
+
+| 优先级 | 功能 | 状态 |
+|--------|------|------|
+| P0 | 统一英文模式下剩余的 UI 标签中英混排 | 进行中 |
+| P1 | 两阶段语义 NLI 引文核验 | ✅ 已于 v0.12 上线 |
+| P1 | 子主题 query 拆分与分解 | 规划中 |
+| P1 | 发表偏倚检测（漏斗图诊断） | 规划中 |
+| P2 | 跨语言检索（知网 + 双语对齐） | 规划中 |
+| P2 | 增量文献更新与 delta 辩论 | 规划中 |
+| P2 | 多智能体辩论质量的标准化评估基准 | 规划中 |
+
+---
+
+## ❓ 常见问题
+
+**Q: 和 Elicit 或 Consensus.app 有什么区别？**
+A: 那些工具是单轮提取与摘要。Consensus Pipeline 让每条发现先经过 11 个专业部门的多轮对抗辩论才能进入报告——能暴露单次摘要工具漏掉的方法论缺陷（例如训练/测试集数据泄漏）。
+
+**Q: 多智能体辩论的额外开销真的值得吗？**
+A: 值得。在能源预测文献的对照测试中，单次生成只会报告深度学习模型 10–40% 的 MAE 改进；引入多智能体辩论后，方法论审查部门同时指出了这些基准中普遍存在的数据泄漏，最终把“精度提升”与“方法论警示”一起保留在综述中。
+
+**Q: 完整运行需要多久、成本多少？**
+A: 完整运行属于后台批处理任务，耗时随检索文献数量与启用部门数增长。使用 DeepSeek API 时，一次完整的多部门运行成本仅为一美元的一小部分。
 
 ---
 
